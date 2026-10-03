@@ -1,6 +1,6 @@
 # CLAUDE.md: rules for AI agents in this repository
 
-**legacy-cartographer** (`lcart`): a C++20 CLI that builds a fact database of
+**legacy-cartographer** (`lcart`): a C++23 CLI that builds a fact database of
 C/C++ code with Clang, optionally generates documentation with an LLM, and
 verifies the LLM's structural claims against the facts. Overview:
 [docs/index.md](docs/index.md). Process and review checklist:
@@ -12,17 +12,18 @@ and the ADRs it links **before** writing code.
 
 ## Boundaries (enforced; do not work around the enforcement)
 
-- **Deterministic core** (`src/{common,facts,analysis,claims,verify,report}`)
+- **Deterministic core** (`src/{common,facts,analysis,claims,verify,report,handoff}`)
   never includes or links `src/llm`. `cmake/ArchitectureRules.cmake` fails
   configure if it does. Do not edit the rule to make a change pass.
 - **Clang stays in `analysis`.** No Clang type in any other module's
   interface (ADR-0002).
-- **Egress:** every LLM request goes through `llm::may_send()`. Never add a
-  path that sends project data (code, comments, identifiers, paths) to a
-  non-loopback endpoint without `--allow-remote-source` from the command
-  line. Never read that consent from a config file or environment (ADR-0004).
-- **Untrusted input:** analysed code, `compile_commands.json` and LLM
-  output. Never execute them; SQL uses bound parameters only.
+- **No network in v1:** `lcart` opens no network connection; LLM work goes
+  through handoff bundles for an external agent (ADR-0006). Bundles hold
+  facts only unless `--include-source` is given on the command line; never
+  read that switch from `lcart.toml` or the environment (ADR-0008). Built-in
+  providers (M6) must go through `llm::may_send()` (ADR-0004).
+- **Untrusted input:** analysed code, `compile_commands.json` and agent or
+  LLM output. Never execute them; SQL uses bound parameters only.
 - **Determinism:** no hash-container iteration order, clock, randomness or
   thread scheduling may affect facts, exports, maps or verdicts (NFR-004).
 - **targets/** is upstream code: never modify it. Harnesses, builds and
@@ -32,7 +33,7 @@ and the ADRs it links **before** writing code.
 ## Do not guess
 
 Do not invent Clang, SQLite or libmodbus APIs or flags. Check the pinned
-headers (`/usr/lib/llvm-18/include`, `targets/libmodbus/src`). If you cannot
+headers (`/usr/lib/llvm-20/include`, `targets/libmodbus/src`). If you cannot
 verify something, write `TODO: verify` in the doc and add a row to
 `docs/open-questions.md`.
 

@@ -5,33 +5,38 @@ flowchart TB
     engineer["<b>Engineer</b><br/>[Person]"]
 
     subgraph machine["User's machine"]
-        cli["<b>lcart</b><br/>[C++20 executable]<br/>All analysis, verification,<br/>generation and reporting"]
+        cli["<b>lcart</b><br/>[C++23 executable]<br/>analysis, map, handoff, ingest,<br/>verification, reports"]
         db[("<b>Fact database</b><br/>[SQLite file]<br/>files, includes, functions,<br/>calls, modules, claims, verdicts")]
-        cfg["<b>Project config</b><br/>[TOML/YAML file, TBD]<br/>module rules, provider"]
-        out["<b>Output directory</b><br/>[Markdown, Mermaid, JSON]<br/>module map, docs, report,<br/>test skeletons, egress log"]
-        clang["<b>Clang/LLVM 18</b><br/>[Library, LibTooling]<br/>parses C/C++"]
+        cfg["<b>lcart.toml</b><br/>[TOML file]<br/>project, module rules"]
+        bundle["<b>Handoff bundle</b><br/>[directory]<br/>PROMPT.md, facts/*.json,<br/>claim schema, MANIFEST.json"]
+        agentout["<b>Agent output</b><br/>[directory]<br/>Markdown docs, claims.json"]
+        out["<b>Output directory</b><br/>[Markdown, Mermaid, JSON]<br/>module map, annotated docs,<br/>verification report, test skeletons"]
+        clang["<b>Clang/LLVM 20</b><br/>[Library, LibTooling]<br/>parses C/C++"]
         src["<b>Analysed sources</b><br/>+ compile_commands.json"]
-        ollama["<b>Local LLM server</b><br/>[optional, loopback]"]
+        agent["<b>Coding agent</b><br/>[external process, user-run]"]
     end
 
-    remote["<b>Remote LLM API</b><br/>[optional]"]
+    llmapi["<b>Agent's LLM provider</b><br/>[outside, agent's choice]"]
 
     engineer --> cli
+    engineer --> agent
     cli -- "reads" --> cfg
     cli -- "links" --> clang
     clang -- "parses (read-only)" --> src
     cli -- "reads/writes SQL" --> db
+    cli -- "writes" --> bundle
+    agent -- "reads" --> bundle
+    agent -- "writes" --> agentout
+    cli -- "reads, validates" --> agentout
     cli -- "writes" --> out
-    cli -- "HTTP, loopback" --> ollama
-    cli -. "HTTPS, explicit consent only" .-> remote
+    agent -.-> llmapi
 ```
 
 Notes:
 
 - One process, one database file per analysed project. There is no server
-  and no background service.
-- The fact database and the output directory may contain the analysed
-  project's source code (excerpts, names). They are as sensitive as the code
-  itself ([security](../security.md)).
-- The configuration file format is an open question
-  ([open questions](../open-questions.md)).
+  and no background service. `lcart` opens no network connection in v1.
+- The fact database, bundles and outputs contain names (and, with
+  `--include-source`, excerpts) of the analysed project. They are as
+  sensitive as the code ([security](../security.md)).
+- Configuration format: [ADR-0008](../adr/0008-configuration-file-format.md).

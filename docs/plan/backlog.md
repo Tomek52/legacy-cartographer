@@ -15,11 +15,11 @@ expanded in place; its version is bumped if its meaning changes
 | [B-04](#b04-include-boundary-check-v1) | Include boundary check for the core | M0 | NFR-001 | B-02 | 2 h |
 | [B-05](#b05-libmodbus-compilation-database-v1) | Compilation database for libmodbus | M1 | FR-001 | B-01 | 3 h |
 | [B-06](#b06-sqlite-fact-store-v1) | SQLite fact store, schema v1 | M1 | FR-002–FR-004, NFR-004 | – | 6 h |
-| [B-07](#b07-clang-libtooling-spike-v1) | Clang LibTooling spike and analysis driver | M1 | FR-001 | B-02 | 6 h |
+| [B-07](#b07-clang-libtooling-spike-v2) | Clang LibTooling spike and analysis driver | M1 | FR-001 | B-02 | 6 h |
 | [B-08](#b08-file-and-include-facts-v1) | File and include facts | M1 | FR-002 | B-06, B-07 | 4 h |
 | [B-09](#b09-function-facts-v1) | Function facts | M1 | FR-003 | B-08 | 4 h |
 | [B-10](#b10-call-edges-v1) | Direct and indirect call edges | M1 | FR-004 | B-09 | 5 h |
-| [B-11](#b11-module-rules-v1) | Module rules and module dependencies | M1 | FR-005 | B-08 | 4 h |
+| [B-11](#b11-module-rules-v2) | Module rules and module dependencies | M1 | FR-005 | B-08 | 4 h |
 | [B-12](#b12-query-and-export-v1) | `lcart analyze` / `lcart query` / export | M1 | FR-006, NFR-004 | B-10, B-11 | 5 h |
 | [B-13](#b13-module-map-v1) | `lcart map` | M1 | FR-007 | B-12 | 3 h |
 | [B-14](#b14-libmodbus-baseline-v1) | libmodbus baseline map and timing | M1 | NFR-001, NFR-005 | B-05, B-13 | 3 h |
@@ -102,11 +102,13 @@ Acceptance criteria:
    `'); DROP TABLE file;--`).
 4. Tests use an in-memory database; no files left behind.
 
-### <a id="b07-clang-libtooling-spike-v1"></a>**[B-07 v1]** Clang LibTooling spike and analysis driver
+### <a id="b07-clang-libtooling-spike-v2"></a>**[B-07 v2]** Clang LibTooling spike and analysis driver
 
 Acceptance criteria:
 
-1. `find_package(Clang 18 CONFIG)` from the distribution packages works in
+1. `find_package(Clang 20 CONFIG)` from the distribution packages
+   (`libclang-20-dev`, `libclang-cpp20-dev`, `llvm-20-dev`;
+   [ADR-0007](../adr/0007-cpp23-and-toolchain-baseline.md)) works in
    all presets; CI installs the packages. If it does not, stop and write an
    ADR before continuing.
 2. An `Analyzer` implementation parses each TU of a compilation database and
@@ -134,11 +136,16 @@ on the `fn_pointers` and `macros` fixtures. The `fn_pointers` fixture
 contains a backend table modelled on libmodbus's (struct of function
 pointers initialized statically), in preparation for FR-015.
 
-### <a id="b11-module-rules-v1"></a>**[B-11 v1]** Module rules and module dependencies
+### <a id="b11-module-rules-v2"></a>**[B-11 v2]** Module rules and module dependencies
 
-Acceptance criteria: those of [FR-005](../specs/requirements.md#fr005-map-files-to-modules-v1).
-Requires the configuration file format decision
-([open questions](../open-questions.md)).
+Acceptance criteria: those of [FR-005](../specs/requirements.md#fr005-map-files-to-modules-v1),
+plus:
+
+1. Rules are read from `lcart.toml` with toml++
+   ([ADR-0008](../adr/0008-configuration-file-format.md)); unknown keys and
+   consent switches in the file are errors.
+2. A fuzz target for the configuration parser exists and runs in CI
+   ([NFR-010](../specs/requirements.md#nfr010-untrusted-input-v1)).
 
 ### <a id="b12-query-and-export-v1"></a>**[B-12 v1]** `lcart analyze`, `lcart query`, export
 

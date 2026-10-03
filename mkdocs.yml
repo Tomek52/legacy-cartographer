@@ -65,6 +65,7 @@ nav:
       - specs/index.md
       - Requirements: specs/requirements.md
       - Claim schema: specs/claim-schema.md
+      - Agent handoff contract: specs/handoff-contract.md
   - Architecture:
       - architecture/index.md
       - C4 level 1 – Context: architecture/c4-context.md
@@ -80,6 +81,9 @@ nav:
       - adr/0003-licensing.md
       - adr/0004-llm-provider-abstraction-and-code-privacy.md
       - adr/0005-versioned-requirement-anchors.md
+      - adr/0006-external-agent-handoff-for-llm-work.md
+      - adr/0007-cpp23-and-toolchain-baseline.md
+      - adr/0008-configuration-file-format.md
   - Testing:
       - testing/index.md
       - Strategy: testing/strategy.md

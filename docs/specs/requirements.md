@@ -121,38 +121,48 @@ Acceptance criteria:
 
 1. The output renders with MkDocs + Mermaid without errors (checked in CI for
    the libmodbus map).
-2. The command works with no LLM provider configured and no network access.
+2. The command works with no LLM and no network access.
 3. Running it twice on the same database produces identical output.
 
-### LLM documentation and verification (M2)
+### Agent handoff and verification (M2)
 
-#### <a id="fr008-generate-documentation-v1"></a>**[FR-008 v1]** Generate documentation with an LLM
+#### <a id="fr008-generate-documentation-v2"></a>**[FR-008 v2]** Documentation through an agent handoff
 
-Where an LLM provider is configured, when the user runs `lcart document`, the
-tool shall generate per-module descriptions, C4 context and container
-diagrams in Mermaid, and a glossary, using the fact database as the primary
-input and source excerpts only as allowed by [NFR-002](#nfr002-no-source-egress-by-default-v1).
-
-Acceptance criteria:
-
-1. With a stub provider returning canned responses, the command writes the
-   expected Markdown files.
-2. Every generated file states that it is LLM-generated, which provider and
-   model produced it, and links to the verification report.
-3. Generated Mermaid that fails to parse is reported as an error, not
-   written as a diagram.
-
-#### <a id="fr009-structured-claims-v1"></a>**[FR-009 v1]** Structured claims
-
-The tool shall require the LLM to emit every structural statement as a claim
-conforming to the [claim schema](claim-schema.md), and shall link each claim
-to the sentence in the generated text that states it.
+When the user runs `lcart handoff`, the tool shall write a handoff bundle
+(facts, claim schema, a ready prompt and an output contract) as specified in
+the [handoff contract](handoff-contract.md); when the user runs
+`lcart ingest` on the directory an external coding agent produced from it,
+the tool shall validate the output, verify its claims, annotate the
+documents and write the verification report
+([ADR-0006](../adr/0006-external-agent-handoff-for-llm-work.md)).
 
 Acceptance criteria:
 
-1. Output that does not validate against the schema is rejected with
-   `schema_violation`; the tool retries at most N times (configurable,
-   default 2) and then reports the section as failed.
+1. For a fixture fact database, the bundle equals a committed golden
+   bundle byte for byte, and its `PROMPT.md` matches the
+   [prompt in the contract](handoff-contract.md#claim-handoff-prompt-v1).
+2. `lcart ingest` on a recorded agent output (committed test data) produces
+   the expected annotated documents and report.
+3. `lcart ingest` rejects output that breaks the
+   [output contract](handoff-contract.md#claim-agent-output-v1) (missing file,
+   extra file, marker without claim, claim without marker) and lists every
+   problem.
+4. Every annotated document states that it is LLM-generated, names the agent
+   and model given with `--agent`, and links to the verification report.
+5. Mermaid blocks that fail to parse are reported (TODO: verify how to
+   parse Mermaid without a browser; fallback: a syntax subset check).
+
+#### <a id="fr009-structured-claims-v2"></a>**[FR-009 v2]** Structured claims
+
+The tool shall accept structural statements only as claims conforming to
+the [claim schema](claim-schema.md), each linked to the sentence that states
+it by a claim marker (`[c-NNNN]`).
+
+Acceptance criteria:
+
+1. A claims file that does not validate against the schema is rejected
+   with `schema_violation` and a list of problems; nothing from that output
+   is ingested.
 2. Claims of a kind not in the schema are rejected, not ignored.
 3. The parser never crashes on arbitrary input (fuzzed, see
    [testing strategy](../testing/strategy.md)).
@@ -169,10 +179,9 @@ Acceptance criteria:
 1. Every rule in the claim schema has at least one test per possible
    outcome.
 2. Verification is deterministic and needs no LLM.
-3. `lcart verify` works on a hand-written claims file without any provider
-   configured.
+3. `lcart verify` works on a hand-written claims file without any LLM.
 
-#### <a id="fr011-verification-report-v1"></a>**[FR-011 v1]** Verification report
+#### <a id="fr011-verification-report-v2"></a>**[FR-011 v2]** Verification report
 
 The tool shall write a verification report in Markdown and JSON with counts
 per status, every contradicted and unverified claim with its reason and
@@ -184,10 +193,37 @@ Acceptance criteria:
    `contradicted`.
 2. Sentences in the generated documentation whose claims are contradicted
    are marked in the documentation itself, not only in the report.
-3. The report records tool version, fact database schema version, provider
-   and model.
+3. The report records the tool version, the fact database schema version,
+   the handoff contract version, and the agent and model as stated by the
+   user.
+
+
+
+
+#### <a id="fr015-resolve-function-pointer-tables-v1"></a>**[FR-015 v1]** Resolve function-pointer tables
+
+Where a struct field of function-pointer type is assigned functions in
+static initializers (for example a backend table), the tool shall record
+`may_call` edges from indirect calls through that field to every function
+assigned to it.
+
+Acceptance criteria:
+
+1. For libmodbus, an indirect call through the backend's `check_integrity`
+   field yields `may_call` edges to the RTU and TCP implementations
+   (TODO: verify the initializer form in `modbus-rtu.c` / `modbus-tcp.c`
+   when B-10 is done).
+2. `may_call` edges are reported separately from direct calls and never
+   turn a `calls` claim into `confirmed` (see the claim schema).
+
+### Built-in LLM providers (M6, deferred)
+
+In v1 the tool makes no network requests; these requirements apply when
+built-in providers are added.
 
 #### <a id="fr012-provider-selection-v1"></a>**[FR-012 v1]** Provider selection
+
+Deferred to M6 by [ADR-0006](../adr/0006-external-agent-handoff-for-llm-work.md#adr0006-providers-deferred-v1).
 
 The tool shall support the providers `none` (default), `openai-compatible`,
 `anthropic` and `ollama`, selected by configuration, with API keys read from
@@ -202,6 +238,8 @@ Acceptance criteria:
 3. An API key in the configuration file is rejected with an error.
 
 #### <a id="fr013-explicit-remote-consent-v1"></a>**[FR-013 v1]** Explicit consent for remote egress
+
+Deferred to M6 by [ADR-0006](../adr/0006-external-agent-handoff-for-llm-work.md#adr0006-providers-deferred-v1).
 
 If a request containing source code would be sent to a remote provider and
 the `--allow-remote-source` flag was not given on the command line, then the
@@ -219,6 +257,8 @@ Acceptance criteria:
 
 #### <a id="fr014-egress-log-v1"></a>**[FR-014 v1]** Egress log
 
+Deferred to M6 by [ADR-0006](../adr/0006-external-agent-handoff-for-llm-work.md#adr0006-providers-deferred-v1).
+
 While a provider is in use, the tool shall append to an egress log, for each
 request, the provider, endpoint, time, size and the list of files and line
 ranges whose content was included.
@@ -228,22 +268,6 @@ Acceptance criteria:
 1. A `--dry-run` mode writes the prompts and the egress log without sending
    anything.
 2. The log never contains API keys.
-
-#### <a id="fr015-resolve-function-pointer-tables-v1"></a>**[FR-015 v1]** Resolve function-pointer tables
-
-Where a struct field of function-pointer type is assigned functions in
-static initializers (for example a backend table), the tool shall record
-`may_call` edges from indirect calls through that field to every function
-assigned to it.
-
-Acceptance criteria:
-
-1. For libmodbus, an indirect call through the backend's `check_integrity`
-   field yields `may_call` edges to the RTU and TCP implementations
-   (TODO: verify the initializer form in `modbus-rtu.c` / `modbus-tcp.c`
-   when B-10 is done).
-2. `may_call` edges are reported separately from direct calls and never
-   turn a `calls` claim into `confirmed` (see the claim schema).
 
 ### Characterization tests (M3)
 
@@ -269,33 +293,42 @@ Acceptance criteria:
 
 #### <a id="nfr001-works-without-llm-v1"></a>**[NFR-001 v1]** Works without an LLM
 
-The tool shall provide analysis, query, module map, claim verification and
-test skeleton generation with no LLM provider configured and no network
+The tool shall provide analysis, query, module map, handoff bundles, claim
+verification and test skeleton generation with no LLM and no network
 access.
 
 Acceptance criteria:
 
 1. The deterministic modules (`common`, `facts`, `analysis`, `claims`,
-   `verify`, `report`) do not link the `llm` module; the build fails at
+   `verify`, `report`, `handoff`) do not link the `llm` module; the build fails at
    configure time if they do (`cmake/ArchitectureRules.cmake`).
 2. CI runs the M1 commands on libmodbus in a job without network access
    (TODO: verify how to cut network in GitHub Actions; fallback is
    `unshare -n`).
 
-#### <a id="nfr002-no-source-egress-by-default-v1"></a>**[NFR-002 v1]** No source egress by default
+#### <a id="nfr002-no-source-egress-by-default-v2"></a>**[NFR-002 v2]** No source egress by default
 
-The tool shall not send source code, comments, identifiers or file paths of
-the analysed project to any non-loopback network endpoint unless the
-`--allow-remote-source` flag is given for that invocation.
+The tool shall make no network requests in v1, and a handoff bundle shall
+contain no source code, comments or string literals of the analysed project
+unless `--include-source` is given on the command line of that invocation.
 
 Acceptance criteria:
 
-1. Covered by [FR-013](#fr013-explicit-remote-consent-v1) tests.
-2. The default configuration uses provider `none`.
-3. Telemetry: none. The tool makes no network request that is not an LLM
-   request the user configured.
+1. Tests of `lcart analyze`, `map`, `handoff` and `ingest` pass with network
+   access blocked.
+2. A facts-only bundle of a fixture whose comments contain a marker string
+   does not contain that string anywhere.
+3. `MANIFEST.json` lists every file and line range included with
+   `--include-source`; `--include-source` in `lcart.toml` is an error
+   ([ADR-0008](../adr/0008-configuration-file-format.md#adr0008-no-consent-in-config-v1)).
+4. No telemetry, no update checks.
+5. From M6, also [FR-013](#fr013-explicit-remote-consent-v1) for built-in
+   providers.
 
 #### <a id="nfr003-fully-local-mode-v1"></a>**[NFR-003 v1]** Fully local mode
+
+Deferred to M6 by [ADR-0006](../adr/0006-external-agent-handoff-for-llm-work.md#adr0006-providers-deferred-v1).
+Until then, the offline mode is the no-LLM mode ([NFR-001](#nfr001-works-without-llm-v1)).
 
 Where a local provider (Ollama or an OpenAI-compatible server on loopback)
 is configured, the tool shall generate documentation and claims with no
@@ -333,11 +366,12 @@ Acceptance criteria:
 2. A budget for 1 MLOC code bases is set after the M1 baseline (open
    question).
 
-#### <a id="nfr006-toolchain-baseline-v1"></a>**[NFR-006 v1]** Toolchain baseline
+#### <a id="nfr006-toolchain-baseline-v2"></a>**[NFR-006 v2]** Toolchain baseline
 
-The tool shall build with C++20 on Ubuntu 24.04 with GCC 13 and Clang 18,
+The tool shall build with C++23 on Ubuntu 24.04 with GCC 14 and Clang 20,
 using CMake presets and Conan 2, and also from distribution packages without
-Conan (`debug-system` preset) for offline environments.
+Conan (`debug-system` preset) for offline environments
+([ADR-0007](../adr/0007-cpp23-and-toolchain-baseline.md)).
 
 Acceptance criteria:
 
@@ -392,7 +426,7 @@ Acceptance criteria:
 1. Fuzz targets for the claim parser and the configuration parser run in
    CI for at least 60 s per change.
 2. Prompts delimit analysed code as data
-   ([security](../security.md#security-prompt-injection-v1)).
+   ([security](../security.md#security-prompt-injection-v2)).
 
 #### <a id="nfr011-licensing-v1"></a>**[NFR-011 v1]** Licensing
 

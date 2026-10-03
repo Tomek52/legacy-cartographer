@@ -14,10 +14,12 @@ pinned and unmodified submodule.
 
 Legacy code often has no reliable documentation, and LLM summaries cannot be
 trusted as they are. This tool keeps the useful part (fast, readable
-summaries) and makes the risky part (wrong statements) visible. It works
-without any LLM, and fully offline with a local one; source code is never
-sent to a remote API without an explicit per-run flag
-([ADR-0004](docs/adr/0004-llm-provider-abstraction-and-code-privacy.md)).
+summaries) and makes the risky part (wrong statements) visible. Static
+analysis works without any LLM. For documentation, `lcart` writes a bundle
+with a ready prompt for a coding agent of your choice (e.g. Claude Code) and
+verifies what the agent returns; `lcart` itself makes no network requests
+([ADR-0006](docs/adr/0006-external-agent-handoff-for-llm-work.md)).
+Built-in providers and local models are planned for later (M6).
 
 ## Status
 
@@ -27,7 +29,7 @@ libmodbus without LLM. See the [roadmap](docs/plan/roadmap.md).
 
 ## Build
 
-Ubuntu 24.04, GCC 13 or Clang 18, CMake ≥ 3.25, Ninja, Conan 2.
+Ubuntu 24.04, GCC 14 or Clang 20 (C++23), CMake ≥ 3.25, Ninja, Conan 2.
 
 ```bash
 # With Conan (presets: debug, clang-debug, release, asan-ubsan)
@@ -35,7 +37,7 @@ scripts/conan-install.sh debug
 cmake --workflow --preset debug
 
 # Without Conan, from Ubuntu packages (offline machines)
-sudo apt-get install ninja-build libsqlite3-dev nlohmann-json3-dev libgtest-dev
+sudo apt-get install ninja-build g++-14 libsqlite3-dev nlohmann-json3-dev libgtest-dev
 cmake --workflow --preset debug-system
 
 build/debug-system/src/cli/lcart --help

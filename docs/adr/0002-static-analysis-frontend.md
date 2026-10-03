@@ -1,6 +1,6 @@
 # 0002. Clang LibTooling as the analysis frontend
 
-- **Status:** Accepted
+- **Status:** Accepted; LLVM version superseded by [ADR-0007](0007-cpp23-and-toolchain-baseline.md) (LLVM 20)
 - **Date:** 2026-10-03
 - **Requirements:** [FR-001](../specs/requirements.md#fr001-ingest-compilation-database-v1)…[FR-005](../specs/requirements.md#fr005-map-files-to-modules-v1), [FR-015](../specs/requirements.md#fr015-resolve-function-pointer-tables-v1), [NFR-004](../specs/requirements.md#nfr004-deterministic-output-v1)
 

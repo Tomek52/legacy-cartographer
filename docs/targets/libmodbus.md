@@ -69,9 +69,11 @@ rule would give one module. The libmodbus configuration (B-14) defines:
 
 ### M2: generated documentation and verification report
 
-1. Generate module descriptions and C4 diagrams for libmodbus with at least
-   one local model and, optionally, one remote model (libmodbus is public, so
-   `--allow-remote-source` is acceptable here).
+1. `lcart handoff` for libmodbus, then run a coding agent (Claude Code) on
+   the bundle with the prompt from the [handoff contract](../specs/handoff-contract.md).
+   Run it twice: facts-only, and with `--include-source` (libmodbus is
+   public, so sharing excerpts is fine), and compare the verification
+   reports.
 2. Publish the docs with their verification reports. Contradicted claims are
    kept and shown: they are the point of the demonstration.
 3. Label the real claims and add them to the verifier's labelled set.
@@ -107,6 +109,8 @@ on a pseudo-terminal. TODO: verify which works with the public API only.
   here.
 
 ### M5: modern C++20 wrapper
+
+The wrapper's public API stays C++20 for its users ([ADR-0007](../adr/0007-cpp23-and-toolchain-baseline.md#adr0007-wrapper-stays-cpp20-v1)).
 
 - Header + small library in `wrappers/modbus-cpp/` (outside the submodule):
   RAII context (`std::unique_ptr` with a custom deleter calling

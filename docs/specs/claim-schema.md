@@ -1,8 +1,8 @@
 # Claim schema and verification rules
 
-The LLM writes prose, but every **structural** statement in it must also be
-emitted as a claim: a small JSON object that the verifier can check against
-the fact database ([FR-009](requirements.md#fr009-structured-claims-v1),
+The agent or LLM writes prose, but every **structural** statement in it must
+also be emitted as a claim: a small JSON object that the verifier can check against
+the fact database ([FR-009](requirements.md#fr009-structured-claims-v2),
 [FR-010](requirements.md#fr010-verify-claims-v1)). The C++ model is in
 `src/claims/claim.hpp` and `src/verify/verdict.hpp`.
 

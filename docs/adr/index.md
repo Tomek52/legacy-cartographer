@@ -16,7 +16,10 @@ Rules:
 | # | Decision | Status |
 |---|---|---|
 | [0001](0001-spec-driven-development-and-adrs.md) | Spec-driven development and ADRs | Accepted |
-| [0002](0002-static-analysis-frontend.md) | Clang LibTooling as the analysis frontend | Accepted |
+| [0002](0002-static-analysis-frontend.md) | Clang LibTooling as the analysis frontend | Accepted (LLVM version superseded by 0007) |
 | [0003](0003-licensing.md) | Apache-2.0 for own code; LGPL-2.1 obligations for libmodbus | Accepted |
-| [0004](0004-llm-provider-abstraction-and-code-privacy.md) | LLM provider abstraction and code privacy | Accepted |
+| [0004](0004-llm-provider-abstraction-and-code-privacy.md) | LLM provider abstraction and code privacy | Accepted (providers deferred to M6 by 0006) |
 | [0005](0005-versioned-requirement-anchors.md) | Versioned anchors and requirement-to-test traceability | Accepted |
+| [0006](0006-external-agent-handoff-for-llm-work.md) | LLM work through an external agent handoff in v1 | Accepted |
+| [0007](0007-cpp23-and-toolchain-baseline.md) | C++23 and toolchain baseline: GCC 14, Clang/LLVM 20 | Accepted |
+| [0008](0008-configuration-file-format.md) | Project configuration in TOML | Accepted |

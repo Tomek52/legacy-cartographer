@@ -40,10 +40,10 @@ flowchart LR
 | Look for | Why |
 |---|---|
 | Tests weakened to pass: assertions removed, expected values copied from actual output, golden files regenerated without review | the most common way a wrong change "passes" |
-| Invented APIs: Clang, SQLite or libmodbus functions or flags that do not exist in the pinned versions | plausible and wrong; check against the headers |
+| Invented APIs: Clang, SQLite, toml++ or libmodbus functions or flags that do not exist in the pinned versions | plausible and wrong; check against the headers |
 | Hidden nondeterminism: hash-map iteration, unsorted directory listing, timestamps in facts | breaks NFR-004 silently |
 | Boundary erosion: core code including `llm/`, Clang types outside `analysis` | the build checks linking; review checks intent |
-| Egress changes: anything touching `llm/egress_policy.hpp` or what goes into a prompt | the privacy guarantee lives there |
+| Changes to what leaves `lcart`: bundle content (`handoff`), the prompt, `--include-source`, and in M6 `llm/egress_policy.hpp` | the privacy guarantee lives there |
 | Unverified statements in docs: facts about libmodbus or Clang without a source | mark them "TODO: verify" and list them in [open questions](open-questions.md) |
 | Scope creep: refactoring mixed with behaviour change | harder to review |
 | Over-mocking: tests asserting that a fake was called instead of behaviour | passes while the system is broken |

@@ -22,6 +22,10 @@
   example "function A calls function B". Defined in the
   [claim schema](specs/claim-schema.md).
 
+**Coding agent**
+: An LLM-based tool that reads and writes files on the user's machine (e.g.
+  Claude Code). In v1 it does the documentation work from a handoff bundle.
+
 **Compilation database**
 : `compile_commands.json`: the list of translation units and the exact
   compiler arguments used to build them. The tool's input.
@@ -45,13 +49,18 @@
   [requirements](specs/requirements.md).
 
 **Egress**
-: Any data leaving the user's machine. Here: source code in an LLM prompt
-  sent to a remote endpoint.
+: Any data leaving the user's machine, such as project data in an LLM
+  prompt sent to a remote endpoint.
 
 **Fact / fact database**
 : A fact is a record derived deterministically from the code by static
   analysis (a file, an include, a function, a call). The fact database is the
   SQLite file holding them ([data model](architecture/data-model.md)).
+
+**Handoff bundle**
+: The directory `lcart handoff` writes for a coding agent: facts, claim
+  schema, a ready prompt, the output contract and a manifest
+  ([handoff contract](specs/handoff-contract.md)).
 
 **LibTooling**
 : Clang's C++ library for writing tools that parse code with the real Clang
@@ -67,8 +76,9 @@
   [security](security.md).
 
 **Provider (LLM provider)**
-: An implementation of the LLM interface for one API: OpenAI-compatible,
-  Anthropic, Ollama, or none.
+: A built-in implementation of the LLM interface for one API
+  (OpenAI-compatible, Anthropic, Ollama). Planned for M6; v1 uses a coding
+  agent instead.
 
 **Seam**
 : A place where behaviour can be changed without editing the code there

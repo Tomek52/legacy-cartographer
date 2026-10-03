@@ -22,8 +22,9 @@ external API is often not allowed.
 1. Build a **fact database** from static analysis with Clang. It is
    deterministic, needs no LLM, and is useful on its own (module map, call
    graph queries).
-2. Let an LLM (optional) write documentation **from the facts**, and make it
-   state its structural assertions as **structured claims**.
+2. Let a coding agent (optional, e.g. Claude Code) write documentation
+   **from the facts**, using a ready prompt from `lcart`, and make it state
+   its structural assertions as **structured claims**.
 3. **Verify every claim** against the fact database, and publish the
    verification report next to the documentation.
 4. Help with the first safe change: generate **characterization test**
@@ -50,9 +51,10 @@ external API is often not allowed.
   claim kinds in the [claim schema](specs/claim-schema.md) (structure: calls,
   includes, dependencies, membership). Statements about *behaviour* or
   *intent* remain unverified prose, and the report says so.
-- **Not a hosted service.** It is a local CLI; nothing runs in the cloud
-  unless the user configures a remote LLM and explicitly allows source code
-  to be sent ([ADR-0004](adr/0004-llm-provider-abstraction-and-code-privacy.md)).
+- **Not a hosted service and not an LLM client (yet).** It is a local CLI
+  that makes no network requests. LLM work is done by a coding agent the
+  user runs on a handoff bundle; built-in providers come later
+  ([ADR-0006](adr/0006-external-agent-handoff-for-llm-work.md)).
 - **Not a whole-language C++ semantic model.** Templates, macros and
   function pointers are handled as far as Clang's AST allows; where the call
   target is not statically known, the tool says so instead of guessing.
@@ -62,6 +64,8 @@ external API is often not allowed.
 - On libmodbus: a module map and call graph produced without any LLM in under
   a minute, a generated architecture description whose verification report
   shows no contradicted claims left unflagged, characterization tests for the
-  frame-parsing path, a fuzzing harness for it, and a C++20 wrapper with tests.
-- The same tool, run fully offline on a private code base, produces the same
-  kind of output without sending a byte of source code anywhere.
+  frame-parsing path, a fuzzing harness for it, and a C++20 wrapper with tests
+  (the wrapper's API stays C++20 for its users; the tool itself is C++23).
+- The same tool, run on a private code base, produces the fact database and
+  module map fully offline, and a documentation bundle whose content (facts
+  only, by default) the user reviews before any agent sees it.

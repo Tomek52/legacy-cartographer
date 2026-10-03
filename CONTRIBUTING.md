@@ -36,18 +36,18 @@ LLM-assisted changes follow the same process; the review checklist is in
 
 ## Conventions
 
-- C++20, formatted by `.clang-format`, checked by `.clang-tidy` (naming
+- C++23 (GCC 14, Clang 20; ADR-0007), formatted by `.clang-format`, checked by `.clang-tidy` (naming
   rules included): `snake_case` functions and variables, `CamelCase` types,
   trailing `_` on private members, namespaces `lcart::<module>`.
 - Headers under `src/<module>/`, included as `"<module>/<file>.hpp"`.
-- `[[nodiscard]]` on functions returning `Result`, `std::optional` or a
-  status `bool`.
+- Fallible functions return `common::Result<T>` (`std::expected`);
+  `[[nodiscard]]` on them and on `std::optional` or status `bool` returns.
 - Exhaustive `switch` over enums without `default:`, followed by
-  `common::unreachable()`.
+  `std::unreachable()`.
 - Comments explain *why*; public interfaces document their contract with
   `///`.
 - The deterministic core (`common`, `facts`, `analysis`, `claims`,
-  `verify`, `report`) never depends on `llm`. The build enforces it.
+  `verify`, `report`, `handoff`) never depends on `llm`. The build enforces it.
 - Never modify anything under `targets/`.
 
 ## Commits
@@ -58,7 +58,7 @@ LLM-assisted changes follow the same process; the review checklist is in
 - Types: `feat`, `fix`, `refactor`, `perf`, `test`, `docs`, `build`, `ci`,
   `chore`.
 - Scopes: `facts`, `analysis`, `llm`, `claims`, `verify`, `report`, `cli`,
-  `testgen`, `fuzz`, `cmake`, `conan`, `targets`, `adr`, `specs`.
+  `handoff`, `testgen`, `fuzz`, `cmake`, `conan`, `targets`, `adr`, `specs`.
 - The body says *why* and references the backlog item (`Backlog: B-07`) and
   ADRs.
 - Every commit builds and passes its tests.

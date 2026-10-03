@@ -5,25 +5,27 @@ Arrows are build dependencies (who includes and links whom).
 
 ```mermaid
 flowchart TB
-    cli["<b>cli</b><br/>command dispatch, options"]
+    cli["<b>cli</b><br/>command dispatch, options,<br/>lcart.toml"]
 
     subgraph det["Deterministic core (no LLM, no network)"]
         analysis["<b>analysis</b><br/>Clang LibTooling frontend,<br/>module rules"]
         facts["<b>facts</b><br/>fact model, FactWriter / FactQuery,<br/>SQLite store"]
         claims["<b>claims</b><br/>claim model, JSON parser + validation"]
         verify["<b>verify</b><br/>per-kind verification rules"]
-        report["<b>report</b><br/>module map, verification report"]
-        common["<b>common</b><br/>Result, errors, version"]
+        report["<b>report</b><br/>module map, verification report,<br/>document annotation"]
+        handoff["<b>handoff</b><br/>bundle writer, agent output reader"]
+        common["<b>common</b><br/>Result (std::expected), errors, version"]
     end
 
-    subgraph gen["LLM layer (optional)"]
-        llm["<b>llm</b><br/>LlmProvider, egress policy,<br/>providers, prompt builder"]
+    subgraph later["Later (M6)"]
+        llm["<b>llm</b><br/>LlmProvider, egress gate,<br/>built-in providers"]
     end
 
     testgen["<b>testgen</b> (M3)<br/>characterization test skeletons"]
 
-    cli --> analysis & report & llm & testgen
+    cli --> analysis & report & handoff & llm & testgen
     analysis --> facts
+    handoff --> claims & facts
     verify --> claims & facts
     report --> verify
     claims --> common
@@ -35,8 +37,7 @@ flowchart TB
 No module of the deterministic core may depend on `llm`; the build fails at
 configure time if one does (`cmake/ArchitectureRules.cmake`).
 
-The `llm` module does not depend on `facts` directly: the `document` command
-in `cli` reads facts, builds prompts through `llm`, and passes the returned
-claims to `verify`. This keeps the LLM layer replaceable and testable with a
-stub provider. (Where the prompt builder lives is decided in M2; see
-[open questions](../open-questions.md).)
+The `ingest` command in `cli` chains the core: `handoff::read_agent_output`
+→ `verify::verify_claim` for each claim → `report` writes the annotated
+documents and the report. Nothing in this chain needs an LLM, so recorded
+agent outputs make it fully testable.

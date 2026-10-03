@@ -9,13 +9,14 @@ and cite the requirement they verify
 
 | Level | What | Tools | Runs |
 |---|---|---|---|
-| Unit | one module through its interface, dependencies faked (`FactQuery` fake for `verify`, stub `LlmProvider`) | GoogleTest | every preset, every change |
+| Unit | one module through its interface, dependencies faked (`FactQuery` fake for `verify`) | GoogleTest | every preset, every change |
+| Handoff | golden bundles for fixtures; recorded agent outputs (valid and broken) for `ingest` | GoogleTest + committed test data | every change |
 | Analysis fixtures | `analysis` on tiny C/C++ projects under `tests/fixtures/` with hand-written expected facts | GoogleTest + fixture `compile_commands.json` | every change |
 | Golden files | fact export, module map, report: byte-for-byte against committed files | GoogleTest | every change |
 | Determinism | same input, 1 vs N threads, shuffled TU order → identical export ([NFR-004](../specs/requirements.md#nfr004-deterministic-output-v1)) | GoogleTest | every change |
 | Architecture | deterministic core does not link `llm` | CMake configure check | every configure |
 | Fuzzing | parsers of untrusted input | libFuzzer + ASan/UBSan | 60 s per change in CI; longer runs locally |
-| End-to-end | CLI on libmodbus: analyze → map (M1), → document with stub provider → verify (M2) | shell script, CTest | CI |
+| End-to-end | CLI on libmodbus: analyze → map (M1); → handoff → ingest of a recorded agent output → report (M2) | shell script, CTest | CI |
 | Verifier accuracy | labelled claim set (below) | GoogleTest data-driven | every change from M2 |
 
 All tests also run under ASan + UBSan (`asan-ubsan` preset).
@@ -52,8 +53,8 @@ building a wrapper on top of it (M3, then M5).
 
 | Target | Input | Milestone |
 |---|---|---|
-| `claim_json_fuzzer` | arbitrary bytes as LLM output → `parse_claims` | M2 (stub exists) |
-| config parser fuzzer | arbitrary project configuration | M1/M2 |
+| `claim_json_fuzzer` | arbitrary bytes as agent output → `parse_claims` | M2 (stub exists) |
+| config parser fuzzer | arbitrary `lcart.toml` | M1 (B-11) |
 | libmodbus frame parsing | arbitrary bytes as a received frame through the seam above | M4 |
 
 - Sanitizers: ASan + UBSan. Corpora are kept out of the repository except a
@@ -79,8 +80,8 @@ database). Sources:
 3. **Hard cases** expected to be `unverified`: calls through the backend
    table, calls only inside `#ifdef` branches not compiled with the given
    flags, functions in TUs that failed to parse.
-4. **Real LLM claims** (from M2): claims produced by the models used, labelled
-   by hand. These show which mistakes models actually make.
+4. **Real agent claims** (from M2): claims produced by the agents and models
+   used, labelled by hand. These show which mistakes models actually make.
 
 **Metrics** (per claim kind and overall), from the confusion matrix of
 expected vs actual status:
