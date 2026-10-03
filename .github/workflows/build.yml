@@ -1,0 +1,78 @@
+name: build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  APT_PACKAGES: ninja-build gcc-13 g++-13 clang-18 clang-tidy-18 clang-format-18 libclang-rt-18-dev
+  CONAN_VERSION: "2.30.0"
+
+jobs:
+  cpp:
+    name: C++ ${{ matrix.preset }}
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        # asan-ubsan also builds the libFuzzer targets (Clang only).
+        preset: [debug, clang-debug, release, asan-ubsan]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install toolchain
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq $APT_PACKAGES
+      - name: Install Conan
+        run: pipx install "conan==${CONAN_VERSION}"
+      - uses: actions/cache@v4
+        with:
+          path: ~/.conan2/p
+          key: conan-${{ matrix.preset }}-${{ hashFiles('conanfile.py', 'conan/profiles/*') }}
+      - name: Conan dependencies
+        run: scripts/conan-install.sh ${{ matrix.preset }}
+      - name: Configure
+        run: cmake --preset ${{ matrix.preset }}
+      - name: Build
+        run: cmake --build --preset ${{ matrix.preset }}
+      - name: Test
+        run: ctest --preset ${{ matrix.preset }}
+      - name: Fuzz smoke (stub targets, 10 s)
+        if: matrix.preset == 'asan-ubsan'
+        run: build/asan-ubsan/fuzz/claim_json_fuzzer -max_total_time=10
+
+  cpp-system:
+    # Same build from Ubuntu packages only: the offline / air-gapped path
+    # (NFR-006).
+    name: C++ debug-system (no Conan)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install toolchain and libraries
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq $APT_PACKAGES libsqlite3-dev nlohmann-json3-dev libgtest-dev
+      - name: Configure, build, test
+        run: cmake --workflow --preset debug-system
+
+  lint:
+    name: Format + clang-tidy
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install toolchain and libraries
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq $APT_PACKAGES libsqlite3-dev nlohmann-json3-dev libgtest-dev
+      - name: clang-format
+        run: scripts/check-format.sh
+      - name: clang-tidy
+        run: |
+          cmake --preset debug-system
+          scripts/run-clang-tidy.sh debug-system

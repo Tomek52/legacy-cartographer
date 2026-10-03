@@ -1,0 +1,31 @@
+name: codeql
+
+# Manual only while the repository is private: CodeQL code scanning on
+# private repositories requires GitHub Advanced Security. When the repository
+# becomes public, add `push` / `pull_request` / `schedule` triggers.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  analyze:
+    name: CodeQL (c-cpp)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install toolchain and libraries
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ninja-build libsqlite3-dev nlohmann-json3-dev libgtest-dev
+      - uses: github/codeql-action/init@v3
+        with:
+          languages: c-cpp
+          build-mode: manual
+      - name: Build
+        run: |
+          cmake --preset debug-system
+          cmake --build --preset debug-system
+      - uses: github/codeql-action/analyze@v3
