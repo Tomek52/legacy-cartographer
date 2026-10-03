@@ -23,7 +23,8 @@ import sys
 from pathlib import Path
 
 DOCS = Path(__file__).resolve().parent.parent / "docs"
-SKIP = {DOCS / "adr" / "template.md"}
+# Relative to the docs root: the ADR template shows the anchor syntax with placeholders.
+SKIP = {Path("adr") / "template.md"}
 
 ID_FORMAT = re.compile(
     r"^(fr\d{3}|nfr\d{3}|b\d{2}|m\d|adr\d{4}|arch|claim|testing|security)"
@@ -45,12 +46,17 @@ def expected_marker(anchor_id: str) -> tuple[str, str] | None:
     return None
 
 
-def check(paths: list[Path]) -> list[str]:
+def markdown_files(docs: Path) -> list[Path]:
+    return sorted(p for p in docs.rglob("*.md") if p.relative_to(docs) not in SKIP)
+
+
+def check(docs: Path) -> list[str]:
+    """Returns one `file:line: message` per problem in the Markdown under `docs`."""
     problems: list[str] = []
     seen: dict[str, str] = {}
-    for path in paths:
+    for path in markdown_files(docs):
         in_code = False
-        rel = path.relative_to(DOCS.parent)
+        rel = path.relative_to(docs.parent)
         for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
             if FENCE.match(line):
                 in_code = not in_code
@@ -82,13 +88,12 @@ def check(paths: list[Path]) -> list[str]:
 
 
 def main() -> int:
-    paths = sorted(p for p in DOCS.rglob("*.md") if p not in SKIP)
-    problems = check(paths)
+    problems = check(DOCS)
     for problem in problems:
         print(problem)
     if problems:
         return 1
-    print(f"check-doc-anchors: OK ({len(paths)} files)")
+    print(f"check-doc-anchors: OK ({len(markdown_files(DOCS))} files)")
     return 0
 
 

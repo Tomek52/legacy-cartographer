@@ -28,7 +28,8 @@ LLM-assisted changes follow the same process; the review checklist is in
 - [ ] `cmake --workflow --preset <p>` passes for `debug`, `clang-debug`,
       `release`, `asan-ubsan` (or `debug-system` where Conan is unavailable).
 - [ ] `scripts/check-format.sh` and `scripts/run-clang-tidy.sh` are clean.
-- [ ] `scripts/docs-check.sh` passes; changed requirements have their `vN`
+- [ ] `scripts/docs-check.sh` passes (and `python3 -m unittest discover -s tests/docs`
+      if you changed the checker); changed requirements have their `vN`
       bumped ([ADR-0005](docs/adr/0005-versioned-requirement-anchors.md)).
 - [ ] Roadmap checkboxes, architecture docs and open questions updated.
 - [ ] No `TODO` without a reference (`TODO(B-07)`, `TODO(M2)`); no `NOLINT`

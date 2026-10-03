@@ -12,7 +12,7 @@ expanded in place; its version is bumped if its meaning changes
 |---|---|---|---|---|---|
 | [B-01](#b01-libmodbus-submodule-v1) | ✅ libmodbus submodule, pinned and checked | M0 | NFR-008 | – | 2 h |
 | [B-02](#b02-ci-green-all-presets-v1) | ✅ CI green on all presets with Conan | M0 | NFR-006, NFR-007 | – | 4 h |
-| [B-03](#b03-docs-ci-and-anchor-check-v1) | Docs CI and anchor checker | M0 | NFR-012 | – | 2 h |
+| [B-03](#b03-docs-ci-and-anchor-check-v1) | ✅ Docs CI and anchor checker | M0 | NFR-012 | – | 2 h |
 | [B-04](#b04-include-boundary-check-v1) | Include boundary check for the core | M0 | NFR-001 | B-02 | 2 h |
 | [B-05](#b05-libmodbus-compilation-database-v1) | Compilation database for libmodbus | M1 | FR-001 | B-01 | 3 h |
 | [B-06](#b06-sqlite-fact-store-v1) | SQLite fact store, schema v1 | M1 | FR-002–FR-004, NFR-004 | – | 6 h |

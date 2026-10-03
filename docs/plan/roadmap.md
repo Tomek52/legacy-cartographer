@@ -19,6 +19,8 @@ flowchart LR
 
 ## <a id="m0-foundations-v2"></a>**[M0 v2]** Foundations
 
+**Status:** done (2026-10-03).
+
 **Goal:** a repository in which work can start safely: it builds, tests and
 documents itself in CI.
 
@@ -36,8 +38,8 @@ interfaces without logic, libmodbus submodule.
 
 - [x] CI green on `main` for all presets, lint and docs jobs (B-02;
       first run 2026-10-03).
-- [ ] Docs checker has its own tests and was shown to fail on bad input
-      (B-03).
+- [x] Docs checker has its own tests and was shown to fail on bad input
+      (B-03: `tests/docs/`, run in the docs workflow).
 - [x] Configure-time architecture check rejects `llm` in the deterministic
       core (verified by a deliberate violation before commit).
 - [x] libmodbus submodule pinned at v3.2.0, CI checks it is clean (B-01).
