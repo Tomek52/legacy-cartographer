@@ -1,9 +1,8 @@
 #pragma once
 
 #include <cstdint>
+#include <expected>
 #include <string>
-#include <utility>
-#include <variant>
 
 namespace lcart::common {
 
@@ -15,10 +14,10 @@ enum class ErrorCode : std::uint8_t {
     parse_error,
     not_found,
     /// A request would send source code to a remote provider without explicit
-    /// consent (NFR-002, ADR-0004).
+    /// consent (NFR-002; providers arrive in M6, ADR-0006).
     egress_denied,
     provider_error,
-    /// LLM output does not conform to the claim JSON Schema (FR-009).
+    /// Agent or LLM output does not conform to the claim JSON Schema (FR-009).
     schema_violation,
 };
 
@@ -27,27 +26,11 @@ struct Error {
     std::string message;
 };
 
-/// Value-or-error return type. Stand-in for C++23 std::expected while the
-/// project targets C++20 (see docs/open-questions.md). Accessing the wrong
-/// alternative throws std::bad_variant_access: check has_value() first.
+/// Value-or-error return type used across module boundaries (ADR-0007).
 template <typename T>
-class [[nodiscard]] Result {
-public:
-    Result(T value) : storage_(std::in_place_index<0>, std::move(value)) {}
-    Result(Error error) : storage_(std::in_place_index<1>, std::move(error)) {}
-
-    [[nodiscard]] bool has_value() const noexcept { return storage_.index() == 0; }
-    [[nodiscard]] explicit operator bool() const noexcept { return has_value(); }
-
-    [[nodiscard]] const T& value() const& { return std::get<0>(storage_); }
-    [[nodiscard]] T& value() & { return std::get<0>(storage_); }
-    [[nodiscard]] const Error& error() const& { return std::get<1>(storage_); }
-
-private:
-    std::variant<T, Error> storage_;
-};
+using Result = std::expected<T, Error>;
 
 /// Result of an operation that produces no value.
-using Status = Result<std::monostate>;
+using Status = std::expected<void, Error>;
 
 } // namespace lcart::common

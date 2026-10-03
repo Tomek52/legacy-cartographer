@@ -7,7 +7,7 @@ cd "$(dirname "$0")/.."
 
 preset="${1:-debug}"
 build_dir="build/$preset"
-clang_tidy="${CLANG_TIDY:-clang-tidy-18}"
+clang_tidy="${CLANG_TIDY:-clang-tidy-20}"
 
 if [[ ! -f "$build_dir/compile_commands.json" ]]; then
     echo "run-clang-tidy: $build_dir/compile_commands.json missing; run cmake --preset $preset first" >&2

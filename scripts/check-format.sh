@@ -4,7 +4,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-clang_format="${CLANG_FORMAT:-clang-format-18}"
+clang_format="${CLANG_FORMAT:-clang-format-20}"
 mode=(--dry-run --Werror)
 [[ "${1:-}" == "--fix" ]] && mode=(-i)
 

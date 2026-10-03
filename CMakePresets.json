@@ -19,21 +19,21 @@
       "name": "gcc",
       "hidden": true,
       "cacheVariables": {
-        "CMAKE_C_COMPILER": "gcc",
-        "CMAKE_CXX_COMPILER": "g++"
+        "CMAKE_C_COMPILER": "gcc-14",
+        "CMAKE_CXX_COMPILER": "g++-14"
       }
     },
     {
       "name": "clang",
       "hidden": true,
       "cacheVariables": {
-        "CMAKE_C_COMPILER": "clang-18",
-        "CMAKE_CXX_COMPILER": "clang++-18"
+        "CMAKE_C_COMPILER": "clang-20",
+        "CMAKE_CXX_COMPILER": "clang++-20"
       }
     },
     {
       "name": "debug",
-      "displayName": "GCC Debug (Conan)",
+      "displayName": "GCC 14 Debug (Conan)",
       "inherits": [
         "base",
         "gcc"
@@ -45,7 +45,7 @@
     },
     {
       "name": "clang-debug",
-      "displayName": "Clang Debug (Conan)",
+      "displayName": "Clang 20 Debug (Conan)",
       "inherits": [
         "base",
         "clang"
@@ -57,7 +57,7 @@
     },
     {
       "name": "release",
-      "displayName": "GCC Release (Conan)",
+      "displayName": "GCC 14 Release (Conan)",
       "inherits": [
         "base",
         "gcc"
@@ -69,7 +69,7 @@
     },
     {
       "name": "asan-ubsan",
-      "displayName": "Clang Debug + ASan/UBSan + fuzzers (Conan)",
+      "displayName": "Clang 20 Debug + ASan/UBSan + fuzzers (Conan)",
       "inherits": [
         "base",
         "clang"
@@ -83,7 +83,7 @@
     },
     {
       "name": "debug-system",
-      "displayName": "GCC Debug, Ubuntu packages, no Conan (offline / air-gapped)",
+      "displayName": "GCC 14 Debug, Ubuntu packages, no Conan (offline / air-gapped)",
       "inherits": [
         "base",
         "gcc"

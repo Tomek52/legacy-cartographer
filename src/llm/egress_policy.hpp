@@ -16,7 +16,7 @@ struct EgressPolicy {
 /// `policy`. Requests to local providers are always allowed; requests to
 /// remote providers only when they contain no source code or the policy
 /// allows it.
-// TODO(M2): implement, with exhaustive tests of the decision table.
+// TODO(M6): implement, with exhaustive tests of the decision table.
 [[nodiscard]] bool may_send(const EgressPolicy& policy, Locality locality,
                             const CompletionRequest& request) noexcept;
 

@@ -1,10 +1,9 @@
 #pragma once
 
-#include "common/unreachable.hpp"
-
 #include <cstdint>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 namespace lcart::verify {
@@ -45,7 +44,7 @@ struct Verdict {
     case VerificationStatus::contradicted:
         return "contradicted";
     }
-    common::unreachable();
+    std::unreachable();
 }
 
 } // namespace lcart::verify

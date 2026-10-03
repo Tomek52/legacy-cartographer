@@ -1,8 +1,9 @@
 """Conan 2 recipe for legacy-cartographer's third-party dependencies.
 
 Only libraries that Conan Center packages well are managed here. LLVM/Clang
-(LibTooling) comes from the distribution's packages (llvm-18-dev,
-libclang-18-dev, libclang-cpp18-dev): see docs/adr/0002-static-analysis-frontend.md.
+(LibTooling) comes from the distribution's packages (llvm-20-dev,
+libclang-20-dev, libclang-cpp20-dev): see docs/adr/0002-static-analysis-frontend.md
+and docs/adr/0007-cpp23-and-toolchain-baseline.md.
 
 Usage (one output folder per CMake preset, matching CMakePresets.json):
     scripts/conan-install.sh debug

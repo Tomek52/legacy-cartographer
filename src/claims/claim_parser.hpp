@@ -8,7 +8,7 @@
 
 namespace lcart::claims {
 
-/// Parses and schema-validates LLM output into claims (FR-009).
+/// Parses and schema-validates agent or LLM output into claims (FR-009).
 ///
 /// The input is untrusted: it comes from a model that has read the analysed
 /// code, including its comments (docs/security.md). Invalid input yields

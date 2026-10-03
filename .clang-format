@@ -1,7 +1,7 @@
 ---
 Language: Cpp
 BasedOnStyle: LLVM
-Standard: c++20
+Standard: Latest
 ColumnLimit: 100
 IndentWidth: 4
 AccessModifierOffset: -4
@@ -15,7 +15,7 @@ PointerAlignment: Left
 IncludeBlocks: Regroup
 IncludeCategories:
   # Project headers first, then third-party, then the standard library.
-  - Regex: '^"(common|facts|analysis|llm|claims|verify|report|cli)/'
+  - Regex: '^"(common|facts|analysis|handoff|llm|claims|verify|report|cli)/'
     Priority: 1
   - Regex: '^<(gtest|gmock|nlohmann|sqlite3|clang|llvm)'
     Priority: 2

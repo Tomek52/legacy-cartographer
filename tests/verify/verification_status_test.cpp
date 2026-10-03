@@ -1,4 +1,4 @@
-// Verifies: fr011-verification-report-v1 (status names are part of the JSON
+// Verifies: fr011-verification-report-v2 (status names are part of the JSON
 // report format, so they must stay stable).
 #include "verify/verdict.hpp"
 

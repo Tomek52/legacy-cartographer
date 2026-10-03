@@ -13,8 +13,9 @@ Commands (planned, see docs/plan/roadmap.md):
   analyze    build the fact database from compile_commands.json   (M1)
   query      query facts: callers, callees, includes, modules     (M1)
   map        write the module map (Markdown + Mermaid), no LLM    (M1)
-  document   generate documentation and claims with an LLM        (M2)
-  verify     verify claims against the fact database             (M2)
+  handoff    write a bundle for an external coding agent          (M2)
+  ingest     validate agent output, verify claims, write report   (M2)
+  verify     verify a claims file against the fact database       (M2)
   testgen    generate a characterization test skeleton           (M3)
 
 Options:

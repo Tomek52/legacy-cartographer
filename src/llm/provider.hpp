@@ -42,10 +42,11 @@ struct CompletionResponse {
     std::string model;
 };
 
-/// Provider-neutral LLM interface (ADR-0004). Implementations do no egress
+/// Provider-neutral LLM interface for built-in providers (ADR-0004, deferred
+/// to M6 by ADR-0006; v1 uses an external agent through `handoff`). Implementations do no egress
 /// checks themselves: callers go through the egress guard, which is the
 /// single place that decides whether a request may leave the machine.
-// TODO(M2): implementations for OpenAI-compatible, Anthropic and Ollama APIs.
+// TODO(M6): implementations for OpenAI-compatible, Anthropic and Ollama APIs (ADR-0006).
 class LlmProvider {
 public:
     LlmProvider() = default;
