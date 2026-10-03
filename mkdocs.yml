@@ -84,6 +84,8 @@ nav:
       - adr/0006-external-agent-handoff-for-llm-work.md
       - adr/0007-cpp23-and-toolchain-baseline.md
       - adr/0008-configuration-file-format.md
+      - adr/0009-linux-and-wsl2-only.md
+      - adr/0010-traceability-matrix.md
   - Testing:
       - testing/index.md
       - Strategy: testing/strategy.md

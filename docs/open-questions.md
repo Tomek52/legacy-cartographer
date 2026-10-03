@@ -10,7 +10,7 @@ moving the answer into the relevant spec or ADR and deleting it here.
 |---|---|---|---|
 | A1 | Repository `legacy-cartographer`, executable `lcart`, namespace `lcart::`. | everywhere | before going public |
 | A2 | Apache-2.0 for own code. | [ADR-0003](adr/0003-licensing.md) | – |
-| A4 | libmodbus pinned at v3.2.0 (latest tag on 2026-10-03). | [libmodbus plan](targets/libmodbus.md) | B-01 |
+| A4 | libmodbus pinned at v3.2.0 (latest tag on 2026-10-03). | [libmodbus plan](targets/libmodbus.md) | next upstream release |
 | A5 | One SQLite file per analysed project; no server. | [data model](architecture/data-model.md) | M1 end |
 | A7 | Conan manages small libraries only (SQLite, nlohmann_json, GoogleTest, later toml++); a `debug-system` preset builds from Ubuntu packages for offline machines. | `conanfile.py`, presets | B-02 |
 | A8 | C4 diagrams as Mermaid flowcharts, not Mermaid's experimental `C4Context`. | [architecture](architecture/index.md) | – |
@@ -27,27 +27,18 @@ moving the answer into the relevant spec or ADR and deleting it here.
 | LLM in v1 | external coding agent via handoff bundle with a ready prompt; built-in providers and local models in M6 | [ADR-0006](adr/0006-external-agent-handoff-for-llm-work.md) |
 | Publication | private until M1 is done, then public with Pages and CodeQL | [roadmap](plan/roadmap.md#publication) |
 | HTTP client | not needed before M6; decided then | [M6](plan/roadmap.md#m6-built-in-providers-v1) |
+| Platform / MSVC code | Linux and WSL2 only; MSVC code parsed by Clang in MSVC mode | [ADR-0009](adr/0009-linux-and-wsl2-only.md) |
+| Traceability format | IDs + versioned anchors, plus a generated traceability matrix that also gates CI; no restructuring after a standard | [ADR-0010](adr/0010-traceability-matrix.md) |
+| Performance for large code bases | hours or days are acceptable; the tool must use all cores, show progress and resume interrupted runs; incremental re-analysis later | [NFR-005](specs/requirements.md#nfr005-performance-budget-v2) |
 
 ## Questions for the maintainer
 
-1. **Q1. Toolchain of the private code bases.** The analysis needs a
-   `compile_commands.json` and Clang must accept the code. If the private
-   code builds only with MSVC on Windows: does `lcart` have to run on
-   Windows, or is running it on Linux/WSL with Clang in MSVC-compatibility
-   mode (`clang-cl`, Windows SDK headers copied over) acceptable? And can the
-   build produce a compilation database (CMake can; MSBuild `.vcxproj` needs
-   an extra tool)? This decides whether M1 needs a Windows CI job.
-2. **Q7. Traceability format.** Is the ID + versioned-anchor scheme enough,
-   or should requirements map to a formal standard's structure (for example a
-   software lifecycle standard used in a regulated domain)?
-3. **Q8. Performance target for large code bases** (NFR-005 part 2): what
-   size and time budget is realistic for the intended private code base?
+None open. New questions are added here as they come up.
 
 ## Not verified yet ("TODO: verify")
 
 | Item | Where | Verified by |
 |---|---|---|
-| Conan Center has `sqlite3/3.46.1`, `nlohmann_json/3.11.3`, `gtest/1.15.0` (Conan Center was not reachable from the authoring environment) | `conanfile.py` | first CI run (B-02) |
 | `find_package(Clang)` from `/usr/lib/llvm-20/lib/cmake/clang` links with our presets | [ADR-0007](adr/0007-cpp23-and-toolchain-baseline.md) | B-07 |
 | Complete list of Clang 20 flags that load code (`-fplugin`, `-load`, …) | [security](security.md) | B-07 |
 | libmodbus builds out of tree with autotools | [libmodbus plan](targets/libmodbus.md) | B-05 |
@@ -56,6 +47,7 @@ moving the answer into the relevant spec or ADR and deleting it here.
 | `modbus_mapping_new` signature and per-iteration cost for fuzzing | [libmodbus plan](targets/libmodbus.md) | M4 |
 | `modbus_close` / `modbus_free` semantics for the RAII wrapper | [libmodbus plan](targets/libmodbus.md) | M5 |
 | Exact terms of `tests/LICENSE` in libmodbus | [ADR-0003](adr/0003-licensing.md) | before reusing any upstream test code |
+| Exact Clang 20 flags for MSVC-targeted code; LibTooling handling of `clang-cl` arguments; a tested way to get a compilation database from MSBuild | [ADR-0009](adr/0009-linux-and-wsl2-only.md) | B-17 |
 | How to run a GitHub Actions job without network access | [NFR-001](specs/requirements.md#nfr001-works-without-llm-v1) | B-14 |
 | MkDocs/Material settings that keep raw HTML in generated docs from executing | [security](security.md) | M2 |
 | Usable local model sizes for claim generation | [NFR-003](specs/requirements.md#nfr003-fully-local-mode-v1) | M6 |

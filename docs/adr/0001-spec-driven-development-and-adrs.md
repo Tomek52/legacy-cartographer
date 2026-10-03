@@ -2,7 +2,7 @@
 
 - **Status:** Accepted
 - **Date:** 2026-10-03
-- **Requirements:** [NFR-012](../specs/requirements.md#nfr012-traceability-v1)
+- **Requirements:** [NFR-012](../specs/requirements.md#nfr012-traceability-v2)
 
 ## Context
 

@@ -1,6 +1,7 @@
 # Backlog (M0–M1)
 
-Each item is small enough for one to three sessions of 2–3 hours. Items are
+Each item is small enough for one to three sessions of 2–3 hours. Done
+items are marked ✅ in the table; their text stays as the record. Items are
 written as contracts: acceptance criteria are turned into tests first
 ([ADR-0001](../adr/0001-spec-driven-development-and-adrs.md#adr0001-spec-before-code-v1)).
 When an item is picked up and needs more detail (interfaces, files), it is
@@ -9,8 +10,8 @@ expanded in place; its version is bumped if its meaning changes
 
 | ID | Item | Milestone | Requirements | Depends on | Est. |
 |---|---|---|---|---|---|
-| [B-01](#b01-libmodbus-submodule-v1) | libmodbus submodule, pinned and checked | M0 | NFR-008 | – | 2 h |
-| [B-02](#b02-ci-green-all-presets-v1) | CI green on all presets with Conan | M0 | NFR-006, NFR-007 | – | 4 h |
+| [B-01](#b01-libmodbus-submodule-v1) | ✅ libmodbus submodule, pinned and checked | M0 | NFR-008 | – | 2 h |
+| [B-02](#b02-ci-green-all-presets-v1) | ✅ CI green on all presets with Conan | M0 | NFR-006, NFR-007 | – | 4 h |
 | [B-03](#b03-docs-ci-and-anchor-check-v1) | Docs CI and anchor checker | M0 | NFR-012 | – | 2 h |
 | [B-04](#b04-include-boundary-check-v1) | Include boundary check for the core | M0 | NFR-001 | B-02 | 2 h |
 | [B-05](#b05-libmodbus-compilation-database-v1) | Compilation database for libmodbus | M1 | FR-001 | B-01 | 3 h |
@@ -23,7 +24,9 @@ expanded in place; its version is bumped if its meaning changes
 | [B-12](#b12-query-and-export-v1) | `lcart analyze` / `lcart query` / export | M1 | FR-006, NFR-004 | B-10, B-11 | 5 h |
 | [B-13](#b13-module-map-v1) | `lcart map` | M1 | FR-007 | B-12 | 3 h |
 | [B-14](#b14-libmodbus-baseline-v1) | libmodbus baseline map and timing | M1 | NFR-001, NFR-005 | B-05, B-13 | 3 h |
-| [B-15](#b15-requirement-test-traceability-v1) | Requirement-to-test traceability check | M1 | NFR-012 | B-03 | 2 h |
+| [B-15](#b15-requirement-test-traceability-v2) | Traceability gate and matrix | M1 | NFR-012 | B-03 | 4 h |
+| [B-16](#b16-resumable-analysis-v1) | Resumable analysis with progress | M1 | NFR-005, NFR-004 | B-12 | 5 h |
+| [B-17](#b17-msvc-code-spike-v1) | MSVC code under Clang: spike and docs | M1 | NFR-013 | B-10 | 4 h |
 
 ## M0
 
@@ -176,12 +179,44 @@ Acceptance criteria:
    as indirect.
 4. Analysis time is printed and recorded as the NFR-005 baseline.
 
-### <a id="b15-requirement-test-traceability-v1"></a>**[B-15 v1]** Requirement-to-test traceability check
+### <a id="b15-requirement-test-traceability-v2"></a>**[B-15 v2]** Traceability gate and matrix
+
+Implements [ADR-0010](../adr/0010-traceability-matrix.md).
 
 Acceptance criteria:
 
-1. `scripts/check-doc-anchors.py --coverage` lists each FR/NFR anchor and
-   the test files citing it (`Verifies: <anchor>`).
+1. `scripts/check-doc-anchors.py --trace <ctest-junit.xml>` lists each
+   FR/NFR anchor with the tests citing it (`Verifies: <anchor>`) and their
+   results from the CTest JUnit output.
 2. CI fails if a requirement of a milestone marked done has no citing test,
-   or if a test cites an anchor that does not exist (for example an old
-   version).
+   a citing test failed, or a test cites an anchor that does not exist (for
+   example an old version).
+3. CI writes `docs/plan/traceability.md` (generated, in nav, marked "do not
+   edit") and `build/traceability.csv`; the docs build uses the generated
+   page.
+4. The script's own tests cover each failure case.
+
+### <a id="b16-resumable-analysis-v1"></a>**[B-16 v1]** Resumable analysis with progress
+
+Acceptance criteria: those of [NFR-005](../specs/requirements.md#nfr005-performance-budget-v2)
+parts 2–5, plus:
+
+1. A generator script creates the ≥ 200-TU fixture on the fly (not
+   committed).
+2. Resume refuses to continue if the compilation database, tool version or
+   schema version changed since the interrupted run, and says why.
+3. SIGINT and SIGTERM end the run cleanly: completed TUs are committed to
+   the database, the summary is printed, and the exit status says
+   "interrupted".
+
+### <a id="b17-msvc-code-spike-v1"></a>**[B-17 v1]** MSVC code under Clang: spike and docs
+
+Acceptance criteria: those of [NFR-013](../specs/requirements.md#nfr013-linux-and-wsl2-v1),
+plus:
+
+1. The exact Clang 20 flags for MSVC-targeted code and how LibTooling
+   handles `clang-cl`-style arguments are recorded in ADR-0009's TODO
+   (resolved) or a superseding ADR.
+2. A how-to page ("Analysing an MSVC code base under WSL2") lists the steps
+   tried, including getting a compilation database for an MSBuild solution,
+   with what worked and what did not.

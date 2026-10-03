@@ -13,7 +13,9 @@ erDiagram
     TRANSLATION_UNIT {
         int id PK
         int file_id FK
-        text status "parsed | failed"
+        text status "pending | parsed | failed"
+        text command_sha256 "compile command"
+        text inputs_sha256 "main file + headers read"
     }
     DIAGNOSTIC {
         int id PK
@@ -110,6 +112,10 @@ erDiagram
   evidence.
 - Claims and verdicts live in the same file so a report can be regenerated
   without the LLM.
+- Each TU's facts are committed in one transaction together with its
+  `status`, so an interrupted analysis resumes from the TUs still `pending`
+  ([NFR-005](../specs/requirements.md#nfr005-performance-budget-v2)). The
+  per-TU hashes allow incremental re-analysis later.
 - All SQL uses bound parameters; analysed names are never concatenated into
   SQL ([security](../security.md)).
 - The physical DDL is written in B-06; this page is its specification.

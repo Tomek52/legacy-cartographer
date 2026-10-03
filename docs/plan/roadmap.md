@@ -8,7 +8,7 @@ Estimates before M1 are guesses; they are revised at each milestone's end.
 
 ```mermaid
 flowchart LR
-    M0["M0<br/>Foundations<br/>~15 h"] --> M1["M1<br/>Fact DB + module map<br/>no LLM<br/>~45 h"]
+    M0["M0<br/>Foundations<br/>~15 h"] --> M1["M1<br/>Fact DB + module map<br/>no LLM<br/>~55 h"]
     M1 --> M2["M2<br/>Agent handoff +<br/>claim verification<br/>~35 h"]
     M1 --> M3["M3<br/>Characterization<br/>tests<br/>~30 h"]
     M3 --> M4["M4<br/>Fuzzing<br/>libmodbus<br/>~20 h"]
@@ -30,15 +30,19 @@ interfaces without logic, libmodbus submodule.
 [NFR-007](../specs/requirements.md#nfr007-quality-gates-v1),
 [NFR-008](../specs/requirements.md#nfr008-upstream-unmodified-v1),
 [NFR-011](../specs/requirements.md#nfr011-licensing-v1),
-[NFR-012](../specs/requirements.md#nfr012-traceability-v1) (format part).
+[NFR-012](../specs/requirements.md#nfr012-traceability-v2) (format part).
 
 **Definition of Done:**
 
-- [ ] CI green on `main` for all presets, lint and docs jobs (B-02, B-03).
+- [x] CI green on `main` for all presets, lint and docs jobs (B-02;
+      first run 2026-10-03).
+- [ ] Docs checker has its own tests and was shown to fail on bad input
+      (B-03).
 - [x] Configure-time architecture check rejects `llm` in the deterministic
       core (verified by a deliberate violation before commit).
-- [ ] libmodbus submodule pinned at v3.2.0, CI checks it is clean (B-01).
-- [ ] Open question Q1 (toolchain of private code bases) answered.
+- [x] libmodbus submodule pinned at v3.2.0, CI checks it is clean (B-01).
+- [x] Open question Q1 (toolchain of private code bases) answered:
+      Linux/WSL2 only ([ADR-0009](../adr/0009-linux-and-wsl2-only.md)).
 
 ## <a id="m1-fact-database-v2"></a>**[M1 v2]** Fact database and module map, without LLM
 
@@ -47,14 +51,16 @@ module map and call graph for libmodbus with no LLM and no network.
 
 **Scope:** Clang LibTooling integration, SQLite fact store, files, includes,
 functions, direct and indirect calls, module rules, query/export, module map,
-libmodbus baseline. Out: function-pointer table resolution (FR-015, M2),
-anything LLM.
+libmodbus baseline, resumable analysis with progress (for runs of hours or
+days), MSVC-code spike, traceability matrix. Out: function-pointer table
+resolution (FR-015, M2), incremental re-analysis, anything LLM.
 
 **Requirements:** [FR-001](../specs/requirements.md#fr001-ingest-compilation-database-v1)–[FR-007](../specs/requirements.md#fr007-module-map-without-llm-v1),
 [NFR-001](../specs/requirements.md#nfr001-works-without-llm-v1),
 [NFR-004](../specs/requirements.md#nfr004-deterministic-output-v1),
-[NFR-005](../specs/requirements.md#nfr005-performance-budget-v1),
-[NFR-012](../specs/requirements.md#nfr012-traceability-v1) (test citation check).
+[NFR-005](../specs/requirements.md#nfr005-performance-budget-v2),
+[NFR-012](../specs/requirements.md#nfr012-traceability-v2) (citation gate and matrix),
+[NFR-013](../specs/requirements.md#nfr013-linux-and-wsl2-v1).
 
 **Definition of Done:**
 

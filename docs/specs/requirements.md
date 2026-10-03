@@ -354,17 +354,34 @@ Acceptance criteria:
 3. No timestamps in exported facts; the report's generation time is in a
    separate metadata block.
 
-#### <a id="nfr005-performance-budget-v1"></a>**[NFR-005 v1]** Performance budget
+#### <a id="nfr005-performance-budget-v2"></a>**[NFR-005 v2]** Performance and long runs
 
 The tool shall analyse libmodbus (about 5.8 kLOC in `src/` at v3.2.0) in
-under 60 seconds on a 4-core developer laptop, and record the time in CI.
+under 60 seconds on a 4-core developer machine. For large code bases, where
+an analysis may take hours or even days, the tool shall use all available
+cores, report progress, and resume an interrupted analysis without parsing
+completed translation units again.
 
 Acceptance criteria:
 
 1. CI prints the analysis time for libmodbus; a regression above 2× the
    recorded baseline fails the job.
-2. A budget for 1 MLOC code bases is set after the M1 baseline (open
-   question).
+2. On a generated fixture of at least 200 translation units, throughput
+   (TUs per minute) is reported for 1 and 4 workers; the target is ≥ 2.5×
+   for 4 workers (confirmed or revised in B-16).
+3. While analysing, the tool prints parsed / failed / total TUs and an
+   estimated time remaining at least every 30 seconds, and a summary when
+   interrupted.
+4. An analysis killed part-way and continued with `lcart analyze --resume`
+   produces an export identical to an uninterrupted run
+   ([NFR-004](#nfr004-deterministic-output-v1)), and does not parse
+   completed TUs again (counted in the summary).
+5. Peak memory does not grow with the number of TUs: each worker releases
+   its AST after its TU (measured on the generated fixture).
+
+Not in v1: incremental re-analysis after source changes (parse only TUs whose
+inputs changed). The data model keeps per-TU input hashes so it can be added
+later.
 
 #### <a id="nfr006-toolchain-baseline-v2"></a>**[NFR-006 v2]** Toolchain baseline
 
@@ -440,13 +457,35 @@ Acceptance criteria:
    ships with the means to relink it.
 2. `NOTICE` and the docs state that `targets/` is not covered by Apache-2.0.
 
-#### <a id="nfr012-traceability-v1"></a>**[NFR-012 v1]** Traceability
+#### <a id="nfr012-traceability-v2"></a>**[NFR-012 v2]** Traceability
 
-Every requirement shall be traceable to the tests that verify it.
+Every requirement shall be traceable to the tests that verify it, and the
+project shall publish that trace as a generated matrix
+([ADR-0010](../adr/0010-traceability-matrix.md)).
 
 Acceptance criteria:
 
 1. Each FR/NFR has a versioned anchor; `scripts/check-doc-anchors.py` checks
    format and uniqueness.
-2. From M1, the checker lists requirements of completed milestones that no
-   test cites, and CI fails on any (backlog [B-15](../plan/backlog.md#b15-requirement-test-traceability-v1)).
+2. From M1, CI fails if a requirement of a milestone marked done has no
+   citing test, a citing test fails, or a test cites a requirement version
+   that does not exist (backlog [B-15](../plan/backlog.md#b15-requirement-test-traceability-v2)).
+3. CI generates `docs/plan/traceability.md` and a CSV with, per
+   requirement: ID, version, milestone, citing tests and their result.
+
+#### <a id="nfr013-linux-and-wsl2-v1"></a>**[NFR-013 v1]** Linux and WSL2
+
+The tool shall run on Ubuntu 24.04, natively or under WSL2, and shall
+analyse code written for MSVC using Clang's MSVC compatibility mode
+([ADR-0009](../adr/0009-linux-and-wsl2-only.md)).
+
+Acceptance criteria:
+
+1. A fixture using MSVC-specific constructs (`__declspec`, `__int64`,
+   `#pragma once`, MSVC-style inline assembly excluded) parses with the
+   MSVC target settings and yields the expected functions and calls
+   (B-17).
+2. An analysis root under `/mnt/<drive>/` (WSL2) works, and stored paths
+   are relative to the root (no drive letters in facts).
+3. The documentation describes at least one tested way to obtain a
+   compilation database for an MSBuild solution (B-17).
