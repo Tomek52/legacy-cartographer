@@ -1,0 +1,33 @@
+# Build trees (all presets build under build/<preset>)
+/build/
+/out/
+compile_commands.json
+CMakeUserPresets.json
+
+# Conan
+conan.lock.bak
+/conan-cache/
+
+# Tool output (fact databases, reports and generated docs may contain source
+# code of the analyzed project: never commit them by accident, see docs/security.md)
+*.lcart.db
+*.sqlite
+/lcart-out/
+
+# Fuzzing
+/fuzz/corpus/
+crash-*
+leak-*
+timeout-*
+oom-*
+
+# Docs
+/site/
+/.venv-docs/
+__pycache__/
+
+# Editors
+.vscode/
+.idea/
+*.swp
+.cache/

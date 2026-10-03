@@ -1,0 +1,10 @@
+if(NOT CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+    message(WARNING "LCART_BUILD_FUZZERS requires Clang (libFuzzer); fuzz targets skipped.")
+    return()
+endif()
+
+add_executable(claim_json_fuzzer claim_json_fuzzer.cpp)
+target_link_libraries(claim_json_fuzzer PRIVATE lcart::claims)
+target_compile_options(claim_json_fuzzer PRIVATE -fsanitize=fuzzer)
+target_link_options(claim_json_fuzzer PRIVATE -fsanitize=fuzzer)
+lcart_target_warnings(claim_json_fuzzer)

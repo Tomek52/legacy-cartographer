@@ -1,0 +1,9 @@
+legacy-cartographer
+Copyright 2026 The legacy-cartographer contributors
+
+This product is licensed under the Apache License, Version 2.0 (see LICENSE).
+
+targets/libmodbus is a git submodule pointing at the unmodified upstream
+libmodbus project, which is licensed under the GNU Lesser General Public
+License v2.1 or later. It is not part of this product's source code and is
+not covered by the Apache License. See docs/adr/0003-licensing.md.

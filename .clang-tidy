@@ -1,0 +1,45 @@
+---
+# Checks are enabled broadly and narrowed with a reason for each exclusion.
+Checks: >
+  -*,
+  bugprone-*,
+  -bugprone-easily-swappable-parameters,
+  cert-*,
+  clang-analyzer-*,
+  concurrency-*,
+  cppcoreguidelines-*,
+  -cppcoreguidelines-avoid-magic-numbers,
+  -cppcoreguidelines-pro-bounds-pointer-arithmetic,
+  misc-*,
+  -misc-include-cleaner,
+  -misc-non-private-member-variables-in-classes,
+  modernize-*,
+  -modernize-use-trailing-return-type,
+  performance-*,
+  portability-*,
+  readability-*,
+  -readability-magic-numbers,
+  -readability-identifier-length
+# Excluded with reason:
+#   easily-swappable-parameters: too noisy for (from, to) edge APIs; strong types cover it.
+#   avoid-magic-numbers / magic-numbers: duplicated by review rule "named constants".
+#   pro-bounds-pointer-arithmetic: required by the libFuzzer entry point signature.
+#   include-cleaner: false positives with interface-only headers in M0.
+#   non-private-member-variables: fact/claim records are plain aggregates by design.
+#   use-trailing-return-type: style preference, not adopted.
+#   identifier-length: `fn`, `id` are clear in this domain.
+WarningsAsErrors: '*'
+HeaderFilterRegex: '.*/(src|tests|fuzz)/.*'
+FormatStyle: file
+CheckOptions:
+  - { key: readability-identifier-naming.NamespaceCase,       value: lower_case }
+  - { key: readability-identifier-naming.ClassCase,           value: CamelCase  }
+  - { key: readability-identifier-naming.StructCase,          value: CamelCase  }
+  - { key: readability-identifier-naming.EnumCase,            value: CamelCase  }
+  - { key: readability-identifier-naming.EnumConstantCase,    value: lower_case }
+  - { key: readability-identifier-naming.FunctionCase,        value: lower_case }
+  - { key: readability-identifier-naming.VariableCase,        value: lower_case }
+  - { key: readability-identifier-naming.ParameterCase,       value: lower_case }
+  - { key: readability-identifier-naming.PrivateMemberSuffix, value: _          }
+  - { key: readability-identifier-naming.ConstexprVariableCase, value: lower_case }
+...

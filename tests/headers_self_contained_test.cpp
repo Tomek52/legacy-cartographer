@@ -1,0 +1,22 @@
+// Includes every module header, so each one is compiled (and checked by
+// clang-tidy) even before it has an implementation.
+#include "analysis/analyzer.hpp"
+#include "analysis/module_rules.hpp"
+#include "claims/claim.hpp"
+#include "claims/claim_parser.hpp"
+#include "common/result.hpp"
+#include "common/unreachable.hpp"
+#include "common/version.hpp"
+#include "facts/fact_model.hpp"
+#include "facts/fact_store.hpp"
+#include "llm/egress_policy.hpp"
+#include "llm/provider.hpp"
+#include "report/report_writer.hpp"
+#include "verify/claim_verifier.hpp"
+#include "verify/verdict.hpp"
+
+#include <gtest/gtest.h>
+
+TEST(Headers, VersionIsSet) {
+    EXPECT_FALSE(lcart::common::version.empty());
+}

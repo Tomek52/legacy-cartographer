@@ -1,0 +1,26 @@
+---
+Language: Cpp
+BasedOnStyle: LLVM
+Standard: c++20
+ColumnLimit: 100
+IndentWidth: 4
+AccessModifierOffset: -4
+AllowShortFunctionsOnASingleLine: Inline
+AllowShortIfStatementsOnASingleLine: Never
+AllowShortLambdasOnASingleLine: Inline
+AlwaysBreakTemplateDeclarations: Yes
+BreakBeforeBraces: Attach
+DerivePointerAlignment: false
+PointerAlignment: Left
+IncludeBlocks: Regroup
+IncludeCategories:
+  # Project headers first, then third-party, then the standard library.
+  - Regex: '^"(common|facts|analysis|llm|claims|verify|report|cli)/'
+    Priority: 1
+  - Regex: '^<(gtest|gmock|nlohmann|sqlite3|clang|llvm)'
+    Priority: 2
+  - Regex: '^<.*>'
+    Priority: 3
+SortIncludes: CaseSensitive
+SpaceAfterTemplateKeyword: true
+...
