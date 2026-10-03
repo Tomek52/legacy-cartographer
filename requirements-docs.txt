@@ -1,0 +1,7 @@
+# Documentation toolchain, pinned exactly so that `mkdocs build --strict`
+# gives the same verdict locally and in CI.
+# MkDocs stays on 1.6.x: `validation:` needs >= 1.6, and 2.0 drops the
+# plugin system Material depends on.
+mkdocs==1.6.1
+mkdocs-material==9.7.7
+pymdown-extensions==12.1

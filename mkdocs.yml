@@ -1,0 +1,96 @@
+# Documentation site. Build with scripts/docs-check.sh (anchor check +
+# `mkdocs build --strict`). Every page under docs/ must be listed in `nav`.
+site_name: legacy-cartographer
+site_description: Static-analysis cartographer for C/C++ code bases with verified LLM documentation.
+docs_dir: docs
+strict: true
+
+theme:
+  name: material
+  features:
+    - navigation.sections
+    - navigation.indexes
+    - navigation.top
+    - search.highlight
+    - content.code.copy
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - def_list
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.tasklist:
+      custom_checkbox: true
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+
+plugins:
+  - search
+
+# MkDocs 1.6 validation. `warn` + `--strict` turns each finding into a
+# build failure: a page missing from nav, a nav entry without a file, a
+# broken link or a missing anchor.
+validation:
+  nav:
+    omitted_files: warn
+    not_found: warn
+    absolute_links: warn
+  links:
+    not_found: warn
+    anchors: warn
+    absolute_links: warn
+    unrecognized_links: warn
+
+nav:
+  - Home: index.md
+  - Vision: vision.md
+  - Specifications:
+      - specs/index.md
+      - Requirements: specs/requirements.md
+      - Claim schema: specs/claim-schema.md
+  - Architecture:
+      - architecture/index.md
+      - C4 level 1 – Context: architecture/c4-context.md
+      - C4 level 2 – Containers: architecture/c4-container.md
+      - C4 level 3 – Components: architecture/c4-component.md
+      - Components in detail: architecture/components.md
+      - Data model: architecture/data-model.md
+  - Decisions (ADR):
+      - adr/index.md
+      - Template: adr/template.md
+      - adr/0001-spec-driven-development-and-adrs.md
+      - adr/0002-static-analysis-frontend.md
+      - adr/0003-licensing.md
+      - adr/0004-llm-provider-abstraction-and-code-privacy.md
+      - adr/0005-versioned-requirement-anchors.md
+  - Testing:
+      - testing/index.md
+      - Strategy: testing/strategy.md
+  - Security: security.md
+  - Targets:
+      - targets/index.md
+      - libmodbus: targets/libmodbus.md
+  - Plan:
+      - plan/index.md
+      - Roadmap: plan/roadmap.md
+      - Backlog: plan/backlog.md
+  - AI-assisted workflow: ai-workflow.md
+  - Glossary: glossary.md
+  - Open questions: open-questions.md
