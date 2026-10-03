@@ -25,7 +25,8 @@
 | Commit | `a9b025d12289855490b10d77461c99e001abfc0f` |
 | Location | `targets/libmodbus` (git submodule, never modified) |
 
-Checked with `git ls-remote` on 2026-10-03. The file and function names on
+Checked with `git ls-remote` on 2026-10-03; added as a submodule (B-01),
+verified by `scripts/check-targets.sh` in CI. The file and function names on
 this page were read from that tag; anything else is marked TODO: verify.
 
 Upstream layout at v3.2.0 (relevant parts): `src/modbus.c` (core:

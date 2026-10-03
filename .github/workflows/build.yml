@@ -61,6 +61,17 @@ jobs:
       - name: Configure, build, test
         run: cmake --workflow --preset debug-system
 
+  targets:
+    # Analysed code bases stay pinned and unmodified (NFR-008).
+    name: Targets pinned and clean
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+      - name: Check submodules
+        run: scripts/check-targets.sh
+
   lint:
     name: Format + clang-tidy
     runs-on: ubuntu-24.04

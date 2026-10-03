@@ -10,18 +10,20 @@ Rules ([NFR-008](../docs/specs/requirements.md), [ADR-0003](../docs/adr/0003-lic
   `docs/targets/<name>.md`.
 - The code here is under its own licence, not Apache-2.0 (see `NOTICE`).
 
-Expected content after setup:
+Content:
 
 ```text
 targets/
 └── libmodbus/   # https://github.com/stephane/libmodbus, tag v3.2.0
 ```
 
-Add it with:
+After cloning this repository:
 
 ```bash
-git submodule add https://github.com/stephane/libmodbus targets/libmodbus
-git -C targets/libmodbus checkout v3.2.0
-git add .gitmodules targets/libmodbus
-git commit -m "build(targets): add libmodbus v3.2.0 as submodule"
+git submodule update --init targets/libmodbus
+scripts/check-targets.sh      # pinned commit, no local changes (also in CI)
 ```
+
+To move a target to another version: check out the new tag inside the
+submodule, update the commit in `docs/targets/<name>.md`, run
+`scripts/check-targets.sh`, and commit both together.

@@ -1,0 +1,3 @@
+[submodule "targets/libmodbus"]
+	path = targets/libmodbus
+	url = https://github.com/stephane/libmodbus
