@@ -13,7 +13,7 @@ expanded in place; its version is bumped if its meaning changes
 | [B-01](#b01-libmodbus-submodule-v1) | ✅ libmodbus submodule, pinned and checked | M0 | NFR-008 | – | 2 h |
 | [B-02](#b02-ci-green-all-presets-v1) | ✅ CI green on all presets with Conan | M0 | NFR-006, NFR-007 | – | 4 h |
 | [B-03](#b03-docs-ci-and-anchor-check-v1) | ✅ Docs CI and anchor checker | M0 | NFR-012 | – | 2 h |
-| [B-04](#b04-include-boundary-check-v1) | Include boundary check for the core | M0 | NFR-001 | B-02 | 2 h |
+| [B-04](#b04-include-boundary-check-v1) | ✅ Include boundary check for the core | M0 | NFR-001 | B-02 | 2 h |
 | [B-05](#b05-libmodbus-compilation-database-v1) | Compilation database for libmodbus | M1 | FR-001 | B-01 | 3 h |
 | [B-06](#b06-sqlite-fact-store-v1) | ✅ SQLite fact store, schema v1 | M1 | FR-002–FR-004, NFR-004 | – | 6 h |
 | [B-07](#b07-clang-libtooling-spike-v2) | ✅ Clang LibTooling spike and analysis driver | M1 | FR-001 | B-02 | 6 h |
@@ -75,6 +75,21 @@ Acceptance criteria:
    from `src/llm/`.
 2. A self-test fixture with a forbidden include proves the check can fail.
 3. No Clang header is included outside `src/analysis/`.
+
+Result (2026-10-04): `cmake/CheckIncludeBoundaries.cmake`, run by CTest as
+`Architecture.IncludeBoundaries` (label `architecture`) on the source tree,
+reads every `#include` line under `src/` and reports each violation as
+`path:line: includes header (rule)`. It checks all eight deterministic
+modules of CLAUDE.md (the criterion's six plus `config` and `handoff`) and
+treats LLVM headers (`llvm/`, `llvm-c/`) like Clang headers, since Clang's
+interfaces expose LLVM types (`llvm::StringRef`). Include lines inside
+`#if 0` or comments are checked too: a false alarm is cheaper than a missed
+include. `Architecture.IncludeBoundariesSelfTest` runs the same script on
+`tests/architecture/forbidden_includes/`, which has one forbidden include of
+each kind and an allowed Clang include in `src/analysis`, and passes only if
+the check fails, names both violations with their lines and not the allowed
+one. A root without sources fails rather than passing as clean. The check
+is a CMake script, so it needs no tool beyond the build's own.
 
 ## M1
 

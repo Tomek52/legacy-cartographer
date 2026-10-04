@@ -14,7 +14,7 @@ and cite the requirement they verify
 | Analysis fixtures | `analysis` on tiny C/C++ projects under `tests/fixtures/` with hand-written expected facts | GoogleTest + fixture `compile_commands.json` | every change |
 | Golden files | fact export, module map, report: byte-for-byte against committed files | GoogleTest | every change |
 | Determinism | same input, 1 vs N threads, shuffled TU order → identical export ([NFR-004](../specs/requirements.md#nfr004-deterministic-output-v1)) | GoogleTest | every change |
-| Architecture | deterministic core does not link `llm` | CMake configure check | every configure |
+| Architecture | deterministic core does not link or include `llm`; Clang and LLVM headers only in `analysis` | CMake configure check (links); CTest label `architecture` running `cmake/CheckIncludeBoundaries.cmake`, with a self-test on a fixture tree (includes) | every configure; every change |
 | Fuzzing | parsers of untrusted input | libFuzzer + ASan/UBSan | 60 s per change in CI; longer runs locally |
 | End-to-end | CLI on libmodbus: analyze → map (M1); → handoff → ingest of a recorded agent output → report (M2) | shell script, CTest | CI |
 | Verifier accuracy | labelled claim set (below) | GoogleTest data-driven | every change from M2 |

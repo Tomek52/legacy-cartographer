@@ -45,3 +45,17 @@ target_compile_definitions(lcart_cli_tests PRIVATE
 add_dependencies(lcart_cli_tests lcart)
 lcart_target_warnings(lcart_cli_tests)
 gtest_discover_tests(lcart_cli_tests PROPERTIES LABELS cli)
+
+# Include boundaries of the deterministic core (B-04, NFR-001, ADR-0002):
+# the source tree must pass; the self-test runs the same check on a fixture
+# tree with one forbidden include of each kind, which proves it can fail.
+add_test(NAME Architecture.IncludeBoundaries
+    COMMAND ${CMAKE_COMMAND} -DLCART_ROOT=${PROJECT_SOURCE_DIR}
+            -P ${PROJECT_SOURCE_DIR}/cmake/CheckIncludeBoundaries.cmake)
+add_test(NAME Architecture.IncludeBoundariesSelfTest
+    COMMAND ${CMAKE_COMMAND}
+            -DLCART_CHECK=${PROJECT_SOURCE_DIR}/cmake/CheckIncludeBoundaries.cmake
+            -DLCART_FIXTURE=${CMAKE_CURRENT_SOURCE_DIR}/architecture/forbidden_includes
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/architecture/include_boundaries_self_test.cmake)
+set_tests_properties(Architecture.IncludeBoundaries Architecture.IncludeBoundariesSelfTest
+    PROPERTIES LABELS architecture)

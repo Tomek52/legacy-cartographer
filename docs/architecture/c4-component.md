@@ -37,7 +37,10 @@ flowchart TB
 ```
 
 No module of the deterministic core may depend on `llm`; the build fails at
-configure time if one does (`cmake/ArchitectureRules.cmake`).
+configure time if one links it (`cmake/ArchitectureRules.cmake`), and a
+test (label `architecture`) fails if one includes a header from `src/llm/`
+or if a Clang or LLVM header is included outside `analysis`
+(`cmake/CheckIncludeBoundaries.cmake`).
 
 The `ingest` command in `cli` chains the core: `handoff::read_agent_output`
 → `verify::verify_claim` for each claim → `report` writes the annotated
