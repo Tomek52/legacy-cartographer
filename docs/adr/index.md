@@ -32,4 +32,4 @@ Rules:
 | [0015](0015-ascii-configuration-while-tomlplusplus-3-4.md) | lcart.toml is ASCII while toml++ 3.4.0 is in use | Accepted |
 | [0016](0016-facts-export-and-command-line.md) | Facts export, command line and the git exposure warning | Accepted; option syntax amended by 0017 (a lone `-` value for `--output`), export output replacement by 0018 |
 | [0017](0017-module-map-format-and-command-line.md) | Module map: command line, content and escaping | Accepted |
-| [0018](0018-facts-export-replaces-only-exports.md) | Facts export replaces only exports | Proposed |
+| [0018](0018-facts-export-replaces-only-exports.md) | Facts export replaces only exports | Accepted |

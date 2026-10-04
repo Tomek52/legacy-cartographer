@@ -1,6 +1,6 @@
 # 0018. Facts export replaces only exports
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-10-04
 - **Requirements:** [FR-006](../specs/requirements.md#fr006-query-and-export-facts-v1),
   [security T2](../security.md)
