@@ -6,6 +6,8 @@
 #include "claims/claim_parser.hpp"
 #include "common/result.hpp"
 #include "common/version.hpp"
+#include "config/path_glob.hpp"
+#include "config/project_config.hpp"
 #include "facts/fact_model.hpp"
 #include "facts/fact_store.hpp"
 #include "facts/sqlite_fact_store.hpp"

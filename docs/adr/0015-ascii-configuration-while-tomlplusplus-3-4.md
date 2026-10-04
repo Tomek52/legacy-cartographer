@@ -32,13 +32,18 @@ of undefined behaviour in it on malformed input:
    version is still 3.4.0 and the fix is listed under "Unreleased" in its
    `CHANGELOG.md` (checked 2026-10-04).
 
-The same "Unreleased" section lowers `TOML_MAX_NESTED_VALUES` from 256 to
-128 "to prevent stack overflow on deeply nested arrays/inline tables in
-sanitizer builds"; that one is a configuration macro.
+3. **Unbounded recursion.** `parser::update_region_ends()`
+   (`toml++/impl/parser.inl`) recurses once per table level, and dotted
+   keys and table headers (`a.a.a…`, `[a.a.a…]`) create one level per part
+   with no limit: 100,000 parts (200 KB) overflow an 8 MB stack, and under
+   ASan 5,000 parts do (found in review of B-11). The same "Unreleased"
+   section lowers `TOML_MAX_NESTED_VALUES` from 256 to 128 "to prevent stack
+   overflow on deeply nested arrays/inline tables in sanitizer builds"; that
+   limit is a configuration macro, but it does not cover dotted keys.
 
 Both are reachable from a configuration file that comes with a code base
 (NFR-010). Assertions can be switched off from outside (`TOML_ASSERT` is a
-configuration macro); the unreachable branch cannot.
+configuration macro); the unreachable branch and the key depth cannot.
 
 ## Options considered
 
@@ -49,8 +54,9 @@ configuration macro); the unreachable branch cannot.
 2. **Another TOML library.** Supersedes ADR-0008 for a bug that upstream has
    already fixed.
 3. **Keep toml++ 3.4.0 and keep the triggering input away from it:** turn
-   its assertions into no-ops and accept only ASCII text, so no code point at
-   or above U+00A0 reaches the whitespace tables. Small and testable.
+   its assertions into no-ops, accept only ASCII text, so no code point at
+   or above U+00A0 reaches the whitespace tables, and bound the size and
+   key depth before parsing. Small and testable.
    Comments and strings in `lcart.toml` cannot use non-ASCII characters
    until it is lifted.
 
@@ -59,7 +65,9 @@ configuration macro); the unreachable branch cannot.
 <a id="adr0015-ascii-configuration-v1"></a>**`lcart.toml` must be ASCII**
 (after an optional UTF-8 byte order mark, which is dropped). The first
 non-ASCII byte is a parse error that names its line and column, before
-toml++ sees the text. toml++ is included in one file only
+toml++ sees the text, and so are a file larger than 1 MiB and a line with
+more than 32 `.` outside strings and comments (dots in numbers count: a
+bare key may be all digits). toml++ is included in one file only
 (`src/config/src/project_config.cpp`), with `TOML_ASSERT` defined as a
 no-op and `NDEBUG` hidden while its header is read, so its assertions are
 neither aborts nor assumptions and malformed input reaches its error paths,
@@ -67,12 +75,14 @@ and with `TOML_MAX_NESTED_VALUES` at 128 as on toml++'s main branch.
 
 ## Consequences
 
+- A line of `lcart.toml` holds at most 32 dotted key parts (or that many
+  dots in numbers); `lcart.toml` needs two.
 - Module names, paths and comments in `lcart.toml` are ASCII; a file with
   a non-ASCII name can be matched only through wildcards (`*` matches its
   bytes; `?` matches one byte, not one character).
 - The fuzz target keeps running in CI, so another such bug in toml++ shows
   up as a red build, not in a user's analysis.
 - Revisit when Ubuntu or Conan Center package a toml++ release after 3.4.0:
-  check that the whitespace tables no longer end in `TOML_UNREACHABLE` and
-  that `parse_key` no longer asserts on reachable input, then supersede this
-  ADR.
+  check that the whitespace tables no longer end in `TOML_UNREACHABLE`,
+  that `parse_key` no longer asserts on reachable input and that key depth
+  is bounded, then supersede this ADR.

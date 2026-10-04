@@ -21,11 +21,16 @@
 
 #include <algorithm>
 #include <array>
+#include <cstddef>
+#include <cstdint>
+#include <filesystem>
 #include <fstream>
+#include <ios>
 #include <iterator>
 #include <optional>
 #include <string>
 #include <string_view>
+#include <system_error>
 #include <utility>
 #include <vector>
 
@@ -71,10 +76,95 @@ constexpr std::string_view utf8_byte_order_mark = "\xEF\xBB\xBF";
     return std::nullopt;
 }
 
+/// Limits that keep toml++ 3.4.0 within its stack: it recurses once per
+/// dotted key part and table level, without a limit (ADR-0015).
+constexpr std::size_t max_dotted_parts_per_line = 32;
+constexpr std::size_t max_size = std::size_t{1024} * 1024;
+
+/// The position of the first `.` beyond max_dotted_parts_per_line outside
+/// strings and comments on one line, in ASCII `text`. Dots in numbers count
+/// too: a bare key may be all digits (`0.0.0 = 1`). A newline inside a
+/// string does not reset the count, which only errs on the safe side.
+[[nodiscard]] std::optional<toml::source_position> too_many_dots(std::string_view text) {
+    enum class In : std::uint8_t { code, comment, basic, literal, multi_basic, multi_literal };
+    In in = In::code;
+    std::size_t dots = 0;
+    toml::source_position position{.line = 1, .column = 1};
+    std::size_t at = 0;
+    auto advance = [&](std::size_t count) {
+        for (; count > 0 && at < text.size(); --count, ++at) {
+            if (text[at] == '\n') {
+                ++position.line;
+                position.column = 1;
+            } else {
+                ++position.column;
+            }
+        }
+    };
+    auto starts = [&](std::string_view token) {
+        return text.substr(at).starts_with(token);
+    };
+    while (at < text.size()) {
+        const char c = text[at];
+        switch (in) {
+        case In::code:
+            if (c == '#') {
+                in = In::comment;
+            } else if (starts(R"(""")")) {
+                in = In::multi_basic;
+                advance(2);
+            } else if (starts("'''")) {
+                in = In::multi_literal;
+                advance(2);
+            } else if (c == '"') {
+                in = In::basic;
+            } else if (c == '\'') {
+                in = In::literal;
+            } else if (c == '\n') {
+                dots = 0;
+            } else if (c == '.' && ++dots > max_dotted_parts_per_line) {
+                return position;
+            }
+            break;
+        case In::comment:
+        case In::literal:
+            if (c == '\n' || (in == In::literal && c == '\'')) {
+                in = In::code;
+                dots = c == '\n' ? 0 : dots;
+            }
+            break;
+        case In::basic:
+        case In::multi_basic:
+            if (c == '\\') {
+                advance(1); // the escaped character
+            } else if (in == In::basic && (c == '"' || c == '\n')) {
+                in = In::code;
+            } else if (in == In::multi_basic && starts(R"(""")")) {
+                in = In::code;
+                advance(2);
+            }
+            break;
+        case In::multi_literal:
+            if (starts("'''")) {
+                in = In::code;
+                advance(2);
+            }
+            break;
+        }
+        advance(1);
+    }
+    return std::nullopt;
+}
+
 /// Builds errors located in one configuration file.
 class Reporter {
 public:
     explicit Reporter(std::string_view source_name) : source_name_(source_name) {}
+
+    [[nodiscard]] Error whole_file(std::string_view message) const {
+        return Error{.code = ErrorCode::parse_error,
+                     .message = source_name_ + ": " + std::string{message}};
+    }
 
     [[nodiscard]] Error at(const toml::source_region& region, std::string_view message,
                            ErrorCode code = ErrorCode::invalid_argument) const {
@@ -243,9 +333,19 @@ Result<ProjectConfig> parse_project_config(std::string_view text, std::string_vi
     if (text.starts_with(utf8_byte_order_mark)) {
         text.remove_prefix(utf8_byte_order_mark.size());
     }
+    if (text.size() > max_size) {
+        return std::unexpected(
+            report.whole_file("larger than 1 MiB; lcart.toml is a small file (ADR-0015)"));
+    }
     if (const std::optional<toml::source_position> at = first_non_ascii(text)) {
         return std::unexpected(report.at({.begin = *at, .end = *at, .path = {}},
                                          "non-ASCII character; lcart.toml must be ASCII (ADR-0015)",
+                                         ErrorCode::parse_error));
+    }
+    if (const std::optional<toml::source_position> at = too_many_dots(text)) {
+        return std::unexpected(report.at({.begin = *at, .end = *at, .path = {}},
+                                         "more than 32 dotted parts in the keys of one line "
+                                         "(ADR-0015)",
                                          ErrorCode::parse_error));
     }
     toml::parse_result parsed = toml::parse(text, source_name);
@@ -276,11 +376,25 @@ Result<ProjectConfig> parse_project_config(std::string_view text, std::string_vi
 }
 
 Result<ProjectConfig> load_project_config(const std::filesystem::path& file) {
-    std::ifstream in{file, std::ios::binary};
-    const std::string text{std::istreambuf_iterator<char>{in}, std::istreambuf_iterator<char>{}};
-    if (!in.is_open() || in.bad()) {
+    const auto unreadable = [&file] {
         return std::unexpected(Error{.code = ErrorCode::io_error,
                                      .message = "cannot read configuration file " + file.string()});
+    };
+    std::error_code ec;
+    if (!std::filesystem::is_regular_file(file, ec)) {
+        return unreadable();
+    }
+    std::string text;
+    try {
+        std::ifstream in{file, std::ios::binary};
+        text.assign(std::istreambuf_iterator<char>{in}, std::istreambuf_iterator<char>{});
+        if (!in.is_open() || in.bad()) {
+            return unreadable();
+        }
+    } catch (const std::ios_base::failure&) {
+        // libstdc++'s filebuf throws on a failed read() even without
+        // exceptions() set; it does not cross this function.
+        return unreadable();
     }
     return parse_project_config(text, file.string());
 }

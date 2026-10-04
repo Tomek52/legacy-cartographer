@@ -33,8 +33,9 @@ struct ProjectConfig {
 /// Parses the text of `lcart.toml`. `source_name` names the file in error
 /// messages (`<source_name>:<line>:<column>: ...`).
 ///
-/// Errors: ErrorCode::parse_error for text that is not TOML or not ASCII
-/// (a leading UTF-8 byte order mark is allowed; ADR-0015);
+/// Errors: ErrorCode::parse_error for text that is not TOML, not ASCII (a
+/// leading UTF-8 byte order mark is allowed), larger than 1 MiB or with more
+/// than 32 dotted key parts on a line (ADR-0015);
 /// ErrorCode::invalid_argument for an unknown key, a value of the wrong
 /// type, a module without a name or paths, an invalid glob (PathGlob), and
 /// a consent switch such as `include_source`, which only the command line

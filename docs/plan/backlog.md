@@ -214,7 +214,8 @@ translation unit the analysis fills `MODULE_DEPENDENCY`
 `fuzz/project_config_fuzzer.cpp` runs with the other fuzzers in CI
 (`scripts/fuzz-smoke.sh`); within seconds it found two kinds of undefined
 behaviour in toml++ 3.4.0 on malformed input, fixed upstream but not
-released, so `lcart.toml` is ASCII and toml++'s assertions are off
+released, and review found unbounded recursion on deeply dotted keys, so
+`lcart.toml` is ASCII, small and shallow, and toml++'s assertions are off
 ([ADR-0015](../adr/0015-ascii-configuration-while-tomlplusplus-3-4.md)).
 Conan Center's recipe has `tomlplusplus` 3.4.0
 (`recipes/tomlplusplus/config.yml` in conan-center-index). Reading

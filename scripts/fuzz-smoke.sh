@@ -16,7 +16,9 @@ for target in claim_json_fuzzer project_config_fuzzer; do
         exit 1
     fi
     dict="$repo/fuzz/${target%_fuzzer}.dict"
-    args=(-max_total_time="$seconds")
+    # Inputs up to 64 KiB: libFuzzer's default of 4 KiB is too small for
+    # bugs that need depth, such as deeply dotted TOML keys (ADR-0015).
+    args=(-max_total_time="$seconds" -max_len=65536)
     [[ -f "$dict" ]] && args+=(-dict="$dict")
     echo "fuzz-smoke: $target"
     "$fuzzer" "${args[@]}"

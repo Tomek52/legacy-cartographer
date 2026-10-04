@@ -125,6 +125,36 @@ TEST(ProjectConfig, ALeadingByteOrderMarkIsAllowed) {
     EXPECT_EQ(config->name, "x");
 }
 
+// Verifies: adr0015-ascii-configuration-v1 (limits). Found in review:
+// toml++ 3.4.0 recurses once per dotted key segment and table level, so a
+// deep key overflows the stack.
+TEST(ProjectConfig, DeeplyDottedKeysAreErrorsNotACrash) {
+    std::string dotted;
+    for (int i = 0; i < 100000; ++i) {
+        dotted += "a.";
+    }
+    for (const std::string& text : {"[project]\nname = \"x\"\n" + dotted + "a = 1\n",
+                                    "[" + dotted + "a]\n", "x = { " + dotted + "a = 1 }\n"}) {
+        const std::string message = error_of(text, ErrorCode::parse_error);
+        EXPECT_NE(message.find("more than 32 dotted parts"), std::string::npos) << message;
+    }
+    // Dots in strings, comments and numbers do not count.
+    const std::string many_dots(100, '.');
+    auto config = parse_project_config("# " + many_dots + "\n[project]\nname = \"" + many_dots +
+                                           "\"\nroot = '" + many_dots + "'\n",
+                                       "lcart.toml");
+    ASSERT_TRUE(config.has_value()) << config.error().message;
+    EXPECT_EQ(config->name, many_dots);
+    EXPECT_EQ(error_of("[project]\nname = 1.5\n", ErrorCode::invalid_argument),
+              "lcart.toml:2:8: 'project.name' must be a string");
+}
+
+TEST(ProjectConfig, AFileOverOneMebibyteIsAnError) {
+    const std::string text = "# " + std::string(1024 * 1024, 'x') + "\n";
+    EXPECT_EQ(error_of(text, ErrorCode::parse_error),
+              "lcart.toml: larger than 1 MiB; lcart.toml is a small file (ADR-0015)");
+}
+
 TEST(ProjectConfig, UnknownKeysAreErrorsWithTheirPosition) {
     EXPECT_EQ(error_of("[project]\nname = \"x\"\nroots = \"src\"\n", ErrorCode::invalid_argument),
               "lcart.toml:3:1: unknown key 'project.roots'");
@@ -195,6 +225,10 @@ TEST(ProjectConfig, LoadsAFileAndNamesItInErrors) {
     auto missing = load_project_config(dir / "missing.toml");
     ASSERT_FALSE(missing.has_value());
     EXPECT_EQ(missing.error().code, ErrorCode::io_error);
+
+    auto directory = load_project_config(dir); // reading a directory fails in the stream
+    ASSERT_FALSE(directory.has_value());
+    EXPECT_EQ(directory.error().code, ErrorCode::io_error);
     std::filesystem::remove_all(dir);
 }
 

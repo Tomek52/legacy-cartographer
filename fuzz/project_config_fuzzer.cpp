@@ -12,6 +12,9 @@ extern "C" int LLVMFuzzerTestOneInput(const std::uint8_t* data, std::size_t size
     auto config = lcart::config::parse_project_config(text, "fuzz.toml");
     if (config) {
         // Every accepted glob must also be safe to match.
+        for (const lcart::config::PathGlob& glob : config->exclude) {
+            static_cast<void>(glob.matches(text));
+        }
         for (const lcart::config::ModuleRule& rule : config->modules) {
             for (const lcart::config::PathGlob& glob : rule.paths) {
                 static_cast<void>(glob.matches("src/modbus-rtu.c"));

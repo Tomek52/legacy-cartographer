@@ -105,7 +105,8 @@ enum class DependencyVia : std::uint8_t { include, call };
 /// One edge that makes module `from` depend on module `to`: an include
 /// directive in a file of `from` naming a file of `to`, or a direct call from
 /// a function of `from` to a function of `to` (a function belongs to the
-/// module of the file it is located in: its definition).
+/// module of the file it is located in: its definition, else its first
+/// declaration).
 struct ModuleDependencyFact {
     ModuleId from{};
     ModuleId to{};
