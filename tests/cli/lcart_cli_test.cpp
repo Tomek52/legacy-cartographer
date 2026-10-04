@@ -8,8 +8,11 @@
 // reads the rules and exclusions from lcart.toml), fr007-module-map-without-llm-v1
 // (criteria 2 and 3: `lcart map` from the fact database alone, the same
 // bytes twice) and b13-module-map-v1 (golden map of two_modules; the command
-// line, exit statuses and T2 warning of ADR-0017).
+// line, exit statuses and T2 warning of ADR-0017), adr0018-replace-only-exports-v1
+// (`query export --output` refuses the database and other files, replaces
+// an earlier export in one step and keeps its permissions).
 #include <gtest/gtest.h>
+#include <sqlite3.h>
 
 #include <algorithm>
 #include <cerrno>
@@ -645,6 +648,70 @@ TEST_F(LcartCliTest, ExportReplacesAnEarlierExport) {
     EXPECT_EQ(second.status, exit_success) << second.err;
     EXPECT_EQ(read_file(output), golden);
     EXPECT_EQ(sorted_names(output.parent_path()), (std::vector<std::string>{"facts.jsonl"}));
+}
+
+/// A copy of the two_modules database without its module_dependency table:
+/// it opens, but every export and map of it fails half way.
+fs::path drop_module_dependencies(const fs::path& database, const fs::path& copy) {
+    fs::copy_file(database, copy);
+    sqlite3* connection = nullptr;
+    EXPECT_EQ(sqlite3_open(copy.c_str(), &connection), SQLITE_OK);
+    EXPECT_EQ(sqlite3_exec(connection, "DROP TABLE module_dependency", nullptr, nullptr, nullptr),
+              SQLITE_OK);
+    sqlite3_close(connection);
+    return copy;
+}
+
+// ADR-0017, ADR-0018: a failed run leaves an earlier output as it was, and
+// nothing next to it.
+TEST_F(LcartCliTest, FailedRunKeepsTheEarlierExportAndMap) {
+    const fs::path database = two_modules_database();
+    const fs::path broken = drop_module_dependencies(database, work_dir() / "broken.lcart.db");
+    const fs::path directory = work_dir() / "out";
+    const fs::path export_file = directory / "facts.jsonl";
+    const fs::path map_file = directory / "map.md";
+    ASSERT_EQ(query(database, {"export", "--output", export_file.string()}).status, exit_success);
+    ASSERT_EQ(lcart({"map", "--db", database.string(), "--output", map_file.string()}).status,
+              exit_success);
+    const std::string export_bytes = read_file(export_file);
+    const std::string map_bytes = read_file(map_file);
+
+    EXPECT_EQ(query(broken, {"export", "--output", export_file.string()}).status, exit_failure);
+    EXPECT_EQ(lcart({"map", "--db", broken.string(), "--output", map_file.string()}).status,
+              exit_failure);
+    EXPECT_EQ(read_file(export_file), export_bytes);
+    EXPECT_EQ(read_file(map_file), map_bytes);
+    EXPECT_EQ(sorted_names(directory), (std::vector<std::string>{"facts.jsonl", "map.md"}));
+}
+
+// ADR-0018: the replaced file keeps its permissions; an export is as
+// sensitive as the code (security T2).
+TEST_F(LcartCliTest, ReplacingKeepsThePermissions) {
+    const fs::path database = two_modules_database();
+    const fs::path export_file = work_dir() / "facts.jsonl";
+    const fs::path map_file = work_dir() / "map.md";
+    ASSERT_EQ(query(database, {"export", "--output", export_file.string()}).status, exit_success);
+    ASSERT_EQ(lcart({"map", "--db", database.string(), "--output", map_file.string()}).status,
+              exit_success);
+    const auto owner_only = fs::perms::owner_read | fs::perms::owner_write;
+    fs::permissions(export_file, owner_only);
+    fs::permissions(map_file, owner_only);
+
+    EXPECT_EQ(query(database, {"export", "--output", export_file.string()}).status, exit_success);
+    EXPECT_EQ(lcart({"map", "--db", database.string(), "--output", map_file.string()}).status,
+              exit_success);
+    EXPECT_EQ(fs::status(export_file).permissions(), owner_only);
+    EXPECT_EQ(fs::status(map_file).permissions(), owner_only);
+}
+
+// ADR-0018: an output that names a directory is refused before anything is
+// created.
+TEST_F(LcartCliTest, OutputEndingInASlashIsRefused) {
+    const fs::path database = two_modules_database();
+    const Outcome run = query(database, {"export", "--output", "newdir/"});
+    EXPECT_EQ(run.status, exit_failure);
+    EXPECT_NE(run.err.find("names a directory"), std::string::npos) << run.err;
+    EXPECT_FALSE(fs::exists(work_dir() / "newdir"));
 }
 
 TEST_F(LcartCliTest, FailedWriteToStandardOutputIsAFailure) {

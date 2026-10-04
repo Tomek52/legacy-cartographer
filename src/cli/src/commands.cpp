@@ -486,8 +486,11 @@ Outcome<void> print_module_dependencies(const FactQuery& facts, const std::strin
 
 /// Calls `write` on a hidden file next to `target`, creating its directory,
 /// then renames it over `target`, so an existing file is replaced in one
-/// step and a failed write leaves it as it was. Call check_own_output()
-/// first: derived output is replaced without `--force`, but no other file is.
+/// step and a failed write leaves it as it was. The new file gets the
+/// permissions of the one it replaces: an export or map is as sensitive as
+/// the code, and a user who restricted it must not find it widened
+/// (ADR-0018). Call check_own_output() first: derived output is replaced
+/// without `--force`, but no other file is.
 template <typename Write>
 Outcome<void> replace_file(const fs::path& target, const Write& write) {
     std::error_code ec;
@@ -503,7 +506,14 @@ Outcome<void> replace_file(const fs::path& target, const Write& write) {
         Outcome<void> written = file ? write(file) : Outcome<void>{};
         file.close();
         if (written && !file) {
-            written = fail(ExitStatus::failure, "cannot write " + partial.string());
+            written = fail(ExitStatus::failure, "cannot write " + target.string());
+        }
+        if (written && fs::exists(target, ec)) {
+            fs::permissions(partial, fs::status(target, ec).permissions(), ec);
+            if (ec) {
+                written = fail(ExitStatus::failure, "cannot keep the permissions of " +
+                                                        target.string() + ": " + ec.message());
+            }
         }
         if (!written) {
             fs::remove(partial, ec); // best effort; the run has failed already
@@ -550,6 +560,9 @@ constexpr OwnFileKind facts_export{
 /// is spelled.
 Outcome<void> check_own_output(const fs::path& output, const fs::path& database,
                                const OwnFileKind& kind) {
+    if (!output.has_filename()) {
+        return fail(ExitStatus::failure, output.string() + " names a directory, not a file");
+    }
     std::error_code ec;
     const fs::path database_path = fs::absolute(database, ec).lexically_normal();
     if (output.lexically_normal() == database_path ||

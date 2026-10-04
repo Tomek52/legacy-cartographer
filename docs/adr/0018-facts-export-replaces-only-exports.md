@@ -45,12 +45,20 @@ with the export as the file kind:
   start of the header record of every export, ADR-0016; the rest of the
   line holds the format version and coverage, which vary). Any other
   file, an empty one, a directory or a symbolic link is refused;
+- an output that names a directory (ends in `/`) is refused before
+  anything is created;
 - each refusal exits 1 and leaves the file unchanged; `--output -` writes
   no file and is not checked;
 - the export is written to a hidden file next to the output
   (`.<name>.partial-<pid>`) and renamed over it, so a failed run leaves an
   earlier export as it was; the parent directory is created if missing,
-  as for the map.
+  as for the map;
+- the new file gets the permissions of the file it replaces, so an export
+  the user restricted (security T2: as sensitive as the code) is not
+  widened by the next run; a new file gets the default permissions.
+
+The hidden file, the permissions and the directory-name check apply to
+`lcart map` as well: both commands share one implementation.
 
 Standard output stays empty on success (unchanged from ADR-0016); the
 security T2 warning still applies to the file.
@@ -65,5 +73,13 @@ security T2 warning still applies to the file.
   changing them needs a new ADR anyway (ADR-0016 export format).
 - A user who wants to overwrite another file deletes it first; there is no
   `--force` for exports.
+- Devices and pipes are refused as outputs: `--output /dev/null` or
+  `--output /dev/stdout`, accepted before, now exit 1 ("not a facts
+  export"); `--output -` writes to standard output.
+- Replacing by rename gives the output a new inode: hard links to an
+  earlier export keep the old content, and its owner becomes the user
+  running lcart. Only the permission bits are carried over.
+- A directory created for the output stays when the run then fails
+  (`create_directories` comes before the write); it is empty.
 - The export is streamed to the hidden file, not held in memory, as it
   was streamed to the output before.
