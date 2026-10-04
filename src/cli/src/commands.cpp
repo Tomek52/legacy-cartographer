@@ -15,6 +15,7 @@
 #include <optional>
 #include <ostream>
 #include <string>
+#include <string_view>
 #include <system_error>
 #include <unistd.h>
 #include <utility>
@@ -51,6 +52,17 @@ ExitStatus report(const Failure& failure, std::ostream& err) {
 }
 
 // ---- analyze ---------------------------------------------------------------
+
+/// Security T2 (ADR-0016): warns on `err` if git could pick up the output
+/// file `path`; `what` names it in the message.
+void warn_if_exposed(const fs::path& path, std::string_view what, std::ostream& err) {
+    if (const auto work_tree = unignored_git_work_tree(path, false)) {
+        err << "lcart: warning: " << path.string() << " is inside the git work tree "
+            << work_tree->string() << " and not ignored; " << what
+            << " is as sensitive as the analysed code (docs/security.md, T2): add it to"
+               " .gitignore\n";
+    }
+}
 
 /// What `lcart analyze` analyses, with every path absolute.
 struct AnalysisInput {
@@ -187,12 +199,7 @@ ExitStatus run_analyze(const AnalyzeCommand& command, std::ostream& out, std::os
     }
     std::error_code ec;
     const fs::path database = fs::absolute(command.database, ec);
-    if (const auto work_tree = unignored_git_work_tree(database, false)) {
-        err << "lcart: warning: " << database.string() << " is inside the git work tree "
-            << work_tree->string()
-            << " and not ignored; the fact database is as sensitive as the analysed code"
-               " (docs/security.md, T2): add it to .gitignore\n";
-    }
+    warn_if_exposed(database, "the fact database", err);
     auto pending = PendingDatabase::create(database, command.replace_database);
     if (!pending) {
         return report(pending.error(), err);
@@ -472,10 +479,12 @@ Outcome<void> print_module_dependencies(const FactQuery& facts, const std::strin
 }
 
 Outcome<void> export_facts(const FactQuery& facts, const std::optional<fs::path>& output,
-                           std::ostream& out) {
+                           std::ostream& out, std::ostream& err) {
     if (!output) {
         return or_failure(facts::write_jsonl_export(facts, out));
     }
+    std::error_code ec;
+    warn_if_exposed(fs::absolute(*output, ec), "the export", err);
     std::ofstream file{*output, std::ios::binary | std::ios::trunc};
     if (!file) {
         return fail(ExitStatus::failure, "cannot write " + output->string());
@@ -507,7 +516,7 @@ ExitStatus run_query(const QueryCommand& command, std::ostream& out, std::ostrea
         done = print_module_dependencies(facts, command.subject, out);
         break;
     case QueryKind::export_facts:
-        done = export_facts(facts, command.output, out);
+        done = export_facts(facts, command.output, out, err);
         break;
     }
     out.flush();

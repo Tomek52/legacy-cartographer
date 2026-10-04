@@ -178,8 +178,9 @@ the database; 4 ambiguous function name. A partial analysis exits 0
 Values are never renumbered; B-16's "interrupted" gets a new one.
 
 <a id="adr0016-git-exposure-check-v1"></a>**Git exposure warning without
-git.** `lcart analyze` warns on standard error, and goes on, when the
-database is inside a git work tree and that work tree's ignore files do
+git.** `lcart analyze` (for the database) and `lcart query export
+--output` (for the file) warn on standard error, and go on, when the
+output is inside a git work tree and that work tree's ignore files do
 not exclude it. No git command is run. The work tree is the nearest
 directory at or above the output that has a `.git` entry (directory or
 file). The rules read are `.git/info/exclude` (when `.git` is a directory)

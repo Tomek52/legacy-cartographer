@@ -358,6 +358,26 @@ TEST_F(LcartCliTest, WarnsWhenTheDatabaseIsInAWorkTreeAndNotIgnored) {
     EXPECT_EQ(ignored.err.find("not ignored"), std::string::npos) << ignored.err;
 }
 
+// B-12 criterion 1 for the other output: `query export --output`.
+TEST_F(LcartCliTest, WarnsWhenTheExportIsInAWorkTreeAndNotIgnored) {
+    const fs::path database = two_modules_database();
+    const fs::path repo = work_dir() / "repo";
+    fs::create_directories(repo / ".git");
+    const fs::path output = repo / "lcart-out" / "facts.jsonl";
+    fs::create_directories(output.parent_path());
+
+    const Outcome exposed = query(database, {"export", "--output", output.string()});
+    EXPECT_EQ(exposed.status, exit_success) << exposed.err;
+    EXPECT_NE(exposed.err.find("not ignored"), std::string::npos) << exposed.err;
+    EXPECT_NE(exposed.err.find(repo.string()), std::string::npos) << exposed.err;
+    EXPECT_TRUE(fs::is_regular_file(output));
+
+    std::ofstream{repo / ".gitignore"} << "lcart-out/\n";
+    const Outcome ignored = query(database, {"export", "--output", output.string()});
+    EXPECT_EQ(ignored.status, exit_success) << ignored.err;
+    EXPECT_EQ(ignored.err.find("not ignored"), std::string::npos) << ignored.err;
+}
+
 TEST_F(LcartCliTest, NoWarningOutsideAWorkTree) {
     const Outcome run =
         lcart({"analyze", "--root", fixture("two_modules").string(), "--compilation-database",

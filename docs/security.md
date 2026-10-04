@@ -57,8 +57,9 @@ counts as local, egress log and dry run
 
 ### T2. Leaks through output files
 
-- Outputs default to a dedicated directory (`lcart-out/`). `lcart analyze`
-  warns when the database is inside a git work tree and not ignored. It
+- Outputs default to a dedicated directory (`lcart-out/`). The tool warns
+  when an output (the database of `lcart analyze`, the file of `lcart query
+  export --output`) is inside a git work tree and not ignored. It
   reads the work tree's ignore files itself and runs no git command, since
   git can run programs named in the configuration of the (untrusted)
   analysed repository; in doubt it warns
