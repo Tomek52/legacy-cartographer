@@ -79,6 +79,26 @@ jobs:
       - name: Check submodules
         run: scripts/check-targets.sh
 
+  libmodbus-compdb:
+    # B-05: the compilation database of the pinned libmodbus, built from a
+    # copy so targets/libmodbus stays clean (the script checks both).
+    name: libmodbus compilation database
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+      - name: Install tools
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq autoconf automake libtool make bear clang-20
+      - name: Build libmodbus under bear
+        run: CC=clang-20 scripts/libmodbus-compdb.sh
+      - name: Keep the build log
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: libmodbus-build-log
+          path: build/targets/libmodbus/build.log
+
   lint:
     name: Format + clang-tidy
     runs-on: ubuntu-24.04

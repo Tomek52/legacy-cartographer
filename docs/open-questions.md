@@ -51,7 +51,6 @@ None open. New questions are added here as they come up.
 
 | Item | Where | Verified by |
 |---|---|---|
-| libmodbus builds out of tree with autotools | [libmodbus plan](targets/libmodbus.md) | B-05 |
 | Seam for feeding frames to libmodbus through the public API only | [testing strategy](testing/strategy.md#testing-characterization-v1) | M3 |
 | `modbus_mapping_new` signature and per-iteration cost for fuzzing | [libmodbus plan](targets/libmodbus.md) | M4 |
 | `modbus_close` / `modbus_free` semantics for the RAII wrapper | [libmodbus plan](targets/libmodbus.md) | M5 |

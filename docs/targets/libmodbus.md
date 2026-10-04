@@ -53,11 +53,18 @@ rule would give one module. The libmodbus configuration (B-14) defines:
 
 ### M1: fact database and module map (no LLM)
 
-1. Generate `compile_commands.json` outside the submodule: configure and
-   build libmodbus in `build/targets/libmodbus/` under `bear` (B-05). TODO:
-   verify that an out-of-tree autotools build works, to keep the submodule's
-   working tree clean (`../configure` from a build directory; otherwise copy
-   the tree to the build directory first).
+1. Generate `compile_commands.json` outside the submodule:
+   `scripts/libmodbus-compdb.sh` (B-05). `autogen.sh` writes its generated
+   files (`configure`, `Makefile.in`, ...) into the source directory, so an
+   out-of-tree `../configure` alone would still modify the submodule. The
+   script therefore exports the pinned commit with `git archive` to
+   `build/targets/libmodbus/source/`, runs `autogen.sh`, `./configure
+   --enable-tests` and `make` there under `bear`, and writes
+   `build/targets/libmodbus/compile_commands.json` (14 translation units:
+   the 4 library sources and 10 programs in `tests/`). That copy is the
+   analysis root: it holds the pinned files unchanged plus what configure
+   generates (`config.h`, `src/modbus-version.h`, `tests/unit-test.h`), so
+   the generated header belongs to `core` as the table above says.
 2. `lcart analyze` and `lcart map` with the configuration above.
 3. Check by hand against the code: `modbus.c` defines
    `_modbus_receive_msg`, `modbus_receive`, `compute_meta_length_after_function`,
