@@ -25,6 +25,21 @@ include(ArchitectureRules)
 find_package(SQLite3 REQUIRED)
 find_package(nlohmann_json 3.11 REQUIRED)
 
+# Clang/LLVM 20 from the distribution packages (ADR-0002, ADR-0007), never
+# from Conan. On Ubuntu: llvm-20-dev libclang-20-dev libclang-cpp20-dev.
+# LLVMConfigVersion.cmake accepts only an exact major.minor request, so the
+# package is found by path and the major version checked here.
+find_package(LLVM REQUIRED CONFIG HINTS /usr/lib/llvm-20/lib/cmake/llvm NO_DEFAULT_PATH)
+if(NOT LLVM_VERSION_MAJOR EQUAL 20)
+    message(FATAL_ERROR "LLVM 20 required (ADR-0007), found ${LLVM_PACKAGE_VERSION} in ${LLVM_DIR}")
+endif()
+find_package(Clang REQUIRED CONFIG HINTS "${LLVM_DIR}/../clang" NO_DEFAULT_PATH)
+set(LCART_CLANG_RESOURCE_DIR "${LLVM_LIBRARY_DIR}/clang/${LLVM_VERSION_MAJOR}")
+if(NOT EXISTS "${LCART_CLANG_RESOURCE_DIR}/include/stddef.h")
+    message(FATAL_ERROR "Clang resource directory not found at ${LCART_CLANG_RESOURCE_DIR}")
+endif()
+message(STATUS "LibTooling: LLVM ${LLVM_PACKAGE_VERSION} from ${LLVM_DIR}")
+
 add_subdirectory(src)
 
 # Deterministic modules must never depend on the LLM layer (NFR-001, ADR-0004).

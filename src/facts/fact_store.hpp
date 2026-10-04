@@ -28,6 +28,7 @@ public:
     virtual common::Status add_include(const IncludeFact& include) = 0;
     virtual common::Result<FunctionId> add_function(const FunctionFact& function) = 0;
     virtual common::Status add_call(const CallFact& call) = 0;
+    virtual common::Status add_diagnostic(const DiagnosticFact& diagnostic) = 0;
     virtual common::Status set_coverage(const AnalysisCoverage& coverage) = 0;
 };
 

@@ -16,7 +16,7 @@ expanded in place; its version is bumped if its meaning changes
 | [B-04](#b04-include-boundary-check-v1) | Include boundary check for the core | M0 | NFR-001 | B-02 | 2 h |
 | [B-05](#b05-libmodbus-compilation-database-v1) | Compilation database for libmodbus | M1 | FR-001 | B-01 | 3 h |
 | [B-06](#b06-sqlite-fact-store-v1) | SQLite fact store, schema v1 | M1 | FR-002–FR-004, NFR-004 | – | 6 h |
-| [B-07](#b07-clang-libtooling-spike-v2) | Clang LibTooling spike and analysis driver | M1 | FR-001 | B-02 | 6 h |
+| [B-07](#b07-clang-libtooling-spike-v2) | ✅ Clang LibTooling spike and analysis driver | M1 | FR-001 | B-02 | 6 h |
 | [B-08](#b08-file-and-include-facts-v1) | File and include facts | M1 | FR-002 | B-06, B-07 | 4 h |
 | [B-09](#b09-function-facts-v1) | Function facts | M1 | FR-003 | B-08 | 4 h |
 | [B-10](#b10-call-edges-v1) | Direct and indirect call edges | M1 | FR-004 | B-09 | 5 h |
@@ -121,6 +121,14 @@ Acceptance criteria:
    ([security T5](../security.md)).
 4. Decide and record the threading model (ADR if it deviates from the
    [components page](../architecture/components.md#arch-threading-v1)).
+
+Result (2026-10-04): `find_package` works from the distribution packages
+(LLVM's version file accepts only an exact `major.minor`, so CMake finds the
+package by path and checks the major version itself). Threading: one TU at a
+time for now; the parallel design in
+[components](../architecture/components.md#arch-threading-v1) is unchanged and
+arrives with B-16, so no ADR. Plugin removal list verified against
+`clang-20 --help-hidden` and `-cc1 --help`.
 
 ### <a id="b08-file-and-include-facts-v1"></a>**[B-08 v1]** File and include facts
 

@@ -37,7 +37,8 @@ scripts/conan-install.sh debug
 cmake --workflow --preset debug
 
 # Without Conan, from Ubuntu packages (offline machines)
-sudo apt-get install ninja-build g++-14 libsqlite3-dev nlohmann-json3-dev libgtest-dev
+sudo apt-get install ninja-build g++-14 llvm-20-dev libclang-20-dev libclang-cpp20-dev \
+    libsqlite3-dev nlohmann-json3-dev libgtest-dev
 cmake --workflow --preset debug-system
 
 build/debug-system/src/cli/lcart --help

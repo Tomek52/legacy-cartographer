@@ -35,12 +35,16 @@ moving the answer into the relevant spec or ADR and deleting it here.
 
 None open. New questions are added here as they come up.
 
+## Open technical questions
+
+| Question | Context | Decide by |
+|---|---|---|
+| Run each translation unit in a child process so a Clang crash cannot end the run? Costs process start-up per TU. | [security T5](security.md) | B-16, after measuring on libmodbus |
+
 ## Not verified yet ("TODO: verify")
 
 | Item | Where | Verified by |
 |---|---|---|
-| `find_package(Clang)` from `/usr/lib/llvm-20/lib/cmake/clang` links with our presets | [ADR-0007](adr/0007-cpp23-and-toolchain-baseline.md) | B-07 |
-| Complete list of Clang 20 flags that load code (`-fplugin`, `-load`, …) | [security](security.md) | B-07 |
 | libmodbus builds out of tree with autotools | [libmodbus plan](targets/libmodbus.md) | B-05 |
 | Initializer form of libmodbus backend tables (`modbus-rtu.c`, `modbus-tcp.c`) | [FR-015](specs/requirements.md#fr015-resolve-function-pointer-tables-v1) | B-10 |
 | Seam for feeding frames to libmodbus through the public API only | [testing strategy](testing/strategy.md#testing-characterization-v1) | M3 |

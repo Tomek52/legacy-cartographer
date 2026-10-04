@@ -1,6 +1,8 @@
 # Components
 
-Status as of M0: every module has its interface header and no implementation.
+Status: `analysis` has the Clang driver (B-07: compilation database, coverage,
+diagnostics, argument filter); every other module has its interface header
+and no implementation.
 
 | Module | Responsibility | Main interface | Depends on | Delivered in |
 |---|---|---|---|---|

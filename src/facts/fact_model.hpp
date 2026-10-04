@@ -78,6 +78,19 @@ struct CallFact {
     SourceLocation site;
 };
 
+enum class DiagnosticSeverity : std::uint8_t { warning, error, fatal };
+
+/// A compiler diagnostic from analysing one translation unit (FR-001). Paths
+/// are as given in the compilation database; mapping them to FileIds needs
+/// the file facts of B-08.
+struct DiagnosticFact {
+    std::string translation_unit;
+    std::string file; ///< Empty when the diagnostic has no location.
+    std::uint32_t line{};
+    DiagnosticSeverity severity{DiagnosticSeverity::error};
+    std::string message;
+};
+
 /// How much of the compilation database was analysed. The verifier only
 /// reports `contradicted` for an absent fact when coverage is complete.
 struct AnalysisCoverage {

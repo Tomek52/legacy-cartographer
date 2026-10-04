@@ -13,7 +13,7 @@ permissions:
   contents: read
 
 env:
-  APT_PACKAGES: ninja-build gcc-14 g++-14 clang-20 clang-tidy-20 clang-format-20 libclang-rt-20-dev
+  APT_PACKAGES: ninja-build gcc-14 g++-14 clang-20 clang-tidy-20 clang-format-20 libclang-rt-20-dev llvm-20-dev libclang-20-dev libclang-cpp20-dev
   CONAN_VERSION: "2.30.0"
 
 jobs:

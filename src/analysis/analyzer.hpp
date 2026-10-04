@@ -24,6 +24,9 @@ struct AnalysisSummary {
     std::uint32_t translation_units_total{};
     std::uint32_t translation_units_parsed{};
     std::uint32_t diagnostics{};
+    /// Messages for the user, e.g. compiler arguments removed for security
+    /// reasons (docs/security.md, T5). In translation-unit order.
+    std::vector<std::string> warnings;
 };
 
 /// Extracts facts (files, includes, functions, calls) from a C/C++ project.
@@ -31,7 +34,6 @@ struct AnalysisSummary {
 /// A translation unit that fails to parse is recorded as a diagnostic and
 /// the analysis continues (FR-001). Deterministic: the same inputs produce
 /// the same facts regardless of thread scheduling (NFR-004).
-// TODO(B-07): Clang LibTooling implementation behind this interface (ADR-0002).
 class Analyzer {
 public:
     Analyzer() = default;

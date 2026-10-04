@@ -120,13 +120,21 @@ to make it *do* something: delete files, run a command, send data to a URL.
 
 - Compile commands are parsed as arguments for the in-process Clang frontend
   and **never executed** as processes.
-- Arguments that load code into the compiler (`-fplugin=`, `-load`,
-  `-Xclang -load`, `-fpass-plugin=`) are removed before parsing, and a
-  warning is printed (B-07; TODO: verify the complete list of such flags for
-  Clang 20).
-- Parsing hostile C/C++ can still crash or exhaust Clang; analysis runs per
-  TU with limits, and a crash in one TU must not lose the others (design in
-  B-07).
+- Arguments that load code into the compiler are removed before Clang sees
+  a command, and each removal is reported as a warning
+  (`src/analysis/argument_filter.hpp`, B-07). The list was taken from
+  `clang-20 --help-hidden` and `clang-20 -cc1 --help`: driver options
+  `-fplugin=`, `-fpass-plugin=`, `--hipspv-pass-plugin=`, `-fplugin-arg-*`;
+  cc1 options `-load`, `-plugin`, `-add-plugin`, `-plugin-arg-*`,
+  `-fpass-plugin=`, whether passed with `-Xclang`, `-Xclang=` or bare in a
+  `-cc1` command. Response files (`@file`) are expanded first, so they cannot
+  hide such options; any `@` argument left over is removed too.
+- Parsing hostile C/C++ can still crash or exhaust Clang. Analysis runs
+  in-process, one TU at a time: a Clang crash ends the run. Mitigation: each
+  TU's facts are committed as it completes, so `--resume` continues after the
+  crashing TU once it is excluded (B-16). Running each TU in a child process
+  is the stronger option if crashes turn out to be common on real code
+  bases (open question).
 
 ### T6. Malformed agent or LLM output
 
