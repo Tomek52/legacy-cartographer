@@ -9,8 +9,8 @@ EARS patterns used: *ubiquitous* ("The tool shall…"), *event-driven*
 ("If…, then the tool shall…"), *optional feature* ("Where…").
 
 "The tool" means the `lcart` executable. Commands are named as planned in
-`src/cli/main.cpp`; options may change until the milestone that delivers
-them.
+`lcart --help` (`src/cli/src/command_line.cpp`); options may change until
+the milestone that delivers them.
 
 ## Functional requirements
 

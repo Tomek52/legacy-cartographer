@@ -57,10 +57,13 @@ counts as local, egress log and dry run
 
 ### T2. Leaks through output files
 
-- Outputs default to a dedicated directory (`lcart-out/`). The tool warns
-  when the output directory or the database is inside a git work tree and not
-  ignored (planned with B-12). This repository ignores `lcart-out/` and
-  `*.lcart.db`.
+- Outputs default to a dedicated directory (`lcart-out/`). `lcart analyze`
+  warns when the database is inside a git work tree and not ignored. It
+  reads the work tree's ignore files itself and runs no git command, since
+  git can run programs named in the configuration of the (untrusted)
+  analysed repository; in doubt it warns
+  ([ADR-0016](adr/0016-facts-export-and-command-line.md#adr0016-git-exposure-check-v1)).
+  This repository ignores `lcart-out/` and `*.lcart.db`.
 - Documentation states that the fact database and reports are as sensitive
   as the code.
 - Residual risk: users commit generated docs of private code to public

@@ -24,7 +24,10 @@ Built-in providers and local models are planned for later (M6).
 ## Status
 
 **M1 in progress: fact database and module map, without LLM.** Done so
-far: Clang LibTooling driver (B-07) and the SQLite fact store (B-06). See the [roadmap](docs/plan/roadmap.md).
+far: the SQLite fact store (B-06); analysis of files, includes, functions,
+call edges and modules with Clang LibTooling (B-07–B-11); `lcart analyze`,
+`lcart query` and the JSON Lines export (B-12). See the
+[roadmap](docs/plan/roadmap.md).
 
 ## Build
 
@@ -43,6 +46,15 @@ sudo apt-get install ninja-build g++-14 clang-20 libclang-rt-20-dev \
 cmake --workflow --preset debug-system
 
 build/debug-system/src/cli/lcart --help
+```
+
+In the root of a project with a compilation database (outputs go to
+`lcart-out/`, which the project should ignore):
+
+```bash
+lcart analyze --compilation-database build/compile_commands.json
+lcart query callers main
+lcart query export --output lcart-out/facts.jsonl
 ```
 
 Quality gates: `scripts/dod.sh` runs all local checks (format, clang-tidy,
