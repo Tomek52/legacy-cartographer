@@ -14,9 +14,12 @@ and the ADRs it links **before** writing code.
 
 - **Deterministic core** (`src/{common,config,facts,analysis,claims,verify,report,handoff}`)
   never includes or links `src/llm`. `cmake/ArchitectureRules.cmake` fails
-  configure if it does. Do not edit the rule to make a change pass.
+  configure if it links it, `cmake/CheckIncludeBoundaries.cmake` (CTest
+  label `architecture`) if it includes it. Do not edit the rules to make a
+  change pass.
 - **Clang stays in `analysis`.** No Clang type in any other module's
-  interface (ADR-0002).
+  interface (ADR-0002); no Clang or LLVM header outside `src/analysis`
+  (checked by the same test).
 - **No network in v1:** `lcart` opens no network connection; LLM work goes
   through handoff bundles for an external agent (ADR-0006). Bundles hold
   facts only unless `--include-source` is given on the command line; never
