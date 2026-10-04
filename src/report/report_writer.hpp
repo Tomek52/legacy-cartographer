@@ -18,10 +18,19 @@ struct VerificationReport {
     std::vector<verify::Verdict> verdicts; ///< Same order as `claims`.
 };
 
-/// Writes the module map (FR-007): Markdown with a Mermaid module graph,
-/// built from facts only.
-// TODO(B-13): implement.
-common::Status write_module_map(const facts::FactQuery& facts, std::ostream& out);
+/// Writes the module map (FR-007) to `out`: Markdown with a coverage line,
+/// a Mermaid graph of module dependencies (each edge labelled with its
+/// include and call sites) and the modules with their files and function
+/// definition counts, in the format of ADR-0017. Files outside the analysis
+/// root are left out; files under it without a module are listed under
+/// `(unassigned)`.
+///
+/// Built from facts only, sorted by name and path, with no timestamp,
+/// absolute path or tool version: the same facts give the same bytes
+/// (NFR-004). Names are escaped, so no module name or path can break the
+/// Markdown or the Mermaid graph. Fails if the database cannot be read or
+/// `out` fails.
+[[nodiscard]] common::Status write_module_map(const facts::FactQuery& facts, std::ostream& out);
 
 /// Writes the verification report (FR-011).
 // TODO(M2): implement both formats.

@@ -10,11 +10,14 @@ add_executable(lcart_unit_tests
     config/project_config_test.cpp
     facts/fact_export_test.cpp
     facts/sqlite_fact_store_test.cpp
+    report/module_map_test.cpp
     verify/verification_status_test.cpp)
 # SQLite directly: the schema-version tests tamper with a database.
 target_link_libraries(lcart_unit_tests PRIVATE
     lcart::analysis lcart::cli lcart::report lcart::handoff lcart::llm
     SQLite::SQLite3 GTest::gtest_main)
+target_compile_definitions(lcart_unit_tests PRIVATE
+    LCART_GOLDEN_DIR="${CMAKE_CURRENT_SOURCE_DIR}/golden")
 lcart_target_warnings(lcart_unit_tests)
 gtest_discover_tests(lcart_unit_tests PROPERTIES LABELS unit)
 
