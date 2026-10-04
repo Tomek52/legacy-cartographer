@@ -56,6 +56,9 @@ public:
     /// How `file` is named in the facts.
     [[nodiscard]] const FactPath& fact_path(const clang::SourceManager& sources,
                                             clang::FileEntryRef file);
+    /// How the file at `absolute_name` is named in the facts, whether or not
+    /// it is recorded (translation units, diagnostics).
+    [[nodiscard]] const FactPath& fact_path(const std::string& absolute_name);
 
     /// The first error from the fact writer; Clang's callbacks cannot return
     /// one, so later callbacks are ignored once this is set.

@@ -40,8 +40,10 @@ namespace {
 /// database on large code bases.
 class CollectingDiagnosticConsumer final : public clang::DiagnosticConsumer {
 public:
-    explicit CollectingDiagnosticConsumer(std::string translation_unit)
-        : translation_unit_(std::move(translation_unit)) {}
+    /// `translation_unit` is spelled as in the facts; `files` names the
+    /// diagnostics' files the same way, so they match FILE rows.
+    CollectingDiagnosticConsumer(std::string translation_unit, FileFactCollector& files)
+        : translation_unit_(std::move(translation_unit)), files_(&files) {}
 
     void HandleDiagnostic(clang::DiagnosticsEngine::Level level,
                           const clang::Diagnostic& info) override {
@@ -62,7 +64,9 @@ public:
             const clang::PresumedLoc presumed =
                 info.getSourceManager().getPresumedLoc(info.getLocation());
             if (presumed.isValid()) {
-                fact.file = presumed.getFilename();
+                llvm::SmallString<256> absolute{presumed.getFilename()};
+                info.getSourceManager().getFileManager().makeAbsolutePath(absolute);
+                fact.file = files_->fact_path(absolute.str().str()).path;
                 fact.line = presumed.getLine();
             }
         }
@@ -89,6 +93,7 @@ private:
     }
 
     std::string translation_unit_;
+    FileFactCollector* files_;
     std::vector<facts::DiagnosticFact> diagnostics_;
 };
 
@@ -256,6 +261,14 @@ load_compilation_database(const std::filesystem::path& path) {
         exclude, [&path](const config::PathGlob& glob) { return glob.matches(path); });
 }
 
+/// The translation unit `file` (as the compilation database names it),
+/// spelled like a file fact: root-relative, or absolute outside the root.
+[[nodiscard]] std::string translation_unit_path(FileFactCollector& files, const std::string& file) {
+    std::error_code ec;
+    const std::filesystem::path absolute = std::filesystem::absolute(file, ec);
+    return files.fact_path(ec ? file : absolute.string()).path;
+}
+
 } // namespace
 
 common::Result<AnalysisSummary> ClangAnalyzer::analyze(const AnalysisRequest& request,
@@ -311,7 +324,8 @@ common::Result<AnalysisSummary> ClangAnalyzer::analyze(const AnalysisRequest& re
             clang::tooling::getInsertArgumentAdjuster("-resource-dir=" LCART_CLANG_RESOURCE_DIR,
                                                       clang::tooling::ArgumentInsertPosition::END));
 
-        CollectingDiagnosticConsumer consumer{file};
+        CollectingDiagnosticConsumer consumer{translation_unit_path(file_collector, file),
+                                              file_collector};
         tool.setDiagnosticConsumer(&consumer);
 
         const int status = tool.run(&action_factory);

@@ -9,7 +9,9 @@ namespace lcart::facts {
 
 /// Version of the fact database schema (docs/architecture/data-model.md).
 /// Any change to tables or column meaning increments it.
-inline constexpr int schema_version = 1;
+/// 2: translation unit and diagnostic paths are spelled like file paths
+/// (B-12).
+inline constexpr int schema_version = 2;
 
 /// Row identifier in the fact database. Distinct types per table, so a
 /// FileId cannot be passed where a FunctionId is expected.
@@ -120,12 +122,12 @@ struct ModuleDependencyFact {
 
 enum class DiagnosticSeverity : std::uint8_t { warning, error, fatal };
 
-/// A compiler diagnostic from analysing one translation unit (FR-001). Paths
-/// are as Clang reports them, not root-relative; mapping them to FileIds is
-/// left to B-12.
+/// A compiler diagnostic from analysing one translation unit (FR-001). Both
+/// paths are spelled like FileFact::path: relative to the analysis root, or
+/// absolute outside it. A diagnostic in a recorded file is linked to it.
 struct DiagnosticFact {
-    std::string translation_unit{};
-    std::string file{}; ///< Empty when the diagnostic has no location.
+    std::string translation_unit{}; ///< The main file of the unit.
+    std::string file{};             ///< Empty when the diagnostic has no location.
     std::uint32_t line{};
     DiagnosticSeverity severity{DiagnosticSeverity::error};
     std::string message{};

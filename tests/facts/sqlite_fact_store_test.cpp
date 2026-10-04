@@ -317,6 +317,21 @@ public:
             << sqlite3_errmsg(database_);
     }
 
+    /// The values of the first column of `sql`'s rows, as text ("NULL" for null).
+    [[nodiscard]] std::vector<std::string> column(const char* sql) {
+        std::vector<std::string> values;
+        sqlite3_stmt* statement = nullptr;
+        EXPECT_EQ(sqlite3_prepare_v2(database_, sql, -1, &statement, nullptr), SQLITE_OK)
+            << sqlite3_errmsg(database_);
+        while (statement != nullptr && sqlite3_step(statement) == SQLITE_ROW) {
+            const unsigned char* text = sqlite3_column_text(statement, 0);
+            // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast): SQLite C API
+            values.emplace_back(text == nullptr ? "NULL" : reinterpret_cast<const char*>(text));
+        }
+        sqlite3_finalize(statement);
+        return values;
+    }
+
 private:
     sqlite3* database_ = nullptr;
 };
@@ -339,12 +354,14 @@ TEST(SqliteFactStore, RejectsOtherSchemaVersion) {
         auto store = SqliteFactStore::open(SharedMemoryDatabase::uri);
         ASSERT_TRUE(store.has_value()) << store.error().message;
     }
-    database.exec("UPDATE meta SET value = '2' WHERE key = 'schema_version'");
+    const std::string other_version = std::to_string(schema_version + 1);
+    database.exec(
+        ("UPDATE meta SET value = '" + other_version + "' WHERE key = 'schema_version'").c_str());
 
     auto store = SqliteFactStore::open(SharedMemoryDatabase::uri);
     ASSERT_FALSE(store.has_value());
     EXPECT_EQ(store.error().code, ErrorCode::incompatible_database);
-    EXPECT_NE(store.error().message.find("schema version 2"), std::string::npos)
+    EXPECT_NE(store.error().message.find("schema version " + other_version), std::string::npos)
         << store.error().message;
 }
 
@@ -361,6 +378,106 @@ TEST(SqliteFactStore, UnopenablePathIsAnIoError) {
     auto store = SqliteFactStore::open("/nonexistent-dir/facts.db");
     ASSERT_FALSE(store.has_value());
     EXPECT_EQ(store.error().code, ErrorCode::io_error);
+}
+
+// Verifies: fr006-query-and-export-facts-v1 (the queries behind `lcart query`
+// and the export, each in its documented order).
+TEST(SqliteFactStore, ListsEveryModuleFileAndFunction) {
+    const Fixture f;
+    const auto modules = value_of(f.store->modules());
+    ASSERT_EQ(modules.size(), 2U);
+    EXPECT_EQ(modules[0].name, "app");
+    EXPECT_EQ(modules[1].name, "core");
+
+    std::vector<std::string> paths;
+    for (const FileFact& file : value_of(f.store->files())) {
+        paths.push_back(file.path);
+    }
+    EXPECT_EQ(paths, (std::vector<std::string>{"/usr/include/stdio.h", "app/main.c", "src/core.c",
+                                               "src/core.h", "src/util.c"}));
+
+    std::vector<std::string> usrs;
+    for (const FunctionFact& function : value_of(f.store->functions())) {
+        usrs.push_back(function.usr);
+    }
+    // By file path, then first line: main.c; core.c 5, 10, 20; util.c.
+    EXPECT_EQ(usrs, (std::vector<std::string>{"usr:main", "usr:core.c@helper", "usr:init",
+                                              "usr:run", "usr:util.c@helper"}));
+}
+
+TEST(SqliteFactStore, LooksUpFilesAndFunctionsById) {
+    const Fixture f;
+    EXPECT_EQ(value_of(f.store->file(f.core_h)).value_or(FileFact{}).path, "src/core.h");
+    EXPECT_EQ(value_of(f.store->file(FileId{999})), std::nullopt);
+    EXPECT_EQ(value_of(f.store->function(f.run)).value_or(FunctionFact{}).usr, "usr:run");
+    EXPECT_EQ(value_of(f.store->function(FunctionId{999})), std::nullopt);
+    EXPECT_EQ(
+        value_of(f.store->find_function_by_usr("usr:util.c@helper")).value_or(FunctionFact{}).id,
+        f.helper_util);
+    EXPECT_EQ(value_of(f.store->find_function_by_usr("helper")), std::nullopt);
+}
+
+TEST(SqliteFactStore, CallsToListsDirectCallersInSiteOrder) {
+    Fixture f;
+    const FunctionId late = f.add_function("usr:late", "late", f.util_c, 40, 41, true);
+    f.add_call(late, f.init, f.util_c, 41, 3);
+
+    const auto calls = value_of(f.store->calls_to(f.init));
+    ASSERT_EQ(calls.size(), 3U);
+    EXPECT_EQ(calls[0].caller, f.main); // app/main.c
+    EXPECT_EQ(calls[1].caller, f.run);  // src/core.c
+    EXPECT_EQ(calls[2].caller, late);   // src/util.c
+    EXPECT_TRUE(value_of(f.store->calls_to(f.main)).empty());
+}
+
+TEST(SqliteFactStore, ListsEveryCallInSiteOrder) {
+    const Fixture f;
+    const auto calls = value_of(f.store->calls());
+    ASSERT_EQ(calls.size(), 4U);
+    EXPECT_EQ(calls[0].site.file, f.main_c);      // app/main.c 3:5
+    EXPECT_EQ(calls[1].kind, CallKind::indirect); // src/core.c 22:2
+    EXPECT_EQ(calls[2].callee, f.init);           // src/core.c 22:5
+    EXPECT_EQ(calls[3].callee, f.helper_core);    // src/core.c 25:9
+}
+
+TEST(SqliteFactStore, IncludedByAndAllIncludesInIncluderOrder) {
+    Fixture f;
+    expect_ok(f.store->add_include(
+        {.includer = f.core_c, .included = f.core_h, .spelled = "core.h", .line = 1}));
+
+    const auto included_by = value_of(f.store->included_by(f.core_h));
+    ASSERT_EQ(included_by.size(), 2U);
+    EXPECT_EQ(included_by[0].includer, f.main_c); // app/main.c before src/core.c
+    EXPECT_EQ(included_by[1].includer, f.core_c);
+
+    const auto includes = value_of(f.store->includes());
+    ASSERT_EQ(includes.size(), 4U);
+    EXPECT_EQ(includes[0].spelled, "core.h");    // app/main.c:1
+    EXPECT_EQ(includes[1].spelled, "stdio.h");   // app/main.c:2
+    EXPECT_EQ(includes[2].spelled, "missing.h"); // app/main.c:3
+    EXPECT_EQ(includes[3].includer, f.core_c);
+}
+
+// A diagnostic in a recorded file names it (the open question
+// "DIAGNOSTIC.file_id stays null", resolved in B-12).
+TEST(SqliteFactStore, DiagnosticInARecordedFileGetsItsFileId) {
+    SharedMemoryDatabase database;
+    {
+        auto store = SqliteFactStore::open(SharedMemoryDatabase::uri);
+        ASSERT_TRUE(store.has_value()) << store.error().message;
+        const ModuleId module = value_of((*store)->add_module({.name = "src"}));
+        const FileId file = value_of((*store)->add_file({.path = "src/core.c", .module = module}));
+        ASSERT_EQ(file.value, 1);
+        for (const char* path : {"src/core.c", "/usr/include/stdio.h", ""}) {
+            expect_ok((*store)->add_diagnostic({.translation_unit = "src/core.c",
+                                                .file = path,
+                                                .line = 1,
+                                                .severity = DiagnosticSeverity::error,
+                                                .message = "x"}));
+        }
+    }
+    EXPECT_EQ(database.column("SELECT file_id FROM diagnostic ORDER BY id"),
+              (std::vector<std::string>{"1", "NULL", "NULL"}));
 }
 
 } // namespace

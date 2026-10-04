@@ -39,7 +39,11 @@ const FileFactCollector::FactPath& FileFactCollector::fact_path(const clang::Sou
                                                                 clang::FileEntryRef file) {
     llvm::SmallString<256> absolute{file.getName()};
     sources.getFileManager().makeAbsolutePath(absolute);
-    const auto [it, inserted] = fact_paths_.try_emplace(absolute.str().str());
+    return fact_path(absolute.str().str());
+}
+
+const FileFactCollector::FactPath& FileFactCollector::fact_path(const std::string& absolute_name) {
+    const auto [it, inserted] = fact_paths_.try_emplace(absolute_name);
     if (!inserted) {
         return it->second;
     }
