@@ -15,7 +15,7 @@
 # include through a macro (`#include HEADER`); none exists in src/.
 #
 # Verifies: b04-include-boundary-check-v1 (criteria 1 and 3),
-# nfr001-works-without-llm-v1, adr0002-isolated-in-analysis-v1.
+# nfr001-works-without-llm-v2, adr0002-isolated-in-analysis-v1.
 
 cmake_minimum_required(VERSION 3.28)
 

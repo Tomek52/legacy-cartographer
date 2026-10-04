@@ -25,7 +25,7 @@ syntax, which is marked experimental and renders inconsistently.
    module (built-in providers, M6) may not be linked by the core; enforced at
    configure time by `cmake/ArchitectureRules.cmake` (links) and by the
    `architecture` tests (includes, `cmake/CheckIncludeBoundaries.cmake`)
-   ([NFR-001](../specs/requirements.md#nfr001-works-without-llm-v1)).
+   ([NFR-001](../specs/requirements.md#nfr001-works-without-llm-v2)).
 4. **Interfaces at module boundaries.** Each module exposes an abstract
    interface or free functions (`FactWriter`, `FactQuery`, `Analyzer`,
    `write_bundle`), so tests use fakes, and the Clang dependency stays

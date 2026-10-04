@@ -2,7 +2,7 @@
 
 - **Status:** Accepted; provider interface and egress gate deferred to M6 by [ADR-0006](0006-external-agent-handoff-for-llm-work.md)
 - **Date:** 2026-10-03
-- **Requirements:** [FR-012](../specs/requirements.md#fr012-provider-selection-v1), [FR-013](../specs/requirements.md#fr013-explicit-remote-consent-v1), [FR-014](../specs/requirements.md#fr014-egress-log-v1), [NFR-001](../specs/requirements.md#nfr001-works-without-llm-v1), [NFR-002](../specs/requirements.md#nfr002-no-source-egress-by-default-v2), [NFR-003](../specs/requirements.md#nfr003-fully-local-mode-v1)
+- **Requirements:** [FR-012](../specs/requirements.md#fr012-provider-selection-v1), [FR-013](../specs/requirements.md#fr013-explicit-remote-consent-v1), [FR-014](../specs/requirements.md#fr014-egress-log-v1), [NFR-001](../specs/requirements.md#nfr001-works-without-llm-v2), [NFR-002](../specs/requirements.md#nfr002-no-source-egress-by-default-v2), [NFR-003](../specs/requirements.md#nfr003-fully-local-mode-v1)
 
 ## Context
 
