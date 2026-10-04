@@ -1,6 +1,6 @@
 # 0016. Facts export, command line and the git exposure warning
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-10-04
 - **Requirements:** [FR-006](../specs/requirements.md#fr006-query-and-export-facts-v1),
   [NFR-004](../specs/requirements.md#nfr004-deterministic-output-v1),

@@ -30,4 +30,4 @@ Rules:
 | [0013](0013-functions-with-external-linkage-defined-twice.md) | A function with external linkage defined twice is two functions | Accepted |
 | [0014](0014-path-globs-in-the-configuration.md) | Path globs in the configuration | Accepted |
 | [0015](0015-ascii-configuration-while-tomlplusplus-3-4.md) | lcart.toml is ASCII while toml++ 3.4.0 is in use | Accepted |
-| [0016](0016-facts-export-and-command-line.md) | Facts export, command line and the git exposure warning | Proposed |
+| [0016](0016-facts-export-and-command-line.md) | Facts export, command line and the git exposure warning | Accepted |

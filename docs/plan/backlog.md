@@ -241,7 +241,7 @@ commands, git exposure check) behind a thin `main.cpp`, so the parser is
 unit-tested and `tests/cli/lcart_cli_test.cpp` runs the `lcart` binary on the
 fixtures. The export format, the naming of files outside the root, the
 command line, the exit statuses and the warning are
-[ADR-0016](../adr/0016-facts-export-and-command-line.md) (Proposed). The
+[ADR-0016](../adr/0016-facts-export-and-command-line.md) (Accepted). The
 export (`src/facts/fact_export.hpp`) names files by root-relative path,
 external ones by the spelling of their first directive, functions by
 stored USR; the golden file `tests/golden/two_modules.facts.jsonl` was
