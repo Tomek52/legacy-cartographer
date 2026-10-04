@@ -207,23 +207,33 @@ How [FR-004](../specs/requirements.md#fr004-record-call-edges-v1) maps onto
 - Every call expression in the body of a recorded definition is one edge,
   in source order: a function called twice is two edges. Calls in a lambda
   belong to the enclosing function. A function named without being called
-  (`apply(checksum, ...)`) is not an edge.
+  (`apply(checksum, ...)`) is not an edge, and neither is a call in an
+  operand of `sizeof` or `alignof`, which is never evaluated.
 - `direct`: the callee is the function the call names, as the caller's
-  translation unit sees it: its own definition of that name if it has one
-  (ADR-0013), else the function its USR names. A call to a function that is
+  translation unit sees it: its own (last) definition of that name if it
+  has one, else the function its USR names
+  ([ADR-0013](../adr/0013-functions-with-external-linkage-defined-twice.md#adr0013-each-definition-a-function-v1)).
+  A translation unit that only declares a function defined twice calls the
+  first definition. A call to a function that is
   not recorded (declared outside the root, such as `strlen`, or a builtin)
   is not an edge, because `callee_id` must name a `FUNCTION`.
 - `indirect`: there is no named callee (a function pointer, a struct member
   function pointer). `via` is the called member and the member or variable
   it is read from, as written: `ctx->backend->recv(...)` gives
-  `backend.recv`, `local.recv(...)` gives `local.recv`; a plain function
-  pointer (`handler(...)`, `(*handler)(...)`) gives an empty `via`.
+  `backend.recv`, `local.recv(...)` gives `local.recv`; when the object is
+  neither (`get()->recv(...)`, `table[i].recv(...)`) `via` is the member
+  alone, `recv`; a plain function pointer (`handler(...)`, `(*handler)(...)`)
+  gives an empty `via`.
 - The site is the first character of the call; a call written in a macro
   is located at the macro's use, and belongs to the function where the
   macro expands.
 - The calls of a function are recorded once, from the translation unit that
-  writes its definition, although a header's `static inline` body is seen
-  by many.
-- Not recorded yet: calls in templates (only instantiations are resolved,
-  and they are not recorded) and constructor calls (not call expressions in
-  Clang). A C++ virtual call is `direct` to the method it names.
+  writes its definition, although a body in a header is seen by many.
+- C++ gaps (the M1 targets are C): in a template, a call that depends on a
+  template parameter is not recorded (it is resolved only in
+  instantiations, which are not recorded); other calls in a template are. A
+  call to a function template's specialization is not recorded, because the
+  specialization is not a recorded function. Calls in a constructor's
+  member initializers are not recorded (they are not in its body), nor are
+  constructor calls themselves (not call expressions in Clang). A virtual
+  call is `direct` to the method it names.

@@ -4,7 +4,7 @@
 - **Date:** 2026-10-04
 - **Requirements:** [FR-003](../specs/requirements.md#fr003-record-functions-v1),
   [FR-004](../specs/requirements.md#fr004-record-call-edges-v1)
-- **Supersedes / superseded by:** —
+- **Supersedes:** in part, [ADR-0012](0012-function-identity-for-internal-linkage.md#adr0012-internal-linkage-usr-v1): a stored USR is Clang's except for internal linkage *and* for a later definition of a function with external linkage (the rule for internal linkage stands)
 
 ## Context
 
@@ -55,8 +55,10 @@ of its own, with USR `<root-relative path of its file>#<Clang's USR>`
 (`two/main.c#c:@F@main`), and the analysis reports a warning naming both
 places.** Translation units are analysed in path order, so which definition
 keeps Clang's USR is deterministic. Within a translation unit, a call names
-that translation unit's definition when it has one, else the function with
-Clang's USR.
+that translation unit's last definition when it has one, else the function
+with Clang's USR; each definition's own calls are recorded under its own
+function, also when one translation unit has two (a GNU `extern inline`
+definition and the out-of-line one).
 
 ## Consequences
 

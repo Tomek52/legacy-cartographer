@@ -16,5 +16,6 @@ through it.
 | `transfer` (`core.c`) | indirect `backend.send` 10:16, indirect `backend.recv` 11:19 |
 | `apply` (`core.c`) | indirect (plain pointer, no member) 15:12 and 15:29 |
 | `run` (`core.c`) | direct `apply` 20:12, direct `transfer` 20:28, indirect `local.recv` 20:48 |
+| `size_only` (`core.c`) | none: `checksum(1)` is the operand of `sizeof` |
 
 `run` passes `checksum` to `apply` without calling it: not an edge.

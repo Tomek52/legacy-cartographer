@@ -21,8 +21,10 @@ public:
     CallFactCollector(FileFactCollector& files, const FunctionFactCollector& functions,
                       facts::FactWriter& out);
 
-    /// Records the calls in the body of `definition`, in source order.
-    void on_definition(clang::ASTContext& context, const clang::FunctionDecl& definition);
+    /// Records the calls in the body of `definition`, in source order, as
+    /// calls from `caller` (the id FunctionFactCollector wrote it under).
+    void on_definition(clang::ASTContext& context, const clang::FunctionDecl& definition,
+                       facts::FunctionId caller);
 
     /// The first error from the fact writer, as FileFactCollector::status().
     [[nodiscard]] common::Status status() const { return status_; }

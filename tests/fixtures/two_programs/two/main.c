@@ -7,3 +7,5 @@ int work(int value) {
 int main(void) {
     return work(2);
 }
+
+#include "report.h"

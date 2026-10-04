@@ -3,4 +3,8 @@
 
 int work(int value);
 
+inline int twice(int value) {
+    return work(value) + work(value);
+}
+
 #endif

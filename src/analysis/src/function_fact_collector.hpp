@@ -10,6 +10,7 @@
 #include <map>
 #include <optional>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "file_fact_collector.hpp"
@@ -34,17 +35,19 @@ public:
     void begin_translation_unit();
 
     /// Call for every function declaration of the translation unit, in
-    /// source order. Returns true if `function` is a definition written now,
-    /// so the calls in its body are to be recorded (once per function).
-    [[nodiscard]] bool on_function(clang::ASTContext& context, const clang::FunctionDecl& function);
+    /// source order. Returns the function's id if `function` is a definition
+    /// written now: the calls in its body are to be recorded under that id
+    /// (once per function, and per definition, ADR-0013).
+    [[nodiscard]] std::optional<facts::FunctionId> on_function(clang::ASTContext& context,
+                                                               const clang::FunctionDecl& function);
 
-    /// The recorded function that a declaration of the current translation
-    /// unit names, if any: its definition in this translation unit, else the
-    /// function its USR names.
+    /// The recorded function that a call in the current translation unit
+    /// names through `function`, if any: the last definition in this
+    /// translation unit, else the function its USR names (ADR-0013).
     [[nodiscard]] std::optional<facts::FunctionId> id_of(const clang::FunctionDecl& function) const;
 
     /// Warnings since the last call, in the order they arose.
-    [[nodiscard]] std::vector<std::string> take_warnings() { return std::move(warnings_); }
+    [[nodiscard]] std::vector<std::string> take_warnings() { return std::exchange(warnings_, {}); }
 
     /// The first error from the fact writer, as FileFactCollector::status().
     [[nodiscard]] common::Status status() const { return status_; }
@@ -57,6 +60,10 @@ private:
         std::string definition_file;
         std::uint32_t definition_line;
     };
+
+    [[nodiscard]] std::string internal_prefix(const clang::SourceManager& sources,
+                                              const clang::FunctionDecl& function);
+    void remember(const clang::FunctionDecl* canonical, facts::FunctionId id, bool is_definition);
 
     FileFactCollector* files_;
     facts::FactWriter* out_;

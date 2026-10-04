@@ -46,7 +46,7 @@ namespace {
 /// Visits the call expressions of one function body, including those in
 /// lambdas (their call operators are not functions of their own, FR-003),
 /// but not the member functions of local classes, which are recorded as
-/// functions and visited on their own.
+/// functions and visited on their own, nor unevaluated operands.
 class CallVisitor final : public clang::DynamicRecursiveASTVisitor {
 public:
     explicit CallVisitor(llvm::function_ref<void(const clang::CallExpr&)> on_call)
@@ -59,6 +59,12 @@ public:
 
     bool TraverseCXXRecordDecl(clang::CXXRecordDecl* /*record*/) override { return true; }
 
+    /// The operand of `sizeof` or `alignof` is not evaluated: a call in it
+    /// never happens.
+    bool TraverseUnaryExprOrTypeTraitExpr(clang::UnaryExprOrTypeTraitExpr* /*operand*/) override {
+        return true;
+    }
+
 private:
     llvm::function_ref<void(const clang::CallExpr&)> on_call_;
 };
@@ -70,10 +76,10 @@ CallFactCollector::CallFactCollector(FileFactCollector& files,
     : files_(&files), functions_(&functions), out_(&out) {}
 
 void CallFactCollector::on_definition(clang::ASTContext& context,
-                                      const clang::FunctionDecl& definition) {
-    const std::optional<facts::FunctionId> caller = functions_->id_of(definition);
+                                      const clang::FunctionDecl& definition,
+                                      facts::FunctionId caller) {
     clang::Stmt* body = definition.getBody();
-    if (!status_ || !caller || body == nullptr) {
+    if (!status_ || body == nullptr) {
         return;
     }
     clang::SourceManager& sources = context.getSourceManager();
@@ -90,7 +96,7 @@ void CallFactCollector::on_definition(clang::ASTContext& context,
             llvm::isa<clang::CXXPseudoDestructorExpr>(callee_expression->IgnoreParenImpCasts())) {
             return;
         }
-        facts::CallFact fact{.caller = *caller,
+        facts::CallFact fact{.caller = caller,
                              .callee = std::nullopt,
                              .kind = facts::CallKind::indirect,
                              .via = {},

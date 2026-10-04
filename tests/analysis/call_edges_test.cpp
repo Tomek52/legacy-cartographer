@@ -178,15 +178,21 @@ protected:
 
     void analyze_fn_pointers() {
         analyze("fn_pointers", {"core.c", "rtu.c"},
-                {"checksum", "transfer", "apply", "run", "rtu_send", "rtu_recv"},
+                {"checksum", "transfer", "apply", "run", "size_only", "rtu_send", "rtu_recv"},
                 {"core.c", "rtu.c"});
     }
     void analyze_macros() {
         analyze("macros", {"main.c"}, {"log_value", "fail", "step", "zero", "main"}, {"main.c"});
     }
     void analyze_two_programs() {
-        analyze("two_programs", {"one/main.c", "two/main.c"}, {"work", "main"},
-                {"one/main.c", "two/main.c"});
+        analyze("two_programs",
+                {"one/main.c", "one/report.c", "three/use.c", "two/extra.c", "two/main.c"},
+                {"work", "main", "twice", "use", "report", "extra"},
+                {"lib.h", "one/main.c", "three/use.c", "two/extra.c", "two/main.c"});
+    }
+
+    void analyze_gnu_inline() {
+        analyze("gnu_inline", {"pick.c"}, {"pick", "first", "second"}, {"pick.c"});
     }
 
 private:
@@ -208,6 +214,14 @@ TEST_F(CallEdgesTest, DirectCallsAreExactlyTheCallsWrittenInTheBody) {
                            indirect("local.recv", "core.c", 20, 48)}));
     EXPECT_TRUE(calls("checksum").empty());
     EXPECT_TRUE(calls("rtu_recv").empty());
+}
+
+// Verifies: fr004-record-call-edges-v1 (criterion 1: a call in an
+// unevaluated operand, `sizeof(checksum(1))`, never happens)
+TEST_F(CallEdgesTest, CallInSizeofIsNotACall) {
+    analyze_fn_pointers();
+
+    EXPECT_TRUE(calls("size_only").empty());
 }
 
 // Verifies: fr004-record-call-edges-v1 (criterion 2: a struct member
@@ -277,13 +291,60 @@ TEST_F(CallEdgesTest, EachDefinitionOfAnExternalFunctionKeepsItsOwnCalls) {
     EXPECT_EQ(callees(mains[1].id), (std::vector<std::optional<FunctionId>>{works[1].id}));
 }
 
+// Verifies: fr004-record-call-edges-v1 (criterion 1 with ADR-0013: one
+// definition in a header reached from three translation units is one
+// function whose calls are recorded once, naming the first `work`)
+TEST_F(CallEdgesTest, DefinitionInHeaderIsOneFunctionWithItsCallsOnce) {
+    analyze_two_programs();
+
+    const std::vector<FunctionFact> twice = functions("twice");
+    const std::vector<FunctionFact> works = functions("work");
+    ASSERT_EQ(twice.size(), 1U);
+    ASSERT_EQ(works.size(), 2U);
+    EXPECT_EQ(twice[0].usr, "c:@F@twice");
+    EXPECT_EQ(twice[0].linkage, Linkage::external);
+    EXPECT_EQ(calls(twice[0].id),
+              (std::vector{direct("work", "lib.h", 7, 12), direct("work", "lib.h", 7, 26)}));
+    EXPECT_EQ(callees(twice[0].id),
+              (std::vector<std::optional<FunctionId>>{works[0].id, works[0].id}));
+}
+
+// Verifies: fr004-record-call-edges-v1 (criterion 1 with ADR-0013: a
+// translation unit that only declares `work` calls the first definition)
+TEST_F(CallEdgesTest, CallToFunctionOnlyDeclaredNamesItsFirstDefinition) {
+    analyze_two_programs();
+
+    const std::vector<FunctionFact> works = functions("work");
+    ASSERT_EQ(works.size(), 2U);
+    EXPECT_EQ(calls("use"), (std::vector{direct("work", "three/use.c", 4, 12)}));
+    const std::vector<FunctionFact> uses = functions("use");
+    ASSERT_EQ(uses.size(), 1U);
+    EXPECT_EQ(callees(uses[0].id), (std::vector<std::optional<FunctionId>>{works[0].id}));
+}
+
+// Verifies: fr004-record-call-edges-v1 (criterion 1 with ADR-0013: two
+// definitions of one name in one translation unit keep their own calls)
+TEST_F(CallEdgesTest, TwoDefinitionsInOneTranslationUnitKeepTheirOwnCalls) {
+    analyze_gnu_inline();
+
+    const std::vector<FunctionFact> picks = functions("pick");
+    ASSERT_EQ(picks.size(), 2U);
+    EXPECT_EQ(picks[0].usr, "c:@F@pick");
+    EXPECT_EQ(picks[1].usr, "pick.c#c:@F@pick");
+    EXPECT_EQ(calls(picks[0].id), (std::vector{direct("first", "pick.c", 4, 67)}));
+    EXPECT_EQ(calls(picks[1].id), (std::vector{direct("second", "pick.c", 5, 25)}));
+}
+
 // Verifies: fr004-record-call-edges-v1 (ADR-0013: a second definition of
-// an external function is reported)
+// an external function is reported once, and a definition reached from
+// several translation units is not)
 TEST_F(CallEdgesTest, SecondDefinitionOfAnExternalFunctionIsAWarning) {
     analyze_two_programs();
 
     EXPECT_EQ(summary().warnings,
               (std::vector<std::string>{
+                  "two/report.h:4: function 'report' with external linkage is also defined at "
+                  "one/report.c:1; recorded as a separate function (ADR-0013)",
                   "two/main.c:3: function 'work' with external linkage is also defined at "
                   "one/main.c:3; recorded as a separate function (ADR-0013)",
                   "two/main.c:7: function 'main' with external linkage is also defined at "

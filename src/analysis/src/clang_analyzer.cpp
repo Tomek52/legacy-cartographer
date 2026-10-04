@@ -119,6 +119,12 @@ private:
     FileFactCollector* collector_;
 };
 
+/// A definition written in this translation unit, whose calls are recorded.
+struct NewDefinition {
+    const clang::FunctionDecl* definition;
+    facts::FunctionId id;
+};
+
 /// Hands every function declaration of a parsed translation unit to the
 /// collector, and keeps the definitions whose calls are to be recorded.
 /// Template instantiations and implicit code are not visited (the visitor's
@@ -128,12 +134,12 @@ private:
 class FunctionVisitor final : public clang::DynamicRecursiveASTVisitor {
 public:
     FunctionVisitor(clang::ASTContext& context, FunctionFactCollector& collector,
-                    std::vector<const clang::FunctionDecl*>& new_definitions)
+                    std::vector<NewDefinition>& new_definitions)
         : context_(&context), collector_(&collector), new_definitions_(&new_definitions) {}
 
     bool VisitFunctionDecl(clang::FunctionDecl* function) override {
-        if (collector_->on_function(*context_, *function)) {
-            new_definitions_->push_back(function);
+        if (const auto id = collector_->on_function(*context_, *function)) {
+            new_definitions_->push_back({.definition = function, .id = *id});
         }
         return true;
     }
@@ -141,7 +147,7 @@ public:
 private:
     clang::ASTContext* context_;
     FunctionFactCollector* collector_;
-    std::vector<const clang::FunctionDecl*>* new_definitions_;
+    std::vector<NewDefinition>* new_definitions_;
 };
 
 /// The collectors of one analysis.
@@ -154,16 +160,16 @@ struct Collectors {
 /// Records functions, then calls: a call may name a function declared later
 /// in the translation unit (a C++ member defined later in its class), and
 /// every callee must already have its id.
-class FunctionFactConsumer final : public clang::ASTConsumer {
+class FunctionAndCallConsumer final : public clang::ASTConsumer {
 public:
-    explicit FunctionFactConsumer(Collectors collectors) : collectors_(collectors) {}
+    explicit FunctionAndCallConsumer(Collectors collectors) : collectors_(collectors) {}
 
     void HandleTranslationUnit(clang::ASTContext& context) override {
         collectors_.functions->begin_translation_unit();
-        std::vector<const clang::FunctionDecl*> new_definitions;
+        std::vector<NewDefinition> new_definitions;
         FunctionVisitor{context, *collectors_.functions, new_definitions}.TraverseAST(context);
-        for (const clang::FunctionDecl* definition : new_definitions) {
-            collectors_.calls->on_definition(context, *definition);
+        for (const NewDefinition& written : new_definitions) {
+            collectors_.calls->on_definition(context, *written.definition, written.id);
         }
     }
 
@@ -171,8 +177,8 @@ private:
     Collectors collectors_;
 };
 
-/// Syntax-only parse that also feeds file, include and function facts to
-/// the collectors.
+/// Syntax-only parse that also feeds file, include, function and call facts
+/// to the collectors.
 class FactAction final : public clang::SyntaxOnlyAction {
 public:
     explicit FactAction(Collectors collectors) : collectors_(collectors) {}
@@ -186,7 +192,7 @@ protected:
 
     std::unique_ptr<clang::ASTConsumer> CreateASTConsumer(clang::CompilerInstance& /*compiler*/,
                                                           llvm::StringRef /*file*/) override {
-        return std::make_unique<FunctionFactConsumer>(collectors_);
+        return std::make_unique<FunctionAndCallConsumer>(collectors_);
     }
 
 private:

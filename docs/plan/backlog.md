@@ -169,8 +169,9 @@ gets the path of the defining file as a prefix
 ([ADR-0012](../adr/0012-function-identity-for-internal-linkage.md)). The
 other rules are on the
 [data model](../architecture/data-model.md#arch-data-model-function-facts-v2)
-page; duplicate external definitions are an
-[open question](../open-questions.md#open-technical-questions).
+page; duplicate external definitions were an open question, answered by
+[ADR-0013](../adr/0013-functions-with-external-linkage-defined-twice.md)
+in B-10.
 
 ### <a id="b10-call-edges-v1"></a>**[B-10 v1]** Direct and indirect call edges
 

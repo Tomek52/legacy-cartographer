@@ -19,3 +19,7 @@ int run(context_t *ctx) {
     backend_t local = *ctx->backend;
     return apply(checksum, transfer(ctx, 4)) + local.recv(ctx, 1);
 }
+
+int size_only(void) {
+    return (int)sizeof(checksum(1));
+}
