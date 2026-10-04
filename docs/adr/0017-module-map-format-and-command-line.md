@@ -6,9 +6,9 @@
   [NFR-004](../specs/requirements.md#nfr004-deterministic-output-v1),
   [B-13](../plan/backlog.md#b13-module-map-v1),
   [security T2](../security.md)
-- **Supersedes / superseded by:** — (extends the option syntax of
-  [ADR-0016](0016-facts-export-and-command-line.md#adr0016-command-line-v1)
-  with a lone `-` value, below)
+- **Supersedes / superseded by:** — (amends the option syntax of
+  [ADR-0016](0016-facts-export-and-command-line.md#adr0016-command-line-v1):
+  a lone `-` is a value for `--output`, below)
 
 ## Context
 
@@ -20,9 +20,12 @@ with MkDocs + Mermaid (checked for libmodbus in
 ADR:
 
 1. **The command line**: options, default output, whether an existing
-   map is replaced, and how to ask for standard output. ADR-0016's syntax
-   says a value starting with `-` needs `=`, so `--output -` would be a
-   usage error.
+   file at the output is replaced, and how to ask for standard output.
+   ADR-0016's syntax says a value starting with `-` needs `=`, so
+   `--output -` would be a usage error. ADR-0016 also holds that lcart
+   replaces only its own files (`--force` refuses a file that is not a fact
+   database); a map written over the database, or over a source file given
+   by mistake, would destroy it.
 2. **What the map shows** beyond FR-007's minimum: how strong each
    dependency is, files that belong to no module, files outside the root,
    coverage, and whether "function count" counts declarations.
@@ -33,8 +36,20 @@ ADR:
    string, `|` splits a Markdown table cell, a line break ends a list item
    or a Mermaid statement. A name must not change the document's structure.
 
-The owner decided the command line, the content and the determinism rules
-for B-13; this ADR records them with the details the implementation chose.
+**Decided by the owner** for B-13:
+
+- the command `lcart map [--db FILE] [--output FILE]`, with the default
+  output `lcart-out/map.md` and `--output -` for standard output;
+- edge labels that count the include and call sites behind each module
+  dependency;
+- files under the root without a module listed under `(unassigned)`;
+- external files left out;
+- one coverage line (translation units parsed out of the total).
+
+**Chosen in the implementation, for the owner to approve:** which existing
+files the map may replace, the lone `-` value for `--output`, counting
+function definitions only, the order and the generated Mermaid ids, and the
+escaping rules. Each is marked "(implementation)" below.
 
 ## Options considered
 
@@ -43,9 +58,22 @@ Standard output:
 1. **`--output=-` only**, as ADR-0016's syntax implies. No parser change;
    `--output -`, the usual spelling, would be a usage error.
 2. **Accept a lone `-` as the next argument's value** for every option.
-   A lone `-` is never an option (the parser already treats it as a
-   positional argument), so this cannot swallow a forgotten value, which is
-   what the ADR-0016 rule guards against.
+   A lone `-` is never an option, so this cannot swallow a forgotten value;
+   but `analyze --db -` would then create a database named `-`.
+3. **Accept a lone `-` only after `--output`**, where it means standard
+   output. Every other option keeps ADR-0016's rule.
+
+Replacing an existing file at `--output`:
+
+1. **Replace anything** (derived output). Simple; `--output
+   lcart-out/facts.lcart.db` destroys the database being read, and a typo
+   can replace a source file.
+2. **Replace only a module map**, recognised by its first line, and never
+   the database being read. Follows ADR-0016's "lcart replaces only its
+   own files"; a hand-made file that starts with `# Module map` can still
+   be replaced.
+3. **Never replace without `--force`.** Safe; regenerating a map, the
+   normal case, would always need the switch.
 
 Escaping in Mermaid:
 
@@ -69,16 +97,31 @@ Names in Markdown:
 FILE] [--output FILE]`, with ADR-0016's option syntax and exit statuses.
 The database defaults to `lcart-out/facts.lcart.db`, the output to
 `lcart-out/map.md`, both relative to the working directory. `--output -`
-(or `--output=-`) writes the map to standard output: for every option, a
-lone `-` is taken as the next argument's value, and for `--output` (`map`
-and `query export`) it means standard output. A missing database, or a file
-that is not a readable fact database, exits 1 and writes nothing; an
-invalid command line exits 2. The parent directory of the output is
-created if missing, as `lcart analyze` does for the database. An existing
-map is replaced without `--force`: it is derived output, recreated from the
-database at any time. It is written to a hidden file next to the target
-and renamed over it, so a failed run leaves the previous map as it was. On
-success, standard output names the file (`module map in <path>`). The
+(or `--output=-`) writes the map to standard output. (implementation) Only
+after `--output` is a lone `-` taken as the next argument's value, and for
+`--output` (`map` and `query export`) it means standard output; every other
+option given `-` as its next argument is a missing value, as in ADR-0016.
+A missing database, or a file that is not a readable fact database, exits
+1 and writes nothing; an invalid command line exits 2. The parent
+directory of the output is created if missing, as `lcart analyze` does for
+the database.
+
+<a id="adr0017-replace-only-maps-v1"></a>**Which file is replaced**
+(implementation). lcart replaces only its own files, as in ADR-0016. The
+map is written to a hidden file next to the output and renamed over it,
+so a failed run leaves an earlier map as it was, and:
+
+- the output must not be the database being read: the same lexically
+  normal absolute path, or the same file (`std::filesystem::equivalent`)
+  when it exists, so a link or another spelling is caught too;
+- an existing output is replaced without `--force` only if it is a
+  regular file whose first line is exactly `# Module map` (the first line
+  of every map). Any other file, an empty one, a directory or a symbolic
+  link at the output is refused;
+- each refusal exits 1 and leaves the file unchanged. `--output -` writes
+  no file and is not checked.
+
+On success, standard output names the file (`module map in <path>`). The
 security T2 warning of
 [ADR-0016](0016-facts-export-and-command-line.md#adr0016-git-exposure-check-v1)
 applies to the map file (not to standard output).
@@ -109,13 +152,13 @@ applies to the map file (not to standard output).
    headers) are left out: they belong to no module and their paths are
    machine-specific.
 
-Function counts count **definitions** (`FUNCTION.is_definition`), in the
+(implementation) Function counts count **definitions** (`FUNCTION.is_definition`), in the
 file of the definition: a function declared in a header and defined in a
 `.c` file counts once, for the `.c` file. Counts use singular and plural
 (`1 file`, `0 files`).
 
-<a id="adr0017-deterministic-order-v1"></a>**Order and stability.**
-Modules are sorted by name, files by path, edges by source then target
+<a id="adr0017-deterministic-order-v1"></a>**Order and stability**
+(implementation). Modules are sorted by name, files by path, edges by source then target
 module name, all compared byte-wise. Node ids are `m0`, `m1`, ... in that
 module order. The map holds no timestamp, absolute path, row id or tool
 version, and ends with exactly one newline, so the same facts give the same
@@ -125,7 +168,7 @@ Inserting the same facts in another order gives the same map. Adding,
 removing or renaming a module renumbers the ids of the modules after it;
 the map is regenerated as a whole, not edited.
 
-<a id="adr0017-escaping-v1"></a>**Escaping.** First, in every name and
+<a id="adr0017-escaping-v1"></a>**Escaping** (implementation). First, in every name and
 path, each byte that is not part of valid UTF-8 (the rule of
 [ADR-0016](0016-facts-export-and-command-line.md#adr0016-export-format-v1))
 and each control character (U+0000 to U+001F, U+007F) becomes U+FFFD. Then:
@@ -160,7 +203,11 @@ and each control character (U+0000 to U+001F, U+007F) becomes U+FFFD. Then:
   for libmodbus by B-14. If Mermaid stops decoding `#NNN;` in quoted labels,
   the escaping must change and the golden files with it.
 - `query export --output -` now writes to standard output; before, it was a
-  usage error, and `--output=-` wrote a file named `-`.
+  usage error, and `--output=-` wrote a file named `-`. `query export
+  --output` still replaces any file; applying the rule above to it is a
+  follow-up ([open questions](../open-questions.md#open-technical-questions)).
+- Regenerating a map over a file a user edited by hand replaces it, as
+  long as its first line is still `# Module map`.
 - A large code base gives one long list per module; revisit (for example a
   table of modules, or one page per module) when B-14 shows the libmodbus
   map.

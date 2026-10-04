@@ -1,6 +1,6 @@
 # 0016. Facts export, command line and the git exposure warning
 
-- **Status:** Accepted
+- **Status:** Accepted; option syntax amended by [ADR-0017](0017-module-map-format-and-command-line.md#adr0017-command-line-v1) (a lone `-` value for `--output`)
 - **Date:** 2026-10-04
 - **Requirements:** [FR-006](../specs/requirements.md#fr006-query-and-export-facts-v1),
   [NFR-004](../specs/requirements.md#nfr004-deterministic-output-v1),
