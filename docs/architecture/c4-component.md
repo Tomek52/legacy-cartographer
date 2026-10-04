@@ -5,12 +5,12 @@ Arrows are build dependencies (who includes and links whom).
 
 ```mermaid
 flowchart TB
-    cli["<b>cli</b><br/>command dispatch, options"]
+    cli["<b>cli</b><br/>command-line parser, analyze / query,<br/>git exposure warning"]
 
     subgraph det["Deterministic core (no LLM, no network)"]
         analysis["<b>analysis</b><br/>Clang LibTooling frontend,<br/>module rules"]
         config["<b>config</b><br/>lcart.toml (toml++), path globs"]
-        facts["<b>facts</b><br/>fact model, FactWriter / FactQuery,<br/>SQLite store"]
+        facts["<b>facts</b><br/>fact model, FactWriter / FactQuery,<br/>SQLite store, JSON Lines export"]
         claims["<b>claims</b><br/>claim model, JSON parser + validation"]
         verify["<b>verify</b><br/>per-kind verification rules"]
         report["<b>report</b><br/>module map, verification report,<br/>document annotation"]
@@ -24,7 +24,7 @@ flowchart TB
 
     testgen["<b>testgen</b> (M3)<br/>characterization test skeletons"]
 
-    cli --> analysis & report & handoff & llm & testgen
+    cli --> analysis & config & facts & report & handoff & llm & testgen
     analysis --> facts & config
     config --> common
     handoff --> claims & facts

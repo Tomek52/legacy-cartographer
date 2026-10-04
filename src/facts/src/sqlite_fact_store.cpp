@@ -3,6 +3,9 @@
 #include <sqlite3.h>
 
 #include <cstdint>
+#include <fstream>
+#include <ios>
+#include <memory>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -17,7 +20,7 @@ using common::ErrorCode;
 using common::Result;
 using common::Status;
 
-// Physical form of docs/architecture/data-model.md, schema_version 1.
+// Physical form of docs/architecture/data-model.md, schema_version 2.
 // STRICT tables (SQLite >= 3.37) reject values of the wrong type instead of
 // converting them. MODULE_DEPENDENCY is materialised by B-11; until then
 // module_dependencies() derives it from the edges.
@@ -472,6 +475,39 @@ Result<FunctionFact> read_function(const Statement& row) {
                         .linkage = *linkage};
 }
 
+constexpr std::string_view file_columns =
+    "SELECT id, path, sha256, is_header, is_external, module_id FROM file";
+constexpr std::string_view function_columns =
+    "SELECT f.id, f.usr, f.name, f.qualified_name, f.signature, f.file_id, f.line_begin,"
+    " f.line_end, f.is_definition, f.linkage FROM function f";
+constexpr std::string_view call_columns =
+    "SELECT c.caller_id, c.callee_id, c.kind, c.via, c.file_id, c.line, c.col"
+    " FROM call_edge c JOIN file ON file.id = c.file_id";
+constexpr std::string_view include_columns =
+    "SELECT e.includer_id, e.included_id, e.spelled, e.line, e.is_system"
+    " FROM include_edge e JOIN file ON file.id = e.includer_id";
+
+Result<CallFact> read_call(const Statement& row) {
+    auto kind = call_kind_from(row.text(2));
+    if (!kind) {
+        return std::unexpected(kind.error());
+    }
+    return CallFact{
+        .caller = row.id<FunctionId>(0),
+        .callee = row.optional_id<FunctionId>(1),
+        .kind = *kind,
+        .via = row.text(3),
+        .site = {.file = row.id<FileId>(4), .line = row.uint32(5), .column = row.uint32(6)}};
+}
+
+Result<IncludeFact> read_include(const Statement& row) {
+    return IncludeFact{.includer = row.id<FileId>(0),
+                       .included = row.optional_id<FileId>(1),
+                       .spelled = row.text(2),
+                       .line = row.uint32(3),
+                       .is_system = row.boolean(4)};
+}
+
 /// Reads "meta" value `key` as an unsigned count; 0 if absent.
 Result<std::uint32_t> meta_count(sqlite3* database, std::string_view key) {
     auto statement = Statement::prepare(database, "SELECT value FROM meta WHERE key = ?1");
@@ -578,6 +614,39 @@ Result<std::unique_ptr<SqliteFactStore>> SqliteFactStore::open(const std::string
     return store;
 }
 
+bool SqliteFactStore::is_fact_database(const std::string& path) {
+    // Every SQLite 3 file starts with this header (sqlite.org/fileformat.html);
+    // checking it first keeps SQLite away from other files.
+    static constexpr std::string_view sqlite_header{"SQLite format 3\0", 16};
+    std::string header(sqlite_header.size(), '\0');
+    try {
+        std::ifstream in{path, std::ios::binary};
+        in.read(header.data(), static_cast<std::streamsize>(header.size()));
+        if (!in || header != sqlite_header) {
+            return false;
+        }
+    } catch (const std::ios_base::failure&) {
+        // libstdc++'s filebuf throws on a failed read (a directory).
+        return false;
+    }
+    sqlite3* database = nullptr;
+    // No SQLITE_OPEN_URI: `path` is a file name, never a URI.
+    const int opened = sqlite3_open_v2(path.c_str(), &database, SQLITE_OPEN_READONLY, nullptr);
+    const std::unique_ptr<sqlite3, int (*)(sqlite3*)> owned{database, sqlite3_close};
+    if (opened != SQLITE_OK) {
+        return false;
+    }
+    auto has_meta =
+        select_integer(database, "SELECT count(*) FROM sqlite_schema WHERE type = 'table'"
+                                 " AND name = 'meta'");
+    if (!has_meta || has_meta->value_or(0) == 0) {
+        return false;
+    }
+    auto has_version =
+        select_integer(database, "SELECT count(*) FROM meta WHERE key = ?1", schema_version_key);
+    return has_version && has_version->value_or(0) > 0;
+}
+
 SqliteFactStore::SqliteFactStore(sqlite3* database) : database_{database} {}
 
 SqliteFactStore::~SqliteFactStore() {
@@ -656,10 +725,11 @@ Status SqliteFactStore::add_diagnostic(const DiagnosticFact& diagnostic) {
     if (!tu) {
         return std::unexpected(tu.error());
     }
-    // TODO(B-12): resolve file_id; file_path is Clang's path, not the root-relative one.
+    // file_path is spelled like FILE.path, so a diagnostic in a recorded file
+    // finds its row; one in a file that is not recorded keeps a null file_id.
     return execute(database_,
-                   "INSERT INTO diagnostic (tu_id, file_path, line, severity, message)"
-                   " VALUES (?1, ?2, ?3, ?4, ?5)",
+                   "INSERT INTO diagnostic (tu_id, file_path, file_id, line, severity, message)"
+                   " VALUES (?1, ?2, (SELECT id FROM file WHERE path = ?2), ?3, ?4, ?5)",
                    *tu, diagnostic.file, diagnostic.line, to_text(diagnostic.severity),
                    diagnostic.message);
 }
@@ -682,58 +752,95 @@ Result<std::optional<ModuleFact>> SqliteFactStore::find_module(std::string_view 
 }
 
 Result<std::optional<FileFact>> SqliteFactStore::find_file(std::string_view path) const {
-    return first(select_all<FileFact>(
-        database_,
-        "SELECT id, path, sha256, is_header, is_external, module_id FROM file WHERE path = ?1",
-        read_file, path));
+    return first(select_all<FileFact>(database_, std::string{file_columns} + " WHERE path = ?1",
+                                      read_file, path));
+}
+
+Result<std::optional<FileFact>> SqliteFactStore::file(FileId id) const {
+    return first(select_all<FileFact>(database_, std::string{file_columns} + " WHERE id = ?1",
+                                      read_file, id));
+}
+
+Result<std::vector<ModuleFact>> SqliteFactStore::modules() const {
+    return select_all<ModuleFact>(database_, "SELECT id, name FROM module ORDER BY name",
+                                  read_module);
+}
+
+Result<std::vector<FileFact>> SqliteFactStore::files() const {
+    return select_all<FileFact>(database_, std::string{file_columns} + " ORDER BY path, id",
+                                read_file);
 }
 
 Result<std::vector<FunctionFact>> SqliteFactStore::find_functions(std::string_view name) const {
-    return select_all<FunctionFact>(
-        database_,
-        "SELECT f.id, f.usr, f.name, f.qualified_name, f.signature, f.file_id, f.line_begin,"
-        " f.line_end, f.is_definition, f.linkage"
-        " FROM function f JOIN file ON file.id = f.file_id"
-        " WHERE f.name = ?1 ORDER BY file.path, f.line_begin, f.id",
-        read_function, name);
+    return select_all<FunctionFact>(database_,
+                                    std::string{function_columns} +
+                                        " JOIN file ON file.id = f.file_id"
+                                        " WHERE f.name = ?1 ORDER BY file.path, f.line_begin, f.id",
+                                    read_function, name);
 }
 
+Result<std::optional<FunctionFact>>
+SqliteFactStore::find_function_by_usr(std::string_view usr) const {
+    return first(select_all<FunctionFact>(
+        database_, std::string{function_columns} + " WHERE f.usr = ?1", read_function, usr));
+}
+
+Result<std::optional<FunctionFact>> SqliteFactStore::function(FunctionId id) const {
+    return first(select_all<FunctionFact>(
+        database_, std::string{function_columns} + " WHERE f.id = ?1", read_function, id));
+}
+
+Result<std::vector<FunctionFact>> SqliteFactStore::functions() const {
+    return select_all<FunctionFact>(database_,
+                                    std::string{function_columns} +
+                                        " JOIN file ON file.id = f.file_id"
+                                        " ORDER BY file.path, f.line_begin, f.usr",
+                                    read_function);
+}
+
+// may_call edges (FR-015, M2) are a separate query, never mixed with calls.
+
 Result<std::vector<CallFact>> SqliteFactStore::calls_from(FunctionId caller) const {
-    auto read_call = [](const Statement& row) -> Result<CallFact> {
-        auto kind = call_kind_from(row.text(2));
-        if (!kind) {
-            return std::unexpected(kind.error());
-        }
-        return CallFact{
-            .caller = row.id<FunctionId>(0),
-            .callee = row.optional_id<FunctionId>(1),
-            .kind = *kind,
-            .via = row.text(3),
-            .site = {.file = row.id<FileId>(4), .line = row.uint32(5), .column = row.uint32(6)}};
-    };
-    // may_call edges (FR-015, M2) are a separate query, never mixed with calls.
-    return select_all<CallFact>(
-        database_,
-        "SELECT c.caller_id, c.callee_id, c.kind, c.via, c.file_id, c.line, c.col"
-        " FROM call_edge c JOIN file ON file.id = c.file_id"
-        " WHERE c.caller_id = ?1 AND c.kind IN ('direct', 'indirect')"
-        " ORDER BY file.path, c.line, c.col, c.id",
-        read_call, caller);
+    return select_all<CallFact>(database_,
+                                std::string{call_columns} +
+                                    " WHERE c.caller_id = ?1 AND c.kind IN ('direct', 'indirect')"
+                                    " ORDER BY file.path, c.line, c.col, c.id",
+                                read_call, caller);
+}
+
+Result<std::vector<CallFact>> SqliteFactStore::calls_to(FunctionId callee) const {
+    return select_all<CallFact>(database_,
+                                std::string{call_columns} +
+                                    " WHERE c.callee_id = ?1 AND c.kind = 'direct'"
+                                    " ORDER BY file.path, c.line, c.col, c.id",
+                                read_call, callee);
+}
+
+Result<std::vector<CallFact>> SqliteFactStore::calls() const {
+    return select_all<CallFact>(database_,
+                                std::string{call_columns} +
+                                    " WHERE c.kind IN ('direct', 'indirect')"
+                                    " ORDER BY file.path, c.line, c.col, c.id",
+                                read_call);
 }
 
 Result<std::vector<IncludeFact>> SqliteFactStore::includes_of(FileId includer) const {
-    auto read_include = [](const Statement& row) -> Result<IncludeFact> {
-        return IncludeFact{.includer = row.id<FileId>(0),
-                           .included = row.optional_id<FileId>(1),
-                           .spelled = row.text(2),
-                           .line = row.uint32(3),
-                           .is_system = row.boolean(4)};
-    };
     return select_all<IncludeFact>(
-        database_,
-        "SELECT includer_id, included_id, spelled, line, is_system FROM include_edge"
-        " WHERE includer_id = ?1 ORDER BY line, id",
+        database_, std::string{include_columns} + " WHERE e.includer_id = ?1 ORDER BY e.line, e.id",
         read_include, includer);
+}
+
+Result<std::vector<IncludeFact>> SqliteFactStore::included_by(FileId included) const {
+    return select_all<IncludeFact>(database_,
+                                   std::string{include_columns} +
+                                       " WHERE e.included_id = ?1 ORDER BY file.path, e.line, e.id",
+                                   read_include, included);
+}
+
+Result<std::vector<IncludeFact>> SqliteFactStore::includes() const {
+    return select_all<IncludeFact>(
+        database_, std::string{include_columns} + " ORDER BY file.path, e.line, e.id",
+        read_include);
 }
 
 Result<std::vector<ModuleFact>> SqliteFactStore::module_dependencies(ModuleId module) const {

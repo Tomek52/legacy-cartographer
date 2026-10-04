@@ -28,6 +28,12 @@ public:
     [[nodiscard]] static common::Result<std::unique_ptr<SqliteFactStore>>
     open(const std::string& path);
 
+    /// Whether the file at `path` is a fact database of any schema version:
+    /// a SQLite file with lcart's `meta` table and a `schema_version`. Opens
+    /// it read-only and changes nothing; false for anything else, including
+    /// a file that cannot be read.
+    [[nodiscard]] static bool is_fact_database(const std::string& path);
+
     SqliteFactStore(const SqliteFactStore&) = delete;
     SqliteFactStore& operator=(const SqliteFactStore&) = delete;
     SqliteFactStore(SqliteFactStore&&) = delete;
@@ -47,12 +53,25 @@ public:
     find_module(std::string_view name) const override;
     [[nodiscard]] common::Result<std::optional<FileFact>>
     find_file(std::string_view path) const override;
+    [[nodiscard]] common::Result<std::optional<FileFact>> file(FileId id) const override;
+    [[nodiscard]] common::Result<std::vector<ModuleFact>> modules() const override;
+    [[nodiscard]] common::Result<std::vector<FileFact>> files() const override;
     [[nodiscard]] common::Result<std::vector<FunctionFact>>
     find_functions(std::string_view name) const override;
+    [[nodiscard]] common::Result<std::optional<FunctionFact>>
+    find_function_by_usr(std::string_view usr) const override;
+    [[nodiscard]] common::Result<std::optional<FunctionFact>>
+    function(FunctionId id) const override;
+    [[nodiscard]] common::Result<std::vector<FunctionFact>> functions() const override;
     [[nodiscard]] common::Result<std::vector<CallFact>>
     calls_from(FunctionId caller) const override;
+    [[nodiscard]] common::Result<std::vector<CallFact>> calls_to(FunctionId callee) const override;
+    [[nodiscard]] common::Result<std::vector<CallFact>> calls() const override;
     [[nodiscard]] common::Result<std::vector<IncludeFact>>
     includes_of(FileId includer) const override;
+    [[nodiscard]] common::Result<std::vector<IncludeFact>>
+    included_by(FileId included) const override;
+    [[nodiscard]] common::Result<std::vector<IncludeFact>> includes() const override;
     [[nodiscard]] common::Result<std::vector<ModuleFact>>
     module_dependencies(ModuleId module) const override;
     [[nodiscard]] common::Result<std::vector<ModuleDependencyFact>>

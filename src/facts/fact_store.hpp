@@ -56,6 +56,13 @@ public:
     find_module(std::string_view name) const = 0;
     [[nodiscard]] virtual common::Result<std::optional<FileFact>>
     find_file(std::string_view path) const = 0;
+    [[nodiscard]] virtual common::Result<std::optional<FileFact>> file(FileId id) const = 0;
+
+    /// Every module, by name.
+    [[nodiscard]] virtual common::Result<std::vector<ModuleFact>> modules() const = 0;
+
+    /// Every file, by path, then id.
+    [[nodiscard]] virtual common::Result<std::vector<FileFact>> files() const = 0;
 
     /// All functions with this unqualified name, by file path, then first
     /// line, then id. More than one result means the name is ambiguous (e.g.
@@ -63,14 +70,41 @@ public:
     [[nodiscard]] virtual common::Result<std::vector<FunctionFact>>
     find_functions(std::string_view name) const = 0;
 
+    /// The function whose stored USR (FunctionFact::usr, path-prefixed for
+    /// internal linkage, ADR-0012) is `usr`.
+    [[nodiscard]] virtual common::Result<std::optional<FunctionFact>>
+    find_function_by_usr(std::string_view usr) const = 0;
+    [[nodiscard]] virtual common::Result<std::optional<FunctionFact>>
+    function(FunctionId id) const = 0;
+
+    /// Every function, by file path, then first line, then USR.
+    [[nodiscard]] virtual common::Result<std::vector<FunctionFact>> functions() const = 0;
+
     /// Calls made by `caller`, by call-site file path, then line, then column,
     /// then id.
     [[nodiscard]] virtual common::Result<std::vector<CallFact>>
     calls_from(FunctionId caller) const = 0;
 
+    /// Direct calls naming `callee`, by call-site file path, then line, then
+    /// column, then id.
+    [[nodiscard]] virtual common::Result<std::vector<CallFact>>
+    calls_to(FunctionId callee) const = 0;
+
+    /// Every direct and indirect call, by call-site file path, then line,
+    /// then column, then id.
+    [[nodiscard]] virtual common::Result<std::vector<CallFact>> calls() const = 0;
+
     /// Include directives in `includer`, by line, then id.
     [[nodiscard]] virtual common::Result<std::vector<IncludeFact>>
     includes_of(FileId includer) const = 0;
+
+    /// Include directives naming `included`, by includer path, then line,
+    /// then id.
+    [[nodiscard]] virtual common::Result<std::vector<IncludeFact>>
+    included_by(FileId included) const = 0;
+
+    /// Every include directive, by includer path, then line, then id.
+    [[nodiscard]] virtual common::Result<std::vector<IncludeFact>> includes() const = 0;
 
     /// Other modules that `module` depends on, by module name: empty until
     /// FactWriter::derive_module_dependencies() has run.

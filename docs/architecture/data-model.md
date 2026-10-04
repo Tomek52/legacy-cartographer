@@ -1,7 +1,8 @@
 # Fact database data model
 
-One SQLite file per analysed project. Schema version 1
-(`facts::schema_version` in `src/facts/fact_model.hpp`); any change bumps it.
+One SQLite file per analysed project. Schema version 2
+(`facts::schema_version` in `src/facts/fact_model.hpp`); any change bumps it
+(2: translation unit and diagnostic paths spelled like file paths, B-12).
 Paths of files under the analysis root are relative to it, with `/`
 separators; files outside it have absolute paths
 ([file facts](#arch-data-model-file-facts-v1)). How functions are
@@ -17,7 +18,7 @@ erDiagram
     }
     TRANSLATION_UNIT {
         int id PK
-        text path UK "as in compile_commands.json"
+        text path UK "main file, spelled like FILE.path"
         int file_id FK "not set yet (B-16)"
         text status "pending | parsed | failed"
         text command_sha256 "compile command"
@@ -26,8 +27,8 @@ erDiagram
     DIAGNOSTIC {
         int id PK
         int tu_id FK
-        text file_path "as reported by Clang; empty if none"
-        int file_id FK "null until resolved (B-12)"
+        text file_path "spelled like FILE.path; empty if none"
+        int file_id FK "null if not a recorded file"
         int line
         text severity
         text message
@@ -153,7 +154,9 @@ maps onto `FILE` and `INCLUDE_EDGE` (B-08):
   (top-level directory, or `(root)`); see [modules](#arch-data-model-modules-v1).
 - A file outside the root (system and third-party headers) is recorded only
   when a file under the root includes it directly, with its absolute path
-  (how bundles and golden exports show such paths is an
+  (the facts export names it by the spelling of its first directive,
+  [ADR-0016](../adr/0016-facts-export-and-command-line.md#adr0016-paths-outside-root-v1);
+  for bundles it is an
   [open question](../open-questions.md#open-technical-questions)).
   Directives inside it are not recorded, so the database does not grow with
   the system's headers.

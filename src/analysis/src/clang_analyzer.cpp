@@ -40,8 +40,13 @@ namespace {
 /// database on large code bases.
 class CollectingDiagnosticConsumer final : public clang::DiagnosticConsumer {
 public:
-    explicit CollectingDiagnosticConsumer(std::string translation_unit)
-        : translation_unit_(std::move(translation_unit)) {}
+    /// `translation_unit` is spelled as in the facts; `files` names the
+    /// diagnostics' files the same way, so they match FILE rows.
+    /// `root_prefixes` (each ending in `/`) are removed from messages.
+    CollectingDiagnosticConsumer(std::string translation_unit, FileFactCollector& files,
+                                 const std::vector<std::string>& root_prefixes)
+        : translation_unit_(std::move(translation_unit)), files_(&files),
+          root_prefixes_(&root_prefixes) {}
 
     void HandleDiagnostic(clang::DiagnosticsEngine::Level level,
                           const clang::Diagnostic& info) override {
@@ -57,12 +62,14 @@ public:
                                    .message = {}};
         llvm::SmallString<256> text;
         info.FormatDiagnostic(text);
-        fact.message = text.str().str();
+        fact.message = without_root(text.str().str());
         if (info.hasSourceManager() && info.getLocation().isValid()) {
             const clang::PresumedLoc presumed =
                 info.getSourceManager().getPresumedLoc(info.getLocation());
             if (presumed.isValid()) {
-                fact.file = presumed.getFilename();
+                llvm::SmallString<256> absolute{presumed.getFilename()};
+                info.getSourceManager().getFileManager().makeAbsolutePath(absolute);
+                fact.file = files_->fact_path(absolute.str().str()).path;
                 fact.line = presumed.getLine();
             }
         }
@@ -88,7 +95,22 @@ private:
         std::unreachable();
     }
 
+    /// Clang names files in some messages by absolute path ("no such file
+    /// or directory: '/home/.../gone.c'"); facts must not depend on where
+    /// the code is checked out (NFR-004, ADR-0016).
+    [[nodiscard]] std::string without_root(std::string message) const {
+        for (const std::string& prefix : *root_prefixes_) {
+            for (std::size_t at = message.find(prefix); at != std::string::npos;
+                 at = message.find(prefix, at)) {
+                message.erase(at, prefix.size());
+            }
+        }
+        return message;
+    }
+
     std::string translation_unit_;
+    FileFactCollector* files_;
+    const std::vector<std::string>* root_prefixes_;
     std::vector<facts::DiagnosticFact> diagnostics_;
 };
 
@@ -256,6 +278,37 @@ load_compilation_database(const std::filesystem::path& path) {
         exclude, [&path](const config::PathGlob& glob) { return glob.matches(path); });
 }
 
+/// The spellings of the analysis root that messages may contain, each with
+/// a trailing `/`, longest first: canonical, and as given (made absolute).
+[[nodiscard]] std::vector<std::string> message_root_prefixes(const std::filesystem::path& given,
+                                                             const std::filesystem::path& root) {
+    std::error_code ec;
+    std::vector<std::string> prefixes{root.string()};
+    const std::filesystem::path absolute = std::filesystem::absolute(given, ec).lexically_normal();
+    if (!ec) {
+        prefixes.push_back(absolute.string());
+    }
+    for (std::string& prefix : prefixes) {
+        if (!prefix.ends_with('/')) {
+            prefix += '/';
+        }
+    }
+    std::ranges::sort(prefixes, [](const std::string& left, const std::string& right) {
+        return left.size() > right.size();
+    });
+    const auto [first, last] = std::ranges::unique(prefixes);
+    prefixes.erase(first, last);
+    return prefixes;
+}
+
+/// The translation unit `file` (as the compilation database names it),
+/// spelled like a file fact: root-relative, or absolute outside the root.
+[[nodiscard]] std::string translation_unit_path(FileFactCollector& files, const std::string& file) {
+    std::error_code ec;
+    const std::filesystem::path absolute = std::filesystem::absolute(file, ec);
+    return files.fact_path(ec ? file : absolute.string()).path;
+}
+
 } // namespace
 
 common::Result<AnalysisSummary> ClangAnalyzer::analyze(const AnalysisRequest& request,
@@ -284,6 +337,7 @@ common::Result<AnalysisSummary> ClangAnalyzer::analyze(const AnalysisRequest& re
     std::erase_if(files, [&root, &request](const std::string& file) {
         return is_excluded(file, root, request.exclude_globs);
     });
+    const std::vector<std::string> root_prefixes = message_root_prefixes(request.root, root);
     FileFactCollector file_collector{std::move(root), request.module_rules, out};
     FunctionFactCollector function_collector{file_collector, out};
     CallFactCollector call_collector{file_collector, function_collector, out};
@@ -311,7 +365,8 @@ common::Result<AnalysisSummary> ClangAnalyzer::analyze(const AnalysisRequest& re
             clang::tooling::getInsertArgumentAdjuster("-resource-dir=" LCART_CLANG_RESOURCE_DIR,
                                                       clang::tooling::ArgumentInsertPosition::END));
 
-        CollectingDiagnosticConsumer consumer{file};
+        CollectingDiagnosticConsumer consumer{translation_unit_path(file_collector, file),
+                                              file_collector, root_prefixes};
         tool.setDiagnosticConsumer(&consumer);
 
         const int status = tool.run(&action_factory);

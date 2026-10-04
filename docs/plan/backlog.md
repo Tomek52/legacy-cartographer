@@ -21,11 +21,11 @@ expanded in place; its version is bumped if its meaning changes
 | [B-09](#b09-function-facts-v1) | ✅ Function facts | M1 | FR-003 | B-08 | 4 h |
 | [B-10](#b10-call-edges-v1) | ✅ Direct and indirect call edges | M1 | FR-004 | B-09 | 5 h |
 | [B-11](#b11-module-rules-v2) | ✅ Module rules and module dependencies | M1 | FR-005 | B-08 | 4 h |
-| [B-12](#b12-query-and-export-v1) | `lcart analyze` / `lcart query` / export | M1 | FR-006, NFR-004 | B-10, B-11 | 5 h |
+| [B-12](#b12-query-and-export-v2) | ✅ `lcart analyze` / `lcart query` / export | M1 | FR-006, NFR-004 | B-10, B-11 | 5 h |
 | [B-13](#b13-module-map-v1) | `lcart map` | M1 | FR-007 | B-12 | 3 h |
 | [B-14](#b14-libmodbus-baseline-v1) | libmodbus baseline map and timing | M1 | NFR-001, NFR-005 | B-05, B-13 | 3 h |
 | [B-15](#b15-requirement-test-traceability-v2) | Traceability gate and matrix | M1 | NFR-012 | B-03 | 4 h |
-| [B-16](#b16-resumable-analysis-v1) | Resumable analysis with progress | M1 | NFR-005, NFR-004 | B-12 | 5 h |
+| [B-16](#b16-resumable-analysis-v2) | Resumable analysis with progress | M1 | NFR-005, NFR-004 | B-12 | 5 h |
 | [B-17](#b17-msvc-code-spike-v1) | MSVC code under Clang: spike and docs | M1 | NFR-013 | B-10 | 4 h |
 
 ## M0
@@ -221,15 +221,37 @@ Conan Center's recipe has `tomlplusplus` 3.4.0
 (`recipes/tomlplusplus/config.yml` in conan-center-index). Reading
 `lcart.toml` from the command line is B-12.
 
-### <a id="b12-query-and-export-v1"></a>**[B-12 v1]** `lcart analyze`, `lcart query`, export
+### <a id="b12-query-and-export-v2"></a>**[B-12 v2]** `lcart analyze`, `lcart query`, export
 
 Acceptance criteria: those of [FR-006](../specs/requirements.md#fr006-query-and-export-facts-v1),
 plus:
 
 1. `lcart analyze` warns when the database or output directory is inside a
    git work tree and not ignored ([security T2](../security.md)).
-2. Determinism test: export with 1 and 4 worker threads is identical
+2. Determinism test: analysing the same input twice into fresh databases
+   gives byte-identical exports
    ([NFR-004](../specs/requirements.md#nfr004-deterministic-output-v1)).
+   The comparison of 1 and 4 worker threads moved to
+   [B-16](#b16-resumable-analysis-v2), which brings parallel analysis
+   ([B-07 result](#b07-clang-libtooling-spike-v2),
+   [threading](../architecture/components.md#arch-threading-v1)).
+
+Result (2026-10-04): `src/cli` is now a library (`lcart::cli`: parser,
+commands, git exposure check) behind a thin `main.cpp`, so the parser is
+unit-tested and `tests/cli/lcart_cli_test.cpp` runs the `lcart` binary on the
+fixtures. The export format, the naming of files outside the root, the
+command line, the exit statuses and the warning are
+[ADR-0016](../adr/0016-facts-export-and-command-line.md) (Accepted). The
+export (`src/facts/fact_export.hpp`) names files by root-relative path,
+external ones by the spelling of their first directive, functions by
+stored USR; the golden file `tests/golden/two_modules.facts.jsonl` was
+written by hand from the fixture and matched on the first run. The T2
+warning reads `.gitignore` files and `.git/info/exclude` itself and runs no
+git, because git can run programs named in the analysed repository's
+configuration. `FactQuery` gained whole-table and reverse queries
+(`calls_to`, `included_by`, ...). Translation unit and diagnostic paths are
+now stored like file paths and diagnostics get their `file_id`, which
+closes that open question and bumps the schema version to 2.
 
 ### <a id="b13-module-map-v1"></a>**[B-13 v1]** `lcart map`
 
@@ -267,7 +289,7 @@ Acceptance criteria:
    page.
 4. The script's own tests cover each failure case.
 
-### <a id="b16-resumable-analysis-v1"></a>**[B-16 v1]** Resumable analysis with progress
+### <a id="b16-resumable-analysis-v2"></a>**[B-16 v2]** Resumable analysis with progress
 
 Acceptance criteria: those of [NFR-005](../specs/requirements.md#nfr005-performance-budget-v2)
 parts 2–5, plus:
@@ -279,6 +301,10 @@ parts 2–5, plus:
 3. SIGINT and SIGTERM end the run cleanly: completed TUs are committed to
    the database, the summary is printed, and the exit status says
    "interrupted".
+4. Determinism test: the export of an analysis with 1 and with 4 worker
+   threads is identical
+   ([NFR-004](../specs/requirements.md#nfr004-deterministic-output-v1);
+   moved here from B-12, which had no parallel analysis).
 
 ### <a id="b17-msvc-code-spike-v1"></a>**[B-17 v1]** MSVC code under Clang: spike and docs
 

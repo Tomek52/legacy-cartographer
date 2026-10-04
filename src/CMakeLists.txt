@@ -28,7 +28,7 @@ target_compile_definitions(lcart_common INTERFACE LCART_VERSION="${PROJECT_VERSI
 
 # SQLite stays private to facts: other modules see only FactWriter/FactQuery.
 lcart_add_module(facts
-    SOURCES facts/src/sqlite_fact_store.cpp
+    SOURCES facts/src/fact_export.cpp facts/src/sqlite_fact_store.cpp
     DEPS lcart::common
     PRIVATE_DEPS SQLite::SQLite3)
 # lcart.toml and its path globs (ADR-0008, ADR-0014); toml++ stays private.
@@ -59,5 +59,10 @@ lcart_add_module(verify   DEPS lcart::claims lcart::facts)
 lcart_add_module(report   DEPS lcart::verify)
 lcart_add_module(handoff  DEPS lcart::claims lcart::facts)
 lcart_add_module(llm      DEPS lcart::common)  # built-in providers, M6 (ADR-0006)
+# Command-line parsing and the commands, as a library so tests can call
+# them without starting the executable.
+lcart_add_module(cli
+    SOURCES cli/src/command_line.cpp cli/src/commands.cpp cli/src/git_exposure.cpp
+    DEPS lcart::analysis lcart::config lcart::facts)
 
 add_subdirectory(cli)

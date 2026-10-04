@@ -31,6 +31,7 @@ moving the answer into the relevant spec or ADR and deleting it here.
 | Traceability format | IDs + versioned anchors, plus a generated traceability matrix that also gates CI; no restructuring after a standard | [ADR-0010](adr/0010-traceability-matrix.md) |
 | Path glob syntax for module rules and exclusions | `*` within a directory, `**` across directories, anchored at the root; exclusions select translation units | [ADR-0014](adr/0014-path-globs-in-the-configuration.md) |
 | Undefined behaviour in toml++ 3.4.0 on malformed input | `lcart.toml` is ASCII and toml++'s assertions are off until a fixed release is packaged | [ADR-0015](adr/0015-ascii-configuration-while-tomlplusplus-3-4.md) |
+| Paths of files outside the analysis root in the facts export | the spelling of the first directive that includes the file, `#2`... if taken, no hash; translation unit and diagnostic paths stored like file paths, diagnostics linked to their file | [ADR-0016](adr/0016-facts-export-and-command-line.md#adr0016-paths-outside-root-v1) (Accepted) |
 | Function with external linkage defined in several translation units | each definition is a function with its own calls; the analysis warns | [ADR-0013](adr/0013-functions-with-external-linkage-defined-twice.md) |
 | Performance for large code bases | hours or days are acceptable; the tool must use all cores, show progress and resume interrupted runs; incremental re-analysis later | [NFR-005](specs/requirements.md#nfr005-performance-budget-v2) |
 
@@ -43,8 +44,7 @@ None open. New questions are added here as they come up.
 | Question | Context | Decide by |
 |---|---|---|
 | Run each translation unit in a child process so a Clang crash cannot end the run? Costs process start-up per TU. | [security T5](security.md) | B-16, after measuring on libmodbus |
-| How to show paths of files outside the analysis root (now absolute, e.g. Clang's resource directory or a home directory) in golden exports and handoff bundles: spelling, path relative to the include directory, or absolute but stripped? | [file facts](architecture/data-model.md#arch-data-model-file-facts-v1), [security](security.md) | B-12 (golden export), M2 (bundles) |
-| `DIAGNOSTIC.file_id` stays null: diagnostics carry Clang's path, not the root-relative one. | [data model](architecture/data-model.md) | B-12 |
+| How to show paths of files outside the analysis root (stored absolute, e.g. Clang's resource directory or a home directory) in handoff bundles? The export's rule (spelling of the first directive, [ADR-0016](adr/0016-facts-export-and-command-line.md#adr0016-paths-outside-root-v1)) is the candidate. | [file facts](architecture/data-model.md#arch-data-model-file-facts-v1), [security](security.md) | M2 (bundles) |
 | `TRANSLATION_UNIT.file_id` is not set yet: the row is written with diagnostics, before per-TU status exists. | [data model](architecture/data-model.md) | B-16 |
 
 ## Not verified yet ("TODO: verify")

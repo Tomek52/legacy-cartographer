@@ -200,8 +200,10 @@ TEST_F(ClangAnalyzerTest, RecordsSyntaxErrorAsDiagnosticWithLocation) {
     ASSERT_TRUE(summary.has_value()) << summary.error().message;
     ASSERT_EQ(facts.diagnostics().size(), 1U);
     const DiagnosticFact& diagnostic = facts.diagnostics().front();
-    EXPECT_EQ(fs::path{diagnostic.translation_unit}.filename(), "broken.c");
-    EXPECT_EQ(fs::path{diagnostic.file}.filename(), "broken.c");
+    // Root-relative, like file facts, so exports do not depend on where the
+    // code is checked out (ADR-0016).
+    EXPECT_EQ(diagnostic.translation_unit, "broken.c");
+    EXPECT_EQ(diagnostic.file, "broken.c");
     EXPECT_EQ(diagnostic.line, 4U);
     EXPECT_EQ(diagnostic.severity, DiagnosticSeverity::error);
     EXPECT_FALSE(diagnostic.message.empty());
