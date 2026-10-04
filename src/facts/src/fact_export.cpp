@@ -24,44 +24,6 @@ using common::Status;
 
 constexpr std::string_view replacement_character = "\xEF\xBF\xBD";
 
-/// Length of the valid UTF-8 sequence at the start of `text`, or 0 if its
-/// first byte does not start one (RFC 3629: no overlong forms, surrogates
-/// or code points above U+10FFFF).
-std::size_t utf8_sequence_length(std::string_view text) {
-    const auto byte = [&text](std::size_t i) {
-        return static_cast<unsigned char>(text[i]);
-    };
-    const unsigned char lead = byte(0);
-    std::size_t length = 0;
-    unsigned char second_min = 0x80;
-    unsigned char second_max = 0xBF;
-    if (lead < 0x80) {
-        return 1;
-    }
-    if (lead >= 0xC2 && lead <= 0xDF) {
-        length = 2;
-    } else if (lead >= 0xE0 && lead <= 0xEF) {
-        length = 3;
-        second_min = lead == 0xE0 ? 0xA0 : 0x80; // overlong
-        second_max = lead == 0xED ? 0x9F : 0xBF; // surrogates
-    } else if (lead >= 0xF0 && lead <= 0xF4) {
-        length = 4;
-        second_min = lead == 0xF0 ? 0x90 : 0x80; // overlong
-        second_max = lead == 0xF4 ? 0x8F : 0xBF; // above U+10FFFF
-    } else {
-        return 0;
-    }
-    if (text.size() < length || byte(1) < second_min || byte(1) > second_max) {
-        return 0;
-    }
-    for (std::size_t i = 2; i < length; ++i) {
-        if (byte(i) < 0x80 || byte(i) > 0xBF) {
-            return 0;
-        }
-    }
-    return length;
-}
-
 void append_escaped(std::string& out, char character) {
     static constexpr std::string_view hex_digits = "0123456789abcdef";
     switch (character) {
@@ -522,6 +484,41 @@ std::vector<Record> diagnostic_records(const Snapshot& snapshot) {
 }
 
 } // namespace
+
+std::size_t utf8_sequence_length(std::string_view text) {
+    const auto byte = [&text](std::size_t i) {
+        return static_cast<unsigned char>(text[i]);
+    };
+    const unsigned char lead = byte(0);
+    std::size_t length = 0;
+    unsigned char second_min = 0x80;
+    unsigned char second_max = 0xBF;
+    if (lead < 0x80) {
+        return 1;
+    }
+    if (lead >= 0xC2 && lead <= 0xDF) {
+        length = 2;
+    } else if (lead >= 0xE0 && lead <= 0xEF) {
+        length = 3;
+        second_min = lead == 0xE0 ? 0xA0 : 0x80; // overlong
+        second_max = lead == 0xED ? 0x9F : 0xBF; // surrogates
+    } else if (lead >= 0xF0 && lead <= 0xF4) {
+        length = 4;
+        second_min = lead == 0xF0 ? 0x90 : 0x80; // overlong
+        second_max = lead == 0xF4 ? 0x8F : 0xBF; // above U+10FFFF
+    } else {
+        return 0;
+    }
+    if (text.size() < length || byte(1) < second_min || byte(1) > second_max) {
+        return 0;
+    }
+    for (std::size_t i = 2; i < length; ++i) {
+        if (byte(i) < 0x80 || byte(i) > 0xBF) {
+            return 0;
+        }
+    }
+    return length;
+}
 
 std::string json_string(std::string_view text) {
     std::string out = "\"";
