@@ -27,8 +27,9 @@ Workers do not write to SQLite; they return per-TU fact batches to a single
 writer thread, which inserts them in a fixed order (by TU path). This keeps
 the fact database deterministic
 ([NFR-004](../specs/requirements.md#nfr004-deterministic-output-v1)) and avoids
-SQLite write contention. The design is confirmed or replaced by an ADR in
-B-07.
+SQLite write contention. Confirmed and detailed (order by index in the
+sorted TU list, batches, dispatch window, resume) by
+[ADR-0019](../adr/0019-parallel-resumable-analysis.md).
 
 ## <a id="arch-error-handling-v2"></a>Error handling
 
