@@ -259,9 +259,10 @@ Acceptance criteria: those of [FR-007](../specs/requirements.md#fr007-module-map
 with a golden file for the `two_modules` fixture.
 
 Result (2026-10-04): `lcart map [--db FILE] [--output FILE]` writes
-`lcart-out/map.md` by default (`--output -`: standard output), replacing an
-existing map through a renamed hidden file; the T2 warning covers the map
-file. The map (`report::write_module_map`, the first code in
+`lcart-out/map.md` by default (`--output -`: standard output) through a
+renamed hidden file. It replaces only an earlier map (first line
+`# Module map`) and never the database it reads; the T2 warning covers the
+map file. The map (`report::write_module_map`, the first code in
 `src/report`) has a coverage line, a Mermaid `flowchart` whose edges count
 the include and call sites behind each dependency, and the modules with
 their files and function definition counts; external files are left out.
@@ -273,8 +274,10 @@ Markdown shows names and paths only as code spans in list items, never in
 tables, where `|` would split a cell. The golden file
 `tests/golden/two_modules.map.md` was written by hand, matched on the
 first run, and is checked by a unit test and against a real analysis by
-the CLI test. A lone `-` is now a value for any option, so
-`query export --output -` writes to standard output too. Files under the
+the CLI test. A lone `-` is now a value for `--output` only, so
+`query export --output -` writes to standard output too, which amends
+ADR-0016's option syntax. `query export --output` still replaces any file;
+the same protection there is a follow-up (open questions). Files under the
 root without a module cannot occur with schema 2, so `(unassigned)` is
 tested with a `FactQuery` double. FR-007 criterion 1 (renders with MkDocs +
 Mermaid) is checked in CI on the libmodbus map by

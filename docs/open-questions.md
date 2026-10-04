@@ -45,6 +45,7 @@ None open. New questions are added here as they come up.
 |---|---|---|
 | Run each translation unit in a child process so a Clang crash cannot end the run? Costs process start-up per TU. | [security T5](security.md) | B-16, after measuring on libmodbus |
 | How to show paths of files outside the analysis root (stored absolute, e.g. Clang's resource directory or a home directory) in handoff bundles? The export's rule (spelling of the first directive, [ADR-0016](adr/0016-facts-export-and-command-line.md#adr0016-paths-outside-root-v1)) is the candidate. | [file facts](architecture/data-model.md#arch-data-model-file-facts-v1), [security](security.md) | M2 (bundles) |
+| Should `lcart query export --output` refuse to replace a file that is not an export, and the database being read, as `lcart map` does ([ADR-0017](adr/0017-module-map-format-and-command-line.md#adr0017-replace-only-maps-v1))? Today it replaces any file. | [ADR-0016](adr/0016-facts-export-and-command-line.md#adr0016-command-line-v1) | follow-up item after B-13 |
 | `TRANSLATION_UNIT.file_id` is not set yet: the row is written with diagnostics, before per-TU status exists. | [data model](architecture/data-model.md) | B-16 |
 
 ## Not verified yet ("TODO: verify")
