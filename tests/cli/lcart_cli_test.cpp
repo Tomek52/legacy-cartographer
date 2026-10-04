@@ -312,6 +312,27 @@ TEST_F(LcartCliTest, TwoAnalysesWithDiagnosticsExportTheSameBytes) {
     EXPECT_EQ(first, second);
 }
 
+// ADR-0016: the analysis root is removed from diagnostic messages, so the
+// export holds no checkout-specific path.
+TEST_F(LcartCliTest, DiagnosticMessagesAreRootRelative) {
+    const fs::path root = fixture("two_modules");
+    const fs::path database = work_dir() / "gone.lcart.db";
+    const fs::path compilation_database = work_dir() / "gone.json";
+    std::ofstream{compilation_database}
+        << R"([{"directory": ")" << root.string()
+        << R"(", "command": "clang -c -I. core/core.c", "file": "core/core.c"},
+ {"directory": ")"
+        << root.string() << R"(", "command": "clang -c )" << (root / "gone.c").string()
+        << R"(", "file": ")" << (root / "gone.c").string() << R"("}]
+)";
+    const Outcome analyzed = lcart({"analyze", "--root", root.string(), "--compilation-database",
+                                    compilation_database.string(), "--db", database.string()});
+    ASSERT_EQ(analyzed.status, exit_success) << analyzed.err;
+    const Outcome exported = query(database, {"export"});
+    EXPECT_NE(exported.out.find("'gone.c'"), std::string::npos) << exported.out;
+    EXPECT_EQ(exported.out.find(root.string()), std::string::npos) << exported.out;
+}
+
 // B-12 criterion 1 (security T2).
 TEST_F(LcartCliTest, WarnsWhenTheDatabaseIsInAWorkTreeAndNotIgnored) {
     const fs::path repo = work_dir() / "repo";

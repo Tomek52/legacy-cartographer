@@ -129,7 +129,11 @@ case can name them differently on another machine.
 `"external": true` (and `target_external` on includes) keeps these names
 apart from root-relative paths, and their hash is left out. A diagnostic
 or translation unit path outside the root that is no recorded file is
-`null`. In the database, translation unit and diagnostic paths are now
+`null`. Diagnostic messages are Clang's text with the analysis root (as
+given and canonical) and its `/` removed, so `no such file or directory:
+'/home/me/proj/gone.c'` is stored as `... 'gone.c'`; a path outside the
+root inside a message stays as Clang wrote it. In the database,
+translation unit and diagnostic paths are now
 spelled like file paths (root-relative, else absolute), and a diagnostic in
 a recorded file gets its `file_id`; that changes column meaning, so the
 schema version becomes 2. Handoff bundles (M2) decide their own rule.

@@ -130,6 +130,8 @@ struct DiagnosticFact {
     std::string file{};             ///< Empty when the diagnostic has no location.
     std::uint32_t line{};
     DiagnosticSeverity severity{DiagnosticSeverity::error};
+    /// Clang's text, with the analysis root and its `/` removed wherever it
+    /// names a path; paths outside the root stay as Clang wrote them.
     std::string message{};
 
     bool operator==(const DiagnosticFact&) const = default;
