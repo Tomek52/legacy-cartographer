@@ -63,6 +63,6 @@ lcart_add_module(llm      DEPS lcart::common)  # built-in providers, M6 (ADR-000
 # them without starting the executable.
 lcart_add_module(cli
     SOURCES cli/src/command_line.cpp cli/src/commands.cpp cli/src/git_exposure.cpp
-    DEPS lcart::analysis lcart::config lcart::facts)
+    DEPS lcart::analysis lcart::config lcart::facts lcart::report)
 
 add_subdirectory(cli)

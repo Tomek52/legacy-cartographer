@@ -34,6 +34,7 @@ enum class ExitStatus : std::uint8_t {
 /// repository can ignore as a whole.
 inline constexpr std::string_view default_output_directory = "lcart-out";
 inline constexpr std::string_view default_database = "lcart-out/facts.lcart.db";
+inline constexpr std::string_view default_map = "lcart-out/map.md";
 /// Read from the working directory when `--config` is not given and the
 /// file exists.
 inline constexpr std::string_view default_config = "lcart.toml";
@@ -68,15 +69,24 @@ struct QueryCommand {
     /// Empty when not given.
     std::string subject;
     std::filesystem::path database{default_database}; ///< `--db`
-    /// `query export --output`; standard output when empty.
+    /// `query export --output`; standard output when empty (not given, or
+    /// `-`).
     std::optional<std::filesystem::path> output;
 };
 
-using Command = std::variant<HelpCommand, VersionCommand, AnalyzeCommand, QueryCommand>;
+/// `lcart map` (ADR-0017).
+struct MapCommand {
+    std::filesystem::path database{default_database}; ///< `--db`
+    /// `--output`; standard output when empty (`--output -`).
+    std::optional<std::filesystem::path> output{default_map};
+};
+
+using Command = std::variant<HelpCommand, VersionCommand, AnalyzeCommand, QueryCommand, MapCommand>;
 
 /// Parses the arguments after the program name. Options take their value
 /// as the next argument or after `=` (`--db x`, `--db=x`); a value that
-/// starts with `-` needs `=`. `--` ends the options. Errors: ErrorCode::invalid_argument, with a
+/// starts with `-` needs `=`, except `-` alone (`--output -`: standard
+/// output, ADR-0017). `--` ends the options. Errors: ErrorCode::invalid_argument, with a
 /// message for the user, for an unknown command or option, a missing or extra argument, or an
 /// option given twice.
 [[nodiscard]] common::Result<Command>

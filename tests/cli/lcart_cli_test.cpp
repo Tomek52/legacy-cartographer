@@ -5,7 +5,10 @@
 // warning; criterion 2: two analyses into fresh databases export the same
 // bytes), nfr004-deterministic-output-v1 (criteria 1 and 3: golden export
 // without timestamps) and b11-module-rules-v2 (criterion 1: `lcart analyze`
-// reads the rules and exclusions from lcart.toml).
+// reads the rules and exclusions from lcart.toml), fr007-module-map-without-llm-v1
+// (criteria 2 and 3: `lcart map` from the fact database alone, the same
+// bytes twice) and b13-module-map-v1 (golden map of two_modules; the command
+// line, exit statuses and T2 warning of ADR-0017).
 #include <gtest/gtest.h>
 
 #include <algorithm>
@@ -172,6 +175,7 @@ TEST_F(LcartCliTest, HelpAndVersion) {
     const Outcome help = lcart({"--help"});
     EXPECT_EQ(help.status, exit_success);
     EXPECT_NE(help.out.find("lcart query"), std::string::npos) << help.out;
+    EXPECT_NE(help.out.find("lcart map"), std::string::npos) << help.out;
     const Outcome version = lcart({"--version"});
     EXPECT_EQ(version.status, exit_success);
     EXPECT_EQ(version.out.rfind("lcart ", 0), 0U) << version.out;
@@ -525,9 +529,10 @@ TEST_F(LcartCliTest, FailedWriteToStandardOutputIsAFailure) {
          {std::vector<std::string>{"query", "callers", "app_run"},
           {"query", "module-deps"},
           {"query", "export"},
+          {"map", "--output", "-"},
           {"--help"}}) {
         std::vector<std::string> with_database = arguments;
-        if (arguments.front() == "query") {
+        if (arguments.front() == "query" || arguments.front() == "map") {
             with_database.emplace_back("--db");
             with_database.push_back(database.string());
         }
@@ -535,6 +540,118 @@ TEST_F(LcartCliTest, FailedWriteToStandardOutputIsAFailure) {
         EXPECT_EQ(run.status, exit_failure) << arguments.back();
         EXPECT_NE(run.err.find("cannot write"), std::string::npos) << run.err;
     }
+}
+
+// ---- lcart map (ADR-0017) ----------------------------------------------------
+
+std::vector<std::string> sorted_names(const fs::path& directory) {
+    std::vector<std::string> names;
+    for (const fs::directory_entry& entry : fs::directory_iterator{directory}) {
+        names.push_back(entry.path().filename().string());
+    }
+    std::ranges::sort(names);
+    return names;
+}
+
+std::string golden_map() {
+    return read_file(fs::path{LCART_GOLDEN_DIR} / "two_modules.map.md");
+}
+
+// FR-007 criteria 2 and 3, B-13: with the default database and output, the
+// map of two_modules is the golden file; a second run replaces it with the
+// same bytes. No LLM and no network are involved: the command reads the
+// database only.
+TEST_F(LcartCliTest, MapWritesTheDefaultPath) {
+    const fs::path output = work_dir() / "lcart-out" / "map.md";
+    analyze("two_modules", {"app/legacy.c", "app/main.c", "core/core.c"},
+            work_dir() / "lcart-out" / "facts.lcart.db");
+    ASSERT_FALSE(golden_map().empty());
+
+    const Outcome first = lcart({"map"});
+    EXPECT_EQ(first.status, exit_success) << first.err;
+    EXPECT_NE(first.out.find(output.string()), std::string::npos) << first.out;
+    EXPECT_EQ(read_file(output), golden_map());
+
+    // Derived output: replaced without --force.
+    std::ofstream{output} << "stale\n";
+    const Outcome second = lcart({"map"});
+    EXPECT_EQ(second.status, exit_success) << second.err;
+    EXPECT_EQ(read_file(output), golden_map());
+    // Written through a file next to it that is renamed: nothing is left.
+    EXPECT_EQ(sorted_names(output.parent_path()),
+              (std::vector<std::string>{"facts.lcart.db", "map.md"}));
+}
+
+TEST_F(LcartCliTest, MapToStandardOutput) {
+    const fs::path database = two_modules_database();
+    const Outcome run = lcart({"map", "--db", database.string(), "--output", "-"});
+    EXPECT_EQ(run.status, exit_success) << run.err;
+    EXPECT_EQ(run.out, golden_map());
+    EXPECT_FALSE(fs::exists(work_dir() / "lcart-out"));
+    EXPECT_FALSE(fs::exists(work_dir() / "-"));
+}
+
+TEST_F(LcartCliTest, MapCreatesTheParentDirectory) {
+    const fs::path database = two_modules_database();
+    const fs::path output = work_dir() / "docs" / "generated" / "map.md";
+    const Outcome run = lcart({"map", "--db", database.string(), "--output=" + output.string()});
+    EXPECT_EQ(run.status, exit_success) << run.err;
+    EXPECT_EQ(read_file(output), golden_map());
+}
+
+TEST_F(LcartCliTest, MapWithoutDatabaseFailsAndWritesNothing) {
+    const Outcome run = lcart({"map", "--db", "absent.lcart.db"});
+    EXPECT_EQ(run.status, exit_failure);
+    EXPECT_NE(run.err.find("lcart analyze"), std::string::npos) << run.err;
+    EXPECT_FALSE(fs::exists(work_dir() / "absent.lcart.db"));
+    EXPECT_FALSE(fs::exists(work_dir() / "lcart-out"));
+
+    // A file that is not a fact database cannot be read either.
+    std::ofstream{work_dir() / "not.lcart.db"} << "not a database\n";
+    const Outcome unreadable = lcart({"map", "--db", "not.lcart.db"});
+    EXPECT_EQ(unreadable.status, exit_failure);
+    EXPECT_FALSE(fs::exists(work_dir() / "lcart-out"));
+}
+
+TEST_F(LcartCliTest, MapUsageErrors) {
+    for (const std::vector<std::string>& arguments :
+         {std::vector<std::string>{"map", "--frobnicate"}, {"map", "extra"}, {"map", "--output"}}) {
+        const Outcome run = lcart(arguments);
+        EXPECT_EQ(run.status, exit_usage) << arguments.back();
+        EXPECT_NE(run.err.find(arguments.back()), std::string::npos) << run.err;
+    }
+}
+
+TEST_F(LcartCliTest, MapToADirectoryFails) {
+    const fs::path database = two_modules_database();
+    const fs::path directory = work_dir() / "a-directory";
+    fs::create_directories(directory);
+    const Outcome run = lcart({"map", "--db", database.string(), "--output", directory.string()});
+    EXPECT_EQ(run.status, exit_failure);
+    EXPECT_TRUE(fs::is_directory(directory));
+}
+
+// Security T2 for the map file (ADR-0017).
+TEST_F(LcartCliTest, WarnsWhenTheMapIsInAWorkTreeAndNotIgnored) {
+    const fs::path database = two_modules_database();
+    const fs::path repo = work_dir() / "repo";
+    fs::create_directories(repo / ".git");
+
+    const Outcome exposed = lcart({"map", "--db", database.string()}, repo);
+    EXPECT_EQ(exposed.status, exit_success) << exposed.err;
+    EXPECT_NE(exposed.err.find("not ignored"), std::string::npos) << exposed.err;
+    EXPECT_NE(exposed.err.find("module map"), std::string::npos) << exposed.err;
+    EXPECT_TRUE(fs::is_regular_file(repo / "lcart-out" / "map.md"));
+
+    std::ofstream{repo / ".gitignore"} << "/lcart-out/\n";
+    const Outcome ignored = lcart({"map", "--db", database.string()}, repo);
+    EXPECT_EQ(ignored.status, exit_success) << ignored.err;
+    EXPECT_EQ(ignored.err.find("not ignored"), std::string::npos) << ignored.err;
+
+    // Standard output is no file: no warning.
+    fs::remove(repo / ".gitignore");
+    const Outcome to_stdout = lcart({"map", "--db", database.string(), "--output", "-"}, repo);
+    EXPECT_EQ(to_stdout.err.find("not ignored"), std::string::npos) << to_stdout.err;
 }
 
 TEST_F(LcartCliTest, QueryWithoutDatabaseFailsAndCreatesNothing) {
