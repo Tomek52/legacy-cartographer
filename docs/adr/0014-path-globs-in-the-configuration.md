@@ -1,6 +1,6 @@
 # 0014. Path globs in the configuration
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-10-04
 - **Requirements:** [FR-005](../specs/requirements.md#fr005-map-files-to-modules-v1),
   [NFR-010](../specs/requirements.md#nfr010-untrusted-input-v1)

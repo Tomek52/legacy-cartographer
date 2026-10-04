@@ -1,6 +1,6 @@
 # 0015. lcart.toml is ASCII while toml++ 3.4.0 is in use
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-10-04
 - **Requirements:** [NFR-010](../specs/requirements.md#nfr010-untrusted-input-v1),
   [B-11](../plan/backlog.md#b11-module-rules-v2) criterion 2
