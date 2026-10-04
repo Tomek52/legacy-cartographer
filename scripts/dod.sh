@@ -58,6 +58,11 @@ run "check-format" scripts/check-format.sh
 run "clang-tidy" bash -c 'cmake --preset debug-system >/dev/null && scripts/run-clang-tidy.sh debug-system'
 run "docs-check" scripts/docs-check.sh
 run "docs checker tests" python3 -m unittest discover -s tests/docs
+if [[ " $presets " == *" debug-system "* ]]; then
+    # Rewrites docs/plan/traceability.md: commit it with the change.
+    run "traceability" python3 scripts/check-doc-anchors.py \
+        --trace build/debug-system/junit.xml --write
+fi
 if [[ -d targets/libmodbus/src ]]; then
     run "targets pinned" scripts/check-targets.sh
 fi

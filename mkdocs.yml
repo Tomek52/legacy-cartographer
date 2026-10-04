@@ -106,6 +106,7 @@ nav:
       - plan/index.md
       - Roadmap: plan/roadmap.md
       - Backlog: plan/backlog.md
+      - Traceability matrix: plan/traceability.md
   - AI-assisted workflow: ai-workflow.md
   - Glossary: glossary.md
   - Open questions: open-questions.md

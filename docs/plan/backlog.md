@@ -24,7 +24,7 @@ expanded in place; its version is bumped if its meaning changes
 | [B-12](#b12-query-and-export-v2) | ✅ `lcart analyze` / `lcart query` / export | M1 | FR-006, NFR-004 | B-10, B-11 | 5 h |
 | [B-13](#b13-module-map-v1) | ✅ `lcart map` | M1 | FR-007 | B-12 | 3 h |
 | [B-14](#b14-libmodbus-baseline-v1) | ✅ libmodbus baseline map and timing | M1 | NFR-001, NFR-005 | B-05, B-13 | 3 h |
-| [B-15](#b15-requirement-test-traceability-v2) | Traceability gate and matrix | M1 | NFR-012 | B-03 | 4 h |
+| [B-15](#b15-requirement-test-traceability-v2) | ✅ Traceability gate and matrix | M1 | NFR-012 | B-03 | 4 h |
 | [B-16](#b16-resumable-analysis-v2) | Resumable analysis with progress | M1 | NFR-005, NFR-004 | B-12 | 5 h |
 | [B-17](#b17-msvc-code-spike-v1) | MSVC code under Clang: spike and docs | M1 | NFR-013 | B-10 | 4 h |
 
@@ -375,6 +375,28 @@ Acceptance criteria:
    edit") and `build/traceability.csv`; the docs build uses the generated
    page.
 4. The script's own tests cover each failure case.
+
+Result (2026-10-04): `scripts/check-doc-anchors.py --trace JUNIT [--write]`
+reads the FR/NFR headings, the milestones of the roadmap (their status and
+`**Requirements:**` links, an en dash between two links being a range) and
+every `Verifies:` citation under `tests/`, `scripts/`, `cmake/`, `src/`,
+`fuzz/` and `.github/`. A citation in a test file's opening comment block
+covers every `TEST` in the file, one right above a `TEST` covers that
+test, one in `tests/CMakeLists.txt` covers the `add_test` calls of its
+block; any other placement in a C++ test file is an error. The gate fails
+on a cited anchor that does not exist (an old version, anywhere in the
+repository), a citing test that failed or is missing from the results
+(skipped is shown, not failed: one test cannot run as root), and a
+requirement of a done milestone without a citing test, from M1 on (M0's
+requirements are checked by CI jobs, NFR-012 criterion 2). Python tests
+(`tests/docs`) run outside CTest and are listed as such. The `debug-system`
+test preset writes `junit.xml`; its CI job runs the gate, regenerates the
+committed [matrix](traceability.md) and fails if it differs, and keeps
+`build/traceability.csv` as an artifact; `scripts/dod.sh` regenerates the
+page. Eleven tests in `tests/docs` cover attribution, ranges and each
+failure case; each gate condition, disabled in turn, fails at least one of
+them. With M1 not yet done, the matrix shows FR-001 to FR-007 and NFR-004
+cited and passing, NFR-001, NFR-005 and NFR-013 not yet cited by a test.
 
 ### <a id="b16-resumable-analysis-v2"></a>**[B-16 v2]** Resumable analysis with progress
 
