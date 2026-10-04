@@ -5,7 +5,7 @@ Arrows are build dependencies (who includes and links whom).
 
 ```mermaid
 flowchart TB
-    cli["<b>cli</b><br/>command-line parser, analyze / query,<br/>git exposure warning"]
+    cli["<b>cli</b><br/>command-line parser, analyze / query / map,<br/>git exposure warning"]
 
     subgraph det["Deterministic core (no LLM, no network)"]
         analysis["<b>analysis</b><br/>Clang LibTooling frontend,<br/>module rules"]

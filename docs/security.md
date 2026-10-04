@@ -59,7 +59,9 @@ counts as local, egress log and dry run
 
 - Outputs default to a dedicated directory (`lcart-out/`). The tool warns
   when an output (the database of `lcart analyze`, the file of `lcart query
-  export --output`) is inside a git work tree and not ignored. It
+  export --output`, the module map of `lcart map`,
+  [ADR-0017](adr/0017-module-map-format-and-command-line.md#adr0017-command-line-v1))
+  is inside a git work tree and not ignored. It
   reads the work tree's ignore files itself and runs no git command, since
   git can run programs named in the configuration of the (untrusted)
   analysed repository; in doubt it warns

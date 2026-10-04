@@ -3,6 +3,7 @@
 #include "common/result.hpp"
 #include "facts/fact_store.hpp"
 
+#include <cstddef>
 #include <iosfwd>
 #include <string>
 #include <string_view>
@@ -23,6 +24,11 @@ inline constexpr int export_format_version = 1;
 /// spelling of the first directive that includes them (ADR-0016), and have
 /// no content hash. Fails if the database cannot be read or `out` fails.
 [[nodiscard]] common::Status write_jsonl_export(const FactQuery& facts, std::ostream& out);
+
+/// Length of the valid UTF-8 sequence at the start of `text`, or 0 if its
+/// first byte does not start one (RFC 3629: no overlong forms, surrogates
+/// or code points above U+10FFFF). Precondition: `text` is not empty.
+[[nodiscard]] std::size_t utf8_sequence_length(std::string_view text);
 
 /// `text` as a JSON string literal, quotes included. Valid UTF-8 is copied;
 /// each byte that is not part of a valid UTF-8 sequence becomes U+FFFD, so

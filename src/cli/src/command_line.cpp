@@ -20,7 +20,7 @@ constexpr std::string_view usage_text = R"(usage: lcart <command> [options]
 Commands:
   analyze    build the fact database from compile_commands.json
   query      print facts from the fact database, or export them all
-  map        write the module map (Markdown + Mermaid), no LLM    (planned, M1)
+  map        write the module map (Markdown + Mermaid), no LLM
   handoff    write a bundle for an external coding agent          (planned, M2)
   ingest     validate agent output, verify claims, write report   (planned, M2)
   verify     verify a claims file against the fact database       (planned, M2)
@@ -44,6 +44,14 @@ lcart query <query> [--db FILE]
   <function> is a name or a stored USR; <file> a path relative to the
   analysis root.
 
+lcart map [--db FILE] [--output FILE]
+  Writes the module list and a Mermaid graph of module dependencies as
+  Markdown. Default output: lcart-out/map.md. Replaces an earlier map,
+  never another file or the database; --output - writes to standard
+  output.
+
+--output - (or --output=-) means standard output.
+
 Exit status: 0 success, 1 failure (including an unreadable file), 2 invalid
 command line or lcart.toml content, 3 not found in the fact database,
 4 ambiguous function name.
@@ -53,7 +61,10 @@ Options:
   --version    show the tool version
 )";
 
-constexpr std::array planned_commands{"map", "handoff", "ingest", "verify", "testgen"};
+constexpr std::array planned_commands{"handoff", "ingest", "verify", "testgen"};
+
+/// `--output -`: standard output (ADR-0017).
+constexpr std::string_view standard_output = "-";
 
 Error usage_error(std::string message) {
     return Error{.code = ErrorCode::invalid_argument, .message = std::move(message)};
@@ -78,9 +89,13 @@ common::Status add_value(ParsedArguments& parsed, std::span<const std::string_vi
     std::string_view value;
     if (equals != std::string_view::npos) {
         value = argument.substr(equals + 1);
-    } else if (index + 1 < arguments.size() && !arguments[index + 1].starts_with('-')) {
+    } else if (index + 1 < arguments.size() &&
+               (!arguments[index + 1].starts_with('-') ||
+                (name == "--output" && arguments[index + 1] == standard_output))) {
         // `--db --force` is a forgotten value, not a database named
-        // "--force"; a value starting with `-` is given as `--db=-x`.
+        // "--force"; a value starting with `-` is given as `--db=-x`. Only
+        // `--output -` (standard output) takes a lone `-` without `=`
+        // (ADR-0017); `--db -` stays a missing value.
         value = arguments[++index];
     }
     if (value.empty()) {
@@ -142,6 +157,19 @@ std::optional<std::filesystem::path> path_option(const ParsedArguments& parsed,
         return std::nullopt;
     }
     return std::filesystem::path{found->second};
+}
+
+/// `--output`: `fallback` when not given, nullopt (standard output) for `-`.
+std::optional<std::filesystem::path> output_option(const ParsedArguments& parsed,
+                                                   std::optional<std::filesystem::path> fallback) {
+    auto output = path_option(parsed, "--output");
+    if (!output) {
+        return fallback;
+    }
+    if (*output == standard_output) {
+        return std::nullopt;
+    }
+    return output;
 }
 
 Result<Command> parse_analyze(std::span<const std::string_view> arguments) {
@@ -244,8 +272,27 @@ Result<Command> parse_query(std::span<const std::string_view> arguments) {
     query.kind = shape->kind;
     query.subject = parsed->positional.empty() ? "" : parsed->positional.front();
     query.database = path_option(*parsed, "--db").value_or(query.database);
-    query.output = path_option(*parsed, "--output");
+    query.output = output_option(*parsed, std::nullopt);
     return query;
+}
+
+Result<Command> parse_map(std::span<const std::string_view> arguments) {
+    static constexpr std::array<std::string_view, 2> value_options{"--db", "--output"};
+    auto parsed = split_arguments(arguments, value_options, {});
+    if (!parsed) {
+        return std::unexpected(parsed.error());
+    }
+    if (parsed->help) {
+        return HelpCommand{};
+    }
+    if (!parsed->positional.empty()) {
+        return std::unexpected(
+            usage_error("unexpected argument '" + parsed->positional.front() + "' for map"));
+    }
+    MapCommand map;
+    map.database = path_option(*parsed, "--db").value_or(map.database);
+    map.output = output_option(*parsed, map.output);
+    return map;
 }
 
 } // namespace
@@ -266,6 +313,9 @@ Result<Command> parse_command_line(std::span<const std::string_view> arguments) 
     }
     if (command == "query") {
         return parse_query(arguments.subspan(1));
+    }
+    if (command == "map") {
+        return parse_map(arguments.subspan(1));
     }
     if (std::ranges::find(planned_commands, command) != planned_commands.end()) {
         return std::unexpected(usage_error("'" + std::string{command} +

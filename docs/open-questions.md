@@ -45,6 +45,7 @@ None open. New questions are added here as they come up.
 |---|---|---|
 | Run each translation unit in a child process so a Clang crash cannot end the run? Costs process start-up per TU. | [security T5](security.md) | B-16, after measuring on libmodbus |
 | How to show paths of files outside the analysis root (stored absolute, e.g. Clang's resource directory or a home directory) in handoff bundles? The export's rule (spelling of the first directive, [ADR-0016](adr/0016-facts-export-and-command-line.md#adr0016-paths-outside-root-v1)) is the candidate. | [file facts](architecture/data-model.md#arch-data-model-file-facts-v1), [security](security.md) | M2 (bundles) |
+| Should `lcart query export --output` refuse to replace a file that is not an export, and the database being read, as `lcart map` does ([ADR-0017](adr/0017-module-map-format-and-command-line.md#adr0017-replace-only-maps-v1))? Today it replaces any file. | [ADR-0016](adr/0016-facts-export-and-command-line.md#adr0016-command-line-v1) | follow-up item after B-13 |
 | `TRANSLATION_UNIT.file_id` is not set yet: the row is written with diagnostics, before per-TU status exists. | [data model](architecture/data-model.md) | B-16 |
 
 ## Not verified yet ("TODO: verify")
@@ -58,6 +59,7 @@ None open. New questions are added here as they come up.
 | Exact terms of `tests/LICENSE` in libmodbus | [ADR-0003](adr/0003-licensing.md) | before reusing any upstream test code |
 | Exact Clang 20 flags for MSVC-targeted code; LibTooling handling of `clang-cl` arguments; a tested way to get a compilation database from MSBuild | [ADR-0009](adr/0009-linux-and-wsl2-only.md) | B-17 |
 | How to run a GitHub Actions job without network access | [NFR-001](specs/requirements.md#nfr001-works-without-llm-v1) | B-14 |
+| Mermaid, as loaded by MkDocs Material, decodes `#<decimal>;` entity codes in quoted flowchart labels (the module map's escaping) | [ADR-0017](adr/0017-module-map-format-and-command-line.md#adr0017-escaping-v1) | B-14 (rendered libmodbus map) |
 | MkDocs/Material settings that keep raw HTML in generated docs from executing | [security](security.md) | M2 |
 | Usable local model sizes for claim generation | [NFR-003](specs/requirements.md#nfr003-fully-local-mode-v1) | M6 |
 | Claude Code permission rule syntax for a bundle's `.claude/settings.json` | [handoff contract](specs/handoff-contract.md#claim-agent-permissions-v1) | M2 |

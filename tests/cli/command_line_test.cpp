@@ -1,6 +1,7 @@
 // Verifies: fr006-query-and-export-facts-v1 (the `lcart query` commands and
-// their arguments) and fr001-ingest-compilation-database-v1 (`lcart analyze`
-// options), command-line surface of ADR-0016.
+// their arguments), fr001-ingest-compilation-database-v1 (`lcart analyze`
+// options) and fr007-module-map-without-llm-v1 (`lcart map` options),
+// command-line surface of ADR-0016 and ADR-0017.
 #include "cli/command_line.hpp"
 
 #include <gtest/gtest.h>
@@ -133,6 +134,50 @@ TEST(CommandLine, QueryExport) {
     expect_usage_error({"query", "callers", "f", "--output", "x"}, "--output");
 }
 
+// ADR-0017: `-` alone is a value, standard output for `--output`.
+TEST(CommandLine, OutputDashIsStandardOutput) {
+    EXPECT_EQ(parsed_as<QueryCommand>({"query", "export", "--output", "-"}).output, std::nullopt);
+    EXPECT_EQ(parsed_as<QueryCommand>({"query", "export", "--output=-"}).output, std::nullopt);
+    EXPECT_EQ(parsed_as<MapCommand>({"map", "--output", "-"}).output, std::nullopt);
+    EXPECT_EQ(parsed_as<MapCommand>({"map", "--output=-"}).output, std::nullopt);
+    // Still no value: an option, or nothing.
+    expect_usage_error({"map", "--output", "--db", "x"}, "--output needs a value");
+    expect_usage_error({"map", "--output"}, "--output needs a value");
+}
+
+// ADR-0017: only `--output` takes a lone `-` as its next value; for every
+// other option it stays ADR-0016's missing value.
+TEST(CommandLine, OnlyOutputTakesALoneDash) {
+    expect_usage_error({"analyze", "--db", "-"}, "--db needs a value");
+    expect_usage_error({"analyze", "--config", "-"}, "--config needs a value");
+    expect_usage_error({"analyze", "--root", "-"}, "--root needs a value");
+    expect_usage_error({"analyze", "--compilation-database", "-"},
+                       "--compilation-database needs a value");
+    expect_usage_error({"query", "export", "--db", "-"}, "--db needs a value");
+    expect_usage_error({"map", "--db", "-"}, "--db needs a value");
+}
+
+TEST(CommandLine, MapDefaults) {
+    const auto map = parsed_as<MapCommand>({"map"});
+    EXPECT_EQ(map.database, "lcart-out/facts.lcart.db");
+    EXPECT_EQ(map.output, "lcart-out/map.md");
+    EXPECT_TRUE(std::holds_alternative<HelpCommand>(*parse({"map", "--help"})));
+}
+
+TEST(CommandLine, MapOptionsInBothSpellings) {
+    const auto map = parsed_as<MapCommand>({"map", "--db", "x.lcart.db", "--output=docs/map.md"});
+    EXPECT_EQ(map.database, "x.lcart.db");
+    EXPECT_EQ(map.output, "docs/map.md");
+}
+
+TEST(CommandLine, MapRejectsBadArguments) {
+    expect_usage_error({"map", "--frobnicate"}, "--frobnicate");
+    expect_usage_error({"map", "extra"}, "extra");
+    expect_usage_error({"map", "--force"}, "--force");
+    expect_usage_error({"map", "--db", "a", "--db", "b"}, "twice");
+    expect_usage_error({"map", "--include-source"}, "--include-source");
+}
+
 TEST(CommandLine, DoubleDashEndsOptions) {
     EXPECT_EQ(parsed_as<QueryCommand>({"query", "callers", "--", "--odd"}).subject, "--odd");
 }
@@ -142,7 +187,7 @@ TEST(CommandLine, UnknownCommandsAndQueries) {
     expect_usage_error({"query"}, "query");
     expect_usage_error({"query", "everything"}, "everything");
     // Planned commands are named as such.
-    expect_usage_error({"map"}, "not available yet");
+    expect_usage_error({"handoff"}, "not available yet");
 }
 
 } // namespace

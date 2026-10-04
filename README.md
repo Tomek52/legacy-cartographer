@@ -26,7 +26,8 @@ Built-in providers and local models are planned for later (M6).
 **M1 in progress: fact database and module map, without LLM.** Done so
 far: the SQLite fact store (B-06); analysis of files, includes, functions,
 call edges and modules with Clang LibTooling (B-07–B-11); `lcart analyze`,
-`lcart query` and the JSON Lines export (B-12). See the
+`lcart query` and the JSON Lines export (B-12); the module map, `lcart map`
+(B-13). See the
 [roadmap](docs/plan/roadmap.md).
 
 ## Build
