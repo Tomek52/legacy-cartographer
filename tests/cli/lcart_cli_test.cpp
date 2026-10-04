@@ -69,9 +69,11 @@ protected:
 
     /// Runs `lcart arguments...` in `directory` (default: the work directory)
     /// without a shell.
-    [[nodiscard]] Outcome lcart(std::vector<std::string> arguments,
-                                const fs::path& directory = {}) const {
-        const fs::path out_file = work_dir_ / "stdout.txt";
+    /// Standard output goes to `stdout_path` if given (then `out` stays
+    /// empty).
+    [[nodiscard]] Outcome lcart(std::vector<std::string> arguments, const fs::path& directory = {},
+                                const fs::path& stdout_path = {}) const {
+        const fs::path out_file = stdout_path.empty() ? work_dir_ / "stdout.txt" : stdout_path;
         const fs::path err_file = work_dir_ / "stderr.txt";
         const std::string run_in = (directory.empty() ? work_dir_ : directory).string();
         std::string program{LCART_EXECUTABLE};
@@ -101,7 +103,7 @@ protected:
         while (waitpid(pid, &wait_status, 0) < 0 && errno == EINTR) {
         }
         run.status = WIFEXITED(wait_status) ? WEXITSTATUS(wait_status) : -1;
-        run.out = read_file(out_file);
+        run.out = stdout_path.empty() ? read_file(out_file) : std::string{};
         run.err = read_file(err_file);
         return run;
     }
@@ -513,6 +515,24 @@ TEST_F(LcartCliTest, ForceDoesNotRemoveADirectory) {
                                directory.string(), "--force"});
     EXPECT_EQ(run.status, exit_failure);
     EXPECT_TRUE(fs::is_directory(directory));
+}
+
+TEST_F(LcartCliTest, FailedWriteToStandardOutputIsAFailure) {
+    const fs::path database = two_modules_database();
+    for (const std::vector<std::string>& arguments :
+         {std::vector<std::string>{"query", "callers", "app_run"},
+          {"query", "module-deps"},
+          {"query", "export"},
+          {"--help"}}) {
+        std::vector<std::string> with_database = arguments;
+        if (arguments.front() == "query") {
+            with_database.emplace_back("--db");
+            with_database.push_back(database.string());
+        }
+        const Outcome run = lcart(with_database, {}, "/dev/full");
+        EXPECT_EQ(run.status, exit_failure) << arguments.back();
+        EXPECT_NE(run.err.find("cannot write"), std::string::npos) << run.err;
+    }
 }
 
 TEST_F(LcartCliTest, QueryWithoutDatabaseFailsAndCreatesNothing) {

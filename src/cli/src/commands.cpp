@@ -545,7 +545,14 @@ ExitStatus run(const Command& command, std::ostream& out, std::ostream& err) {
             return run_query(query, *out, *err);
         }
     };
-    return std::visit(Visitor{.out = &out, .err = &err}, command);
+    const ExitStatus status = std::visit(Visitor{.out = &out, .err = &err}, command);
+    // Results that did not reach their reader (a full disk, a closed pipe)
+    // are a failure, not a success with no output.
+    out.flush();
+    if (!out && status == ExitStatus::success) {
+        return report({.status = ExitStatus::failure, .message = "cannot write the output"}, err);
+    }
+    return status;
 }
 
 } // namespace lcart::cli
