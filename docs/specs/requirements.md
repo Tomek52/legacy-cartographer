@@ -211,8 +211,9 @@ Acceptance criteria:
 
 1. For libmodbus, an indirect call through the backend's `check_integrity`
    field yields `may_call` edges to the RTU and TCP implementations
-   (TODO: verify the initializer form in `modbus-rtu.c` / `modbus-tcp.c`
-   when B-10 is done).
+   (the tables are positional initializers of `modbus_backend_t`:
+   `_modbus_rtu_backend` in `src/modbus-rtu.c`, `_modbus_tcp_backend` and
+   `_modbus_tcp_pi_backend` in `src/modbus-tcp.c`, v3.2.0).
 2. `may_call` edges are reported separately from direct calls and never
    turn a `calls` claim into `confirmed` (see the claim schema).
 

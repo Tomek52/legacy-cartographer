@@ -19,11 +19,13 @@
 
 #include <algorithm>
 #include <filesystem>
+#include <iterator>
 #include <optional>
 #include <string>
 #include <utility>
 #include <vector>
 
+#include "call_fact_collector.hpp"
 #include "file_fact_collector.hpp"
 #include "function_fact_collector.hpp"
 
@@ -117,46 +119,66 @@ private:
     FileFactCollector* collector_;
 };
 
+/// A definition written in this translation unit, whose calls are recorded.
+struct NewDefinition {
+    const clang::FunctionDecl* definition;
+    facts::FunctionId id;
+};
+
 /// Hands every function declaration of a parsed translation unit to the
-/// collector. Template instantiations and implicit code are not visited
-/// (the visitor's defaults). The dynamic visitor, not the RecursiveASTVisitor
-/// template: inlining that template trips GCC's -Wnull-dereference in Clang's
-/// own headers in release builds.
+/// collector, and keeps the definitions whose calls are to be recorded.
+/// Template instantiations and implicit code are not visited (the visitor's
+/// defaults). The dynamic visitor, not the RecursiveASTVisitor template:
+/// inlining that template trips GCC's -Wnull-dereference in Clang's own
+/// headers in release builds.
 class FunctionVisitor final : public clang::DynamicRecursiveASTVisitor {
 public:
-    FunctionVisitor(clang::ASTContext& context, FunctionFactCollector& collector)
-        : context_(&context), collector_(&collector) {}
+    FunctionVisitor(clang::ASTContext& context, FunctionFactCollector& collector,
+                    std::vector<NewDefinition>& new_definitions)
+        : context_(&context), collector_(&collector), new_definitions_(&new_definitions) {}
 
     bool VisitFunctionDecl(clang::FunctionDecl* function) override {
-        collector_->on_function(*context_, *function);
+        if (const auto id = collector_->on_function(*context_, *function)) {
+            new_definitions_->push_back({.definition = function, .id = *id});
+        }
         return true;
     }
 
 private:
     clang::ASTContext* context_;
     FunctionFactCollector* collector_;
-};
-
-class FunctionFactConsumer final : public clang::ASTConsumer {
-public:
-    explicit FunctionFactConsumer(FunctionFactCollector& collector) : collector_(&collector) {}
-
-    void HandleTranslationUnit(clang::ASTContext& context) override {
-        FunctionVisitor{context, *collector_}.TraverseAST(context);
-    }
-
-private:
-    FunctionFactCollector* collector_;
+    std::vector<NewDefinition>* new_definitions_;
 };
 
 /// The collectors of one analysis.
 struct Collectors {
     FileFactCollector* files;
     FunctionFactCollector* functions;
+    CallFactCollector* calls;
 };
 
-/// Syntax-only parse that also feeds file, include and function facts to
-/// the collectors.
+/// Records functions, then calls: a call may name a function declared later
+/// in the translation unit (a C++ member defined later in its class), and
+/// every callee must already have its id.
+class FunctionAndCallConsumer final : public clang::ASTConsumer {
+public:
+    explicit FunctionAndCallConsumer(Collectors collectors) : collectors_(collectors) {}
+
+    void HandleTranslationUnit(clang::ASTContext& context) override {
+        collectors_.functions->begin_translation_unit();
+        std::vector<NewDefinition> new_definitions;
+        FunctionVisitor{context, *collectors_.functions, new_definitions}.TraverseAST(context);
+        for (const NewDefinition& written : new_definitions) {
+            collectors_.calls->on_definition(context, *written.definition, written.id);
+        }
+    }
+
+private:
+    Collectors collectors_;
+};
+
+/// Syntax-only parse that also feeds file, include, function and call facts
+/// to the collectors.
 class FactAction final : public clang::SyntaxOnlyAction {
 public:
     explicit FactAction(Collectors collectors) : collectors_(collectors) {}
@@ -170,7 +192,7 @@ protected:
 
     std::unique_ptr<clang::ASTConsumer> CreateASTConsumer(clang::CompilerInstance& /*compiler*/,
                                                           llvm::StringRef /*file*/) override {
-        return std::make_unique<FunctionFactConsumer>(*collectors_.functions);
+        return std::make_unique<FunctionAndCallConsumer>(collectors_);
     }
 
 private:
@@ -238,8 +260,9 @@ common::Result<AnalysisSummary> ClangAnalyzer::analyze(const AnalysisRequest& re
     }
     FileFactCollector file_collector{std::move(root), out};
     FunctionFactCollector function_collector{file_collector, out};
-    FactActionFactory action_factory{
-        Collectors{.files = &file_collector, .functions = &function_collector}};
+    CallFactCollector call_collector{file_collector, function_collector, out};
+    FactActionFactory action_factory{Collectors{
+        .files = &file_collector, .functions = &function_collector, .calls = &call_collector}};
 
     AnalysisSummary summary;
     summary.translation_units_total = static_cast<std::uint32_t>(files.size());
@@ -267,11 +290,12 @@ common::Result<AnalysisSummary> ClangAnalyzer::analyze(const AnalysisRequest& re
 
         const int status = tool.run(&action_factory);
         for (const common::Status& collected :
-             {file_collector.status(), function_collector.status()}) {
+             {file_collector.status(), function_collector.status(), call_collector.status()}) {
             if (!collected) {
                 return std::unexpected(collected.error());
             }
         }
+        std::ranges::move(function_collector.take_warnings(), std::back_inserter(summary.warnings));
         if (status == 0) {
             ++summary.translation_units_parsed;
         }

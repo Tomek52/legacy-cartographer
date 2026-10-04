@@ -1,6 +1,6 @@
 # 0012. Function identity: Clang's USR, path-prefixed for internal linkage
 
-- **Status:** Accepted
+- **Status:** Accepted; partly superseded by [ADR-0013](0013-functions-with-external-linkage-defined-twice.md) (a later definition of a function with external linkage is path-prefixed too)
 - **Date:** 2026-10-04
 - **Requirements:** [FR-003](../specs/requirements.md#fr003-record-functions-v1)
 - **Supersedes / superseded by:** —

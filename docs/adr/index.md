@@ -26,4 +26,5 @@ Rules:
 | [0009](0009-linux-and-wsl2-only.md) | Linux and WSL2 only; MSVC code analysed in Clang's MSVC mode | Accepted |
 | [0010](0010-traceability-matrix.md) | Generated traceability matrix instead of a formal standard's structure | Accepted |
 | [0011](0011-pull-request-flow-with-agent-review.md) | Pull-request flow with agent review and merge on green CI | Accepted |
-| [0012](0012-function-identity-for-internal-linkage.md) | Function identity: Clang's USR, path-prefixed for internal linkage | Accepted |
+| [0012](0012-function-identity-for-internal-linkage.md) | Function identity: Clang's USR, path-prefixed for internal linkage | Accepted (extended to duplicate external definitions by 0013) |
+| [0013](0013-functions-with-external-linkage-defined-twice.md) | A function with external linkage defined twice is two functions | Accepted |
