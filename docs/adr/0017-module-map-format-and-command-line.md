@@ -1,6 +1,6 @@
 # 0017. Module map: command line, content and escaping
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-10-04
 - **Requirements:** [FR-007](../specs/requirements.md#fr007-module-map-without-llm-v1),
   [NFR-004](../specs/requirements.md#nfr004-deterministic-output-v1),

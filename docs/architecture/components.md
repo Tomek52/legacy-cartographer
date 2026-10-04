@@ -18,7 +18,7 @@ has its interface header and no implementation.
 | `handoff` | write bundles for an external agent, read its output | `handoff/handoff.hpp` | claims, facts | M2 |
 | `llm` | built-in providers, egress gate, egress log | `llm/provider.hpp`, `llm/egress_policy.hpp` | common, HTTP client (TBD) | M6 |
 | `testgen` | characterization test skeletons | not created yet | facts | M3 |
-| `cli` | command-line parser, commands and the git exposure warning ([ADR-0016](../adr/0016-facts-export-and-command-line.md), [ADR-0017](../adr/0017-module-map-format-and-command-line.md)), as library `lcart::cli`; `main.cpp` builds the `lcart` executable from it; reads `lcart.toml` through `config` | `cli/command_line.hpp`, `cli/commands.hpp`, `cli/git_exposure.hpp` | analysis, config, facts, report (the executable: all) | M0 (help/version), M1 (B-12, B-13) |
+| `cli` | command-line parser, commands and the git exposure warning ([ADR-0016](../adr/0016-facts-export-and-command-line.md), [ADR-0017](../adr/0017-module-map-format-and-command-line.md), [ADR-0018](../adr/0018-facts-export-replaces-only-exports.md)), as library `lcart::cli`; `main.cpp` builds the `lcart` executable from it; reads `lcart.toml` through `config` | `cli/command_line.hpp`, `cli/commands.hpp`, `cli/git_exposure.hpp` | analysis, config, facts, report (the executable: all) | M0 (help/version), M1 (B-12, B-13) |
 
 ## <a id="arch-threading-v1"></a>Threading
 

@@ -267,7 +267,7 @@ map file. The map (`report::write_module_map`, the first code in
 the include and call sites behind each dependency, and the modules with
 their files and function definition counts; external files are left out.
 Command line, content, order and escaping are
-[ADR-0017](../adr/0017-module-map-format-and-command-line.md) (Proposed).
+[ADR-0017](../adr/0017-module-map-format-and-command-line.md).
 Mermaid nodes get generated ids (`m0`, `m1`, ...) and labels in which every
 character but letters, digits, space and `_ . / -` is an entity code;
 Markdown shows names and paths only as code spans in list items, never in

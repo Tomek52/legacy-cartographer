@@ -583,6 +583,70 @@ TEST_F(LcartCliTest, MapRefusesToReplaceAFileThatIsNotAMap) {
     }
 }
 
+std::vector<std::string> sorted_names(const fs::path& directory) {
+    std::vector<std::string> names;
+    for (const fs::directory_entry& entry : fs::directory_iterator{directory}) {
+        names.push_back(entry.path().filename().string());
+    }
+    std::ranges::sort(names);
+    return names;
+}
+
+// ADR-0018: `query export --output` replaces only its own files too. The
+// database being read is never replaced, however it is spelled.
+TEST_F(LcartCliTest, ExportRefusesToReplaceTheDatabase) {
+    analyze("two_modules", {"app/legacy.c", "app/main.c", "core/core.c"},
+            work_dir() / "lcart-out" / "facts.lcart.db");
+    const fs::path database = work_dir() / "lcart-out" / "facts.lcart.db";
+    const std::string bytes = read_file(database);
+    ASSERT_FALSE(bytes.empty());
+
+    for (const std::vector<std::string>& arguments :
+         {std::vector<std::string>{"query", "export", "--output", "lcart-out/facts.lcart.db"},
+          {"query", "export", "--output", "./lcart-out/../lcart-out/facts.lcart.db"},
+          {"query", "export", "--db", database.string(), "--output", "lcart-out/facts.lcart.db"}}) {
+        expect_refused(arguments, "fact database", database, bytes);
+    }
+    fs::create_symlink(database, work_dir() / "link.lcart.db");
+    expect_refused({"query", "export", "--db", "link.lcart.db", "--output", database.string()},
+                   "fact database", database, bytes);
+}
+
+// ADR-0018: an existing file is replaced only if it is an export (its first
+// line starts with the export header).
+TEST_F(LcartCliTest, ExportRefusesToReplaceAFileThatIsNotAnExport) {
+    const fs::path database = two_modules_database();
+    for (const std::string& content :
+         {std::string{"int main(void) { return 0; }\n"}, std::string{"# Module map\n"},
+          std::string{"{\"record\":\"header\",\"format\":\"lcart-factsx\"}\n"},
+          std::string{" {\"record\":\"header\",\"format\":\"lcart-facts\",\n"}, std::string{}}) {
+        const fs::path other = work_dir() / "other.jsonl";
+        std::ofstream{other, std::ios::binary | std::ios::trunc} << content;
+        expect_refused({"query", "export", "--db", database.string(), "--output", other.string()},
+                       "not a facts export", other, content);
+    }
+}
+
+// ADR-0018: an earlier export is replaced through a file next to it that is
+// renamed, so nothing is left; the parent directory is created.
+TEST_F(LcartCliTest, ExportReplacesAnEarlierExport) {
+    const fs::path database = two_modules_database();
+    const std::string golden = read_file(fs::path{LCART_GOLDEN_DIR} / "two_modules.facts.jsonl");
+    const fs::path output = work_dir() / "exports" / "facts.jsonl";
+    const Outcome first = query(database, {"export", "--output", output.string()});
+    EXPECT_EQ(first.status, exit_success) << first.err;
+    EXPECT_EQ(read_file(output), golden);
+    const Outcome again = query(database, {"export", "--output", output.string()});
+    EXPECT_EQ(again.status, exit_success) << again.err;
+
+    std::ofstream{output, std::ios::binary | std::ios::trunc}
+        << "{\"record\":\"header\",\"format\":\"lcart-facts\",\"format_version\":0}\nstale\n";
+    const Outcome second = query(database, {"export", "--output", output.string()});
+    EXPECT_EQ(second.status, exit_success) << second.err;
+    EXPECT_EQ(read_file(output), golden);
+    EXPECT_EQ(sorted_names(output.parent_path()), (std::vector<std::string>{"facts.jsonl"}));
+}
+
 TEST_F(LcartCliTest, FailedWriteToStandardOutputIsAFailure) {
     const fs::path database = two_modules_database();
     for (const std::vector<std::string>& arguments :
@@ -603,15 +667,6 @@ TEST_F(LcartCliTest, FailedWriteToStandardOutputIsAFailure) {
 }
 
 // ---- lcart map (ADR-0017) ----------------------------------------------------
-
-std::vector<std::string> sorted_names(const fs::path& directory) {
-    std::vector<std::string> names;
-    for (const fs::directory_entry& entry : fs::directory_iterator{directory}) {
-        names.push_back(entry.path().filename().string());
-    }
-    std::ranges::sort(names);
-    return names;
-}
 
 std::string golden_map() {
     return read_file(fs::path{LCART_GOLDEN_DIR} / "two_modules.map.md");
