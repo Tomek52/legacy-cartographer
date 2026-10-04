@@ -8,6 +8,7 @@
 // reads the rules and exclusions from lcart.toml).
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <cerrno>
 #include <cstddef>
 #include <fcntl.h>
@@ -414,6 +415,52 @@ TEST_F(LcartCliTest, ExistingDatabaseIsReplacedOnlyWithForce) {
     const Outcome replaced = lcart(arguments);
     EXPECT_EQ(replaced.status, exit_success) << replaced.err;
     EXPECT_EQ(query(database, {"callers", "app_run"}).status, exit_not_found);
+}
+
+TEST_F(LcartCliTest, ForceRefusesAFileThatIsNotAFactDatabase) {
+    const fs::path root = fixture("two_modules");
+    const fs::path compilation_database = write_compilation_database(root, {"core/core.c"});
+    const std::string commands = read_file(compilation_database);
+    const fs::path source = work_dir() / "main.c";
+    std::ofstream{source} << "int main(void) { return 0; }\n";
+    const fs::path other_sqlite = work_dir() / "other.sqlite";
+    {
+        // A SQLite database that lcart did not write.
+        std::ofstream out{other_sqlite, std::ios::binary};
+        out << std::string{"SQLite format 3\0", 16} << std::string(512, '\0');
+    }
+    const std::string other_bytes = read_file(other_sqlite);
+
+    for (const fs::path& target : {source, compilation_database, other_sqlite}) {
+        const Outcome run =
+            lcart({"analyze", "--root", root.string(), "--compilation-database",
+                   compilation_database.string(), "--db", target.string(), "--force"});
+        EXPECT_EQ(run.status, exit_failure) << target;
+        EXPECT_NE(run.err.find("not an lcart fact database"), std::string::npos) << run.err;
+    }
+    EXPECT_EQ(read_file(source), "int main(void) { return 0; }\n");
+    EXPECT_EQ(read_file(compilation_database), commands);
+    EXPECT_EQ(read_file(other_sqlite), other_bytes);
+}
+
+TEST_F(LcartCliTest, FailedAnalysisKeepsThePreviousDatabase) {
+    const fs::path database = two_modules_database();
+    const fs::path root = fixture("broken_tu");
+    // No translation unit parses: the run fails (FR-001 criterion 3).
+    const Outcome run = lcart({"analyze", "--root", root.string(), "--compilation-database",
+                               write_compilation_database(root, {"broken.c"}, "-Iinclude").string(),
+                               "--db", database.string(), "--force"});
+    EXPECT_EQ(run.status, exit_failure);
+    EXPECT_EQ(query(database, {"callers", "app_run"}).out,
+              "app/legacy.c:4:12\tlegacy_run\napp/main.c:10:12\tmain\n");
+    // Nothing is left next to it.
+    std::vector<std::string> names;
+    for (const fs::directory_entry& entry : fs::directory_iterator{work_dir()}) {
+        names.push_back(entry.path().filename().string());
+    }
+    std::ranges::sort(names);
+    EXPECT_EQ(names, (std::vector<std::string>{"compile_commands.json", "stderr.txt", "stdout.txt",
+                                               "two_modules.lcart.db"}));
 }
 
 TEST_F(LcartCliTest, ForceDoesNotRemoveADirectory) {

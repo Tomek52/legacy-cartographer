@@ -28,6 +28,12 @@ public:
     [[nodiscard]] static common::Result<std::unique_ptr<SqliteFactStore>>
     open(const std::string& path);
 
+    /// Whether the file at `path` is a fact database of any schema version:
+    /// a SQLite file with lcart's `meta` table and a `schema_version`. Opens
+    /// it read-only and changes nothing; false for anything else, including
+    /// a file that cannot be read.
+    [[nodiscard]] static bool is_fact_database(const std::string& path);
+
     SqliteFactStore(const SqliteFactStore&) = delete;
     SqliteFactStore& operator=(const SqliteFactStore&) = delete;
     SqliteFactStore(SqliteFactStore&&) = delete;

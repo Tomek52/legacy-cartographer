@@ -16,6 +16,7 @@
 #include <ostream>
 #include <string>
 #include <system_error>
+#include <unistd.h>
 #include <utility>
 #include <variant>
 #include <vector>
@@ -101,36 +102,83 @@ Outcome<AnalysisInput> resolve_input(const AnalyzeCommand& command) {
     return input;
 }
 
-/// Prepares a fresh database file at `database`: refuses to touch an
-/// existing one unless `replace` is set.
-Outcome<std::unique_ptr<facts::SqliteFactStore>> create_database(const fs::path& database,
-                                                                 bool replace) {
-    std::error_code ec;
-    const fs::file_status status = fs::symlink_status(database, ec);
-    if (fs::exists(status)) {
-        if (!fs::is_regular_file(status)) {
-            return fail(ExitStatus::failure, database.string() + " exists and is not a file");
+/// A new fact database, written to a file next to `target` and moved over
+/// it only by commit(), so a failed run leaves an existing database as it
+/// was. Removes its file if it is never committed.
+class PendingDatabase {
+public:
+    /// Fails if `target` exists and is not a fact database (lcart replaces
+    /// only its own files), or exists and `replace` is not set.
+    static Outcome<PendingDatabase> create(const fs::path& target, bool replace) {
+        std::error_code ec;
+        const fs::file_status status = fs::symlink_status(target, ec);
+        if (fs::exists(status)) {
+            if (!fs::is_regular_file(status) ||
+                !facts::SqliteFactStore::is_fact_database(target.string())) {
+                return fail(ExitStatus::failure, target.string() +
+                                                     " exists and is not an lcart fact database;"
+                                                     " lcart replaces only its own databases");
+            }
+            if (!replace) {
+                return fail(ExitStatus::failure,
+                            target.string() + " exists; pass --force to replace it");
+            }
         }
-        if (!replace) {
+        fs::create_directories(target.parent_path(), ec);
+        if (ec) {
             return fail(ExitStatus::failure,
-                        database.string() + " exists; pass --force to replace it");
+                        "cannot create " + target.parent_path().string() + ": " + ec.message());
         }
-        if (!fs::remove(database, ec) || ec) {
-            return fail(ExitStatus::failure,
-                        "cannot remove " + database.string() + ": " + ec.message());
+        PendingDatabase pending;
+        pending.target_ = target;
+        pending.file_ = target.parent_path() /
+                        ("." + target.filename().string() + ".partial-" + std::to_string(getpid()));
+        fs::remove(pending.file_, ec); // a leftover of a crashed run with this pid
+        auto store = facts::SqliteFactStore::open(pending.file_.string());
+        if (!store) {
+            return fail(ExitStatus::failure, store.error().message);
+        }
+        pending.store_ = std::move(*store);
+        return pending;
+    }
+
+    PendingDatabase(const PendingDatabase&) = delete;
+    PendingDatabase& operator=(const PendingDatabase&) = delete;
+    PendingDatabase(PendingDatabase&& other) noexcept
+        : target_{std::move(other.target_)}, file_{std::exchange(other.file_, {})},
+          store_{std::move(other.store_)} {}
+    PendingDatabase& operator=(PendingDatabase&&) = delete;
+    ~PendingDatabase() {
+        store_.reset();
+        if (!file_.empty()) {
+            std::error_code ec;
+            fs::remove(file_, ec); // best effort; the run has failed already
         }
     }
-    fs::create_directories(database.parent_path(), ec);
-    if (ec) {
-        return fail(ExitStatus::failure,
-                    "cannot create " + database.parent_path().string() + ": " + ec.message());
+
+    [[nodiscard]] facts::FactWriter& writer() const { return *store_; }
+
+    /// Closes the database and moves it to the target, replacing any file
+    /// there in one step.
+    Outcome<void> commit() {
+        store_.reset();
+        std::error_code ec;
+        fs::rename(file_, target_, ec);
+        if (ec) {
+            return fail(ExitStatus::failure, "cannot move the new database to " + target_.string() +
+                                                 ": " + ec.message());
+        }
+        file_.clear();
+        return {};
     }
-    auto store = facts::SqliteFactStore::open(database.string());
-    if (!store) {
-        return fail(ExitStatus::failure, store.error().message);
-    }
-    return std::move(*store);
-}
+
+private:
+    PendingDatabase() = default;
+
+    fs::path target_;
+    fs::path file_;
+    std::unique_ptr<facts::SqliteFactStore> store_;
+};
 
 ExitStatus run_analyze(const AnalyzeCommand& command, std::ostream& out, std::ostream& err) {
     auto input = resolve_input(command);
@@ -145,9 +193,9 @@ ExitStatus run_analyze(const AnalyzeCommand& command, std::ostream& out, std::os
             << " and not ignored; the fact database is as sensitive as the analysed code"
                " (docs/security.md, T2): add it to .gitignore\n";
     }
-    auto store = create_database(database, command.replace_database);
-    if (!store) {
-        return report(store.error(), err);
+    auto pending = PendingDatabase::create(database, command.replace_database);
+    if (!pending) {
+        return report(pending.error(), err);
     }
 
     analysis::ClangAnalyzer analyzer;
@@ -155,7 +203,7 @@ ExitStatus run_analyze(const AnalyzeCommand& command, std::ostream& out, std::os
                                      .root = input->root,
                                      .exclude_globs = std::move(input->config.exclude),
                                      .module_rules = std::move(input->config.modules)},
-                                    **store);
+                                    pending->writer());
     if (!summary) {
         return report({.status = ExitStatus::failure, .message = summary.error().message}, err);
     }
@@ -164,12 +212,19 @@ ExitStatus run_analyze(const AnalyzeCommand& command, std::ostream& out, std::os
     }
     out << "analysed " << summary->translation_units_parsed << '/'
         << summary->translation_units_total << " translation units, " << summary->diagnostics
-        << " diagnostics; facts in " << database.string() << '\n';
-    // FR-001 criterion 3: a partial analysis is still a result.
+        << " diagnostics\n";
+    // FR-001 criterion 3: a partial analysis is still a result; none is a
+    // failure, and an earlier database stays in place.
     if (summary->translation_units_parsed == 0) {
-        return report(
-            {.status = ExitStatus::failure, .message = "no translation unit could be parsed"}, err);
+        return report({.status = ExitStatus::failure,
+                       .message = "no translation unit could be parsed; " + database.string() +
+                                  " was not written"},
+                      err);
     }
+    if (auto committed = pending->commit(); !committed) {
+        return report(committed.error(), err);
+    }
+    out << "facts in " << database.string() << '\n';
     return ExitStatus::success;
 }
 

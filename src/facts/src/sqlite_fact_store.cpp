@@ -3,6 +3,9 @@
 #include <sqlite3.h>
 
 #include <cstdint>
+#include <fstream>
+#include <ios>
+#include <memory>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -609,6 +612,39 @@ Result<std::unique_ptr<SqliteFactStore>> SqliteFactStore::open(const std::string
         return std::unexpected(ready.error());
     }
     return store;
+}
+
+bool SqliteFactStore::is_fact_database(const std::string& path) {
+    // Every SQLite 3 file starts with this header (sqlite.org/fileformat.html);
+    // checking it first keeps SQLite away from other files.
+    static constexpr std::string_view sqlite_header{"SQLite format 3\0", 16};
+    std::string header(sqlite_header.size(), '\0');
+    try {
+        std::ifstream in{path, std::ios::binary};
+        in.read(header.data(), static_cast<std::streamsize>(header.size()));
+        if (!in || header != sqlite_header) {
+            return false;
+        }
+    } catch (const std::ios_base::failure&) {
+        // libstdc++'s filebuf throws on a failed read (a directory).
+        return false;
+    }
+    sqlite3* database = nullptr;
+    // No SQLITE_OPEN_URI: `path` is a file name, never a URI.
+    const int opened = sqlite3_open_v2(path.c_str(), &database, SQLITE_OPEN_READONLY, nullptr);
+    const std::unique_ptr<sqlite3, int (*)(sqlite3*)> owned{database, sqlite3_close};
+    if (opened != SQLITE_OK) {
+        return false;
+    }
+    auto has_meta =
+        select_integer(database, "SELECT count(*) FROM sqlite_schema WHERE type = 'table'"
+                                 " AND name = 'meta'");
+    if (!has_meta || has_meta->value_or(0) == 0) {
+        return false;
+    }
+    auto has_version =
+        select_integer(database, "SELECT count(*) FROM meta WHERE key = ?1", schema_version_key);
+    return has_version && has_version->value_or(0) > 0;
 }
 
 SqliteFactStore::SqliteFactStore(sqlite3* database) : database_{database} {}

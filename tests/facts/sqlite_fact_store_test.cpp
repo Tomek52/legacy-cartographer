@@ -8,8 +8,11 @@
 #include <gtest/gtest.h>
 #include <sqlite3.h>
 
+#include <filesystem>
+#include <fstream>
 #include <memory>
 #include <string>
+#include <unistd.h>
 #include <vector>
 
 namespace {
@@ -478,6 +481,28 @@ TEST(SqliteFactStore, DiagnosticInARecordedFileGetsItsFileId) {
     }
     EXPECT_EQ(database.column("SELECT file_id FROM diagnostic ORDER BY id"),
               (std::vector<std::string>{"1", "NULL", "NULL"}));
+}
+
+TEST(SqliteFactStore, RecognisesOnlyFactDatabases) {
+    const std::filesystem::path dir = std::filesystem::temp_directory_path() /
+                                      ("lcart-is-fact-database-" + std::to_string(::getpid()));
+    std::filesystem::create_directories(dir);
+    const std::string facts_path = (dir / "facts.lcart.db").string();
+    ASSERT_TRUE(SqliteFactStore::open(facts_path).has_value());
+    EXPECT_TRUE(SqliteFactStore::is_fact_database(facts_path));
+
+    const std::string other_path = (dir / "other.sqlite").string();
+    sqlite3* other = nullptr;
+    ASSERT_EQ(sqlite3_open(other_path.c_str(), &other), SQLITE_OK);
+    EXPECT_EQ(sqlite3_exec(other, "CREATE TABLE meta(k)", nullptr, nullptr, nullptr), SQLITE_OK);
+    sqlite3_close(other);
+    EXPECT_FALSE(SqliteFactStore::is_fact_database(other_path)); // no schema_version
+
+    std::ofstream{dir / "main.c"} << "int main(void) { return 0; }\n";
+    EXPECT_FALSE(SqliteFactStore::is_fact_database((dir / "main.c").string()));
+    EXPECT_FALSE(SqliteFactStore::is_fact_database((dir / "absent.db").string()));
+    EXPECT_FALSE(SqliteFactStore::is_fact_database(dir.string()));
+    std::filesystem::remove_all(dir);
 }
 
 } // namespace

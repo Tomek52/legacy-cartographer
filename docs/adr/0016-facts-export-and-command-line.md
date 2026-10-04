@@ -140,7 +140,12 @@ or repeated option is an error):
   compilation database = `<root>/compile_commands.json` (a directory gets
   `compile_commands.json` appended), database =
   `lcart-out/facts.lcart.db` in the working directory. An existing
-  database is replaced only with `--force` (B-16 adds `--resume`).
+  database is replaced only with `--force`, and only if it is an lcart
+  fact database (SQLite header and a `meta` table with `schema_version`):
+  `--db main.c --force` is refused. The new database is written to a
+  hidden file next to the target and renamed over it when the analysis
+  succeeds, so a failed run leaves the previous database in place (B-16
+  adds `--resume`).
 - `lcart query callers|callees <function>`, `includes|included-by <file>`,
   `module-deps [<module>]`, `export [--output FILE]`, each with
   `[--db FILE]`. `<function>` is a stored USR or a name; `<file>` a stored
@@ -155,7 +160,8 @@ or repeated option is an error):
 
 <a id="adr0016-exit-status-v1"></a>**Exit statuses:** 0 success; 1
 failure (no translation unit parsed, a file or database that cannot be
-read or written, an existing database without `--force`); 2 invalid
+read or written, an existing database without `--force`, an existing file
+that is not a fact database); 2 invalid
 command line or lcart.toml; 3 the function, file or module named is not in
 the database; 4 ambiguous function name. A partial analysis exits 0
 ([FR-001](../specs/requirements.md#fr001-ingest-compilation-database-v1)).
