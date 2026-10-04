@@ -1,6 +1,6 @@
 # 0013. A function with external linkage defined twice is two functions
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-10-04
 - **Requirements:** [FR-003](../specs/requirements.md#fr003-record-functions-v1),
   [FR-004](../specs/requirements.md#fr004-record-call-edges-v1)
