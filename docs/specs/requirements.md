@@ -292,7 +292,7 @@ Acceptance criteria:
 
 ## Non-functional requirements
 
-#### <a id="nfr001-works-without-llm-v1"></a>**[NFR-001 v1]** Works without an LLM
+#### <a id="nfr001-works-without-llm-v2"></a>**[NFR-001 v2]** Works without an LLM
 
 The tool shall provide analysis, query, module map, handoff bundles, claim
 verification and test skeleton generation with no LLM and no network
@@ -300,9 +300,12 @@ access.
 
 Acceptance criteria:
 
-1. The deterministic modules (`common`, `facts`, `analysis`, `claims`,
-   `verify`, `report`, `handoff`) do not link the `llm` module; the build fails at
-   configure time if they do (`cmake/ArchitectureRules.cmake`).
+1. The deterministic modules (`common`, `config`, `facts`, `analysis`,
+   `claims`, `verify`, `report`, `handoff`) neither link the `llm` module
+   nor include its headers: the build fails at configure time if one links
+   it (`cmake/ArchitectureRules.cmake`), and a test (label `architecture`,
+   `cmake/CheckIncludeBoundaries.cmake`) fails if one includes it
+   ([B-04](../plan/backlog.md#b04-include-boundary-check-v1)).
 2. CI runs the M1 commands on libmodbus in a job without network access
    (TODO: verify how to cut network in GitHub Actions; fallback is
    `unshare -n`).
@@ -329,7 +332,7 @@ Acceptance criteria:
 #### <a id="nfr003-fully-local-mode-v1"></a>**[NFR-003 v1]** Fully local mode
 
 Deferred to M6 by [ADR-0006](../adr/0006-external-agent-handoff-for-llm-work.md#adr0006-providers-deferred-v1).
-Until then, the offline mode is the no-LLM mode ([NFR-001](#nfr001-works-without-llm-v1)).
+Until then, the offline mode is the no-LLM mode ([NFR-001](#nfr001-works-without-llm-v2)).
 
 Where a local provider (Ollama or an OpenAI-compatible server on loopback)
 is configured, the tool shall generate documentation and claims with no

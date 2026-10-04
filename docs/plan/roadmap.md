@@ -58,7 +58,7 @@ days), MSVC-code spike, traceability matrix. Out: function-pointer table
 resolution (FR-015, M2), incremental re-analysis, anything LLM.
 
 **Requirements:** [FR-001](../specs/requirements.md#fr001-ingest-compilation-database-v1)–[FR-007](../specs/requirements.md#fr007-module-map-without-llm-v1),
-[NFR-001](../specs/requirements.md#nfr001-works-without-llm-v1),
+[NFR-001](../specs/requirements.md#nfr001-works-without-llm-v2),
 [NFR-004](../specs/requirements.md#nfr004-deterministic-output-v1),
 [NFR-005](../specs/requirements.md#nfr005-performance-budget-v2),
 [NFR-012](../specs/requirements.md#nfr012-traceability-v2) (citation gate and matrix),
