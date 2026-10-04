@@ -48,7 +48,8 @@ gtest_discover_tests(lcart_cli_tests PROPERTIES LABELS cli)
 
 # Include boundaries of the deterministic core (B-04, NFR-001, ADR-0002):
 # the source tree must pass; the self-test runs the same check on a fixture
-# tree with one forbidden include of each kind, which proves it can fail.
+# tree with forbidden includes of each kind, which proves it can fail.
+# Verifies: b04-include-boundary-check-v1 (criteria 1-3).
 add_test(NAME Architecture.IncludeBoundaries
     COMMAND ${CMAKE_COMMAND} -DLCART_ROOT=${PROJECT_SOURCE_DIR}
             -P ${PROJECT_SOURCE_DIR}/cmake/CheckIncludeBoundaries.cmake)

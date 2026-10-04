@@ -78,17 +78,21 @@ Acceptance criteria:
 
 Result (2026-10-04): `cmake/CheckIncludeBoundaries.cmake`, run by CTest as
 `Architecture.IncludeBoundaries` (label `architecture`) on the source tree,
-reads every `#include` line under `src/` and reports each violation as
+reads every `#include` and `#include_next` line under `src/` (all C and C++
+source and header extensions) and reports each violation as
 `path:line: includes header (rule)`. It checks all eight deterministic
 modules of CLAUDE.md (the criterion's six plus `config` and `handoff`) and
 treats LLVM headers (`llvm/`, `llvm-c/`) like Clang headers, since Clang's
-interfaces expose LLVM types (`llvm::StringRef`). Include lines inside
-`#if 0` or comments are checked too: a false alarm is cheaper than a missed
-include. `Architecture.IncludeBoundariesSelfTest` runs the same script on
-`tests/architecture/forbidden_includes/`, which has one forbidden include of
-each kind and an allowed Clang include in `src/analysis`, and passes only if
-the check fails, names both violations with their lines and not the allowed
-one. A root without sources fails rather than passing as clean. The check
+interfaces expose LLVM types (`llvm::StringRef`). A header matches by any
+path segment, so `../llm/x.hpp` is caught too, and directive lines inside
+`#if 0` or a block comment are checked as well: a false alarm is cheaper
+than a missed include. Not detected: an include through a macro
+(`#include HEADER`), which `src/` does not use.
+`Architecture.IncludeBoundariesSelfTest` runs the same script on
+`tests/architecture/forbidden_includes/`, which has four forbidden includes
+in different spellings and an allowed Clang include in `src/analysis`, and
+passes only if the check fails and reports exactly those four, with their
+lines. A root without sources fails rather than passing as clean. The check
 is a CMake script, so it needs no tool beyond the build's own.
 
 ## M1
