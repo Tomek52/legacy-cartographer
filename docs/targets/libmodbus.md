@@ -65,15 +65,30 @@ rule would give one module. The libmodbus configuration (B-14) defines:
    analysis root: it holds the pinned files unchanged plus what configure
    generates (`config.h`, `src/modbus-version.h`, `tests/unit-test.h`), so
    the generated header belongs to `core` as the table above says.
-2. `lcart analyze` and `lcart map` with the configuration above.
-3. Check by hand against the code: `modbus.c` defines
-   `_modbus_receive_msg`, `modbus_receive`, `compute_meta_length_after_function`,
-   `compute_data_length_after_meta`, `check_confirmation`, `modbus_reply`;
-   `modbus-rtu.c` defines `crc16` and `_modbus_rtu_check_integrity`;
-   `modbus-tcp.c` defines `_modbus_tcp_check_integrity` (all seen in
-   v3.2.0). Calls from `core` into the backends should appear as indirect.
-4. Publish the generated module map in the docs (generated file, committed,
-   reproduced in CI).
+2. `scripts/libmodbus-baseline.sh` (B-14) runs step 1, then `lcart
+   analyze` and `lcart map` with `scripts/libmodbus/lcart.toml`, the module
+   configuration above. `config.h`, generated at the root of the copy,
+   falls into the default `(root)` module.
+3. The script checks that `modbus.c` defines `_modbus_receive_msg`,
+   `modbus_receive`, `compute_meta_length_after_function`,
+   `compute_data_length_after_meta`, `check_confirmation` and
+   `modbus_reply`, `modbus-rtu.c` defines `crc16` and
+   `_modbus_rtu_check_integrity`, and `modbus-tcp.c` defines
+   `_modbus_tcp_check_integrity` (all seen in v3.2.0); that
+   `_modbus_receive_msg` calls `backend.recv` and `backend.check_integrity`
+   indirectly; and that `core` has no direct call into `rtu` or `tcp` (its
+   dependencies on them are include edges: `modbus.h` includes both
+   backend headers).
+4. The generated [module map](libmodbus-map.md) is committed; the CI job
+   `libmodbus baseline` regenerates it with no network and fails if it
+   changes.
+
+**Baseline (NFR-005).** `lcart analyze`
+on the 14 translation units: **1.12 s** with a Release build in the CI job
+`libmodbus baseline` (GitHub-hosted `ubuntu-24.04` runner, first run
+2026-10-04), the reference; 1.6 s with a debug build on the 4-core
+development container. The job prints the time on every run. Budget: 60 s
+([NFR-005](../specs/requirements.md#nfr005-performance-budget-v2)).
 
 ### M2: generated documentation and verification report
 

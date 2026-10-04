@@ -101,6 +101,7 @@ nav:
   - Targets:
       - targets/index.md
       - libmodbus: targets/libmodbus.md
+      - libmodbus module map: targets/libmodbus-map.md
   - Plan:
       - plan/index.md
       - Roadmap: plan/roadmap.md
