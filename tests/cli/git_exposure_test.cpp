@@ -174,7 +174,7 @@ TEST_F(GitExposureTest, SymbolicLinkIgnoreFileIsNotFollowed) {
 TEST_F(GitExposureTest, OversizedIgnoreFileCountsAsUncertain) {
     write(repo() / ".git" / "info" / "exclude", "lcart-out/\n");
     // Over 1 MiB: not read, and it might re-include the database.
-    write(repo() / ".gitignore", std::string(1024UL * 1024UL + 1, '#'));
+    write(repo() / ".gitignore", std::string((1024UL * 1024UL) + 1, '#'));
     EXPECT_EQ(unignored_git_work_tree(database(), false), repo());
     write(repo() / ".gitignore", "# small\n");
     EXPECT_EQ(unignored_git_work_tree(database(), false), std::nullopt); // control
