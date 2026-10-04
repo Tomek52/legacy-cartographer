@@ -125,7 +125,7 @@ to make it *do* something: delete files, run a command, send data to a URL.
   accuracy is measured
   ([testing strategy](testing/strategy.md#testing-verifier-accuracy-v1)).
 
-### T5. Malicious compilation database or source
+### <a id="security-malicious-build-input-v1"></a>T5. Malicious compilation database or source
 
 - Compile commands are parsed as arguments for the in-process Clang frontend
   and **never executed** as processes.

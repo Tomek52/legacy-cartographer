@@ -58,10 +58,13 @@ run "check-format" scripts/check-format.sh
 run "clang-tidy" bash -c 'cmake --preset debug-system >/dev/null && scripts/run-clang-tidy.sh debug-system'
 run "docs-check" scripts/docs-check.sh
 run "docs checker tests" python3 -m unittest discover -s tests/docs
-if [[ " $presets " == *" debug-system "* ]]; then
-    # Rewrites docs/plan/traceability.md: commit it with the change.
-    run "traceability" python3 scripts/check-doc-anchors.py \
-        --trace build/debug-system/junit.xml --write
+if [[ " $presets " == *" debug-system "* && " ${summary[*]} " == *"PASS  build+test debug-system"* ]]; then
+    # Rewrites docs/plan/traceability.md from this run's results; a change
+    # is reported so it is committed with the rest (CI fails on a stale page).
+    run "traceability" bash -c 'python3 scripts/check-doc-anchors.py \
+        --trace build/debug-system/junit.xml --write &&
+        { git diff --quiet -- docs/plan/traceability.md ||
+          echo "dod: docs/plan/traceability.md changed; commit it"; }'
 fi
 if [[ -d targets/libmodbus/src ]]; then
     run "targets pinned" scripts/check-targets.sh

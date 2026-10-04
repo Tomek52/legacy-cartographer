@@ -20,7 +20,8 @@ requirements to tests (ADR-0010, B-15) against a CTest JUnit file:
    fuzz/, .github/) exists, so a citation of an old version fails;
 6. every test citing a requirement passed in the JUnit file;
 7. every FR/NFR of a milestone from M1 on whose roadmap status is "done"
-   has at least one citing test.
+   has a citing test that passed (skipped ones do not count);
+8. every `Verifies:` names at least one versioned anchor.
 
 It prints the matrix; `--write` also writes docs/plan/traceability.md and
 build/traceability.csv.
@@ -166,7 +167,10 @@ def milestones(docs: Path) -> dict[str, tuple[int, bool, list[str]]]:
         if current is None:
             continue
         if line.startswith("**Status:**"):
-            status[current] = line.removeprefix("**Status:**").strip().startswith("done")
+            value = line.removeprefix("**Status:**").strip().lower()
+            if not value.startswith(("done", "open")):
+                raise ValueError(f"roadmap.md: {current} status must start with 'done' or 'open': {line}")
+            status[current] = value.startswith("done")
         if line.startswith("**Requirements:**"):
             in_requirements = True
         elif not line.strip():
@@ -233,7 +237,8 @@ def citations(repo: Path) -> tuple[list[Citation], list[str]]:
         if not base.is_dir():
             continue
         for path in sorted(p for p in base.rglob("*") if p.is_file() and (p.suffix in CITATION_SUFFIXES or p.name == "CMakeLists.txt")):
-            if "fixtures" in path.relative_to(repo).parts:
+            # Fixtures are analysed code; this script describes the syntax.
+            if "fixtures" in path.relative_to(repo).parts or path == Path(__file__).resolve():
                 continue
             try:
                 lines = path.read_text(encoding="utf-8").splitlines()
@@ -250,6 +255,9 @@ def citations(repo: Path) -> tuple[list[Citation], list[str]]:
                     continue
                 anchors = cited_anchors(lines, index)
                 where = f"{rel}:{index + 1}"
+                if not anchors:
+                    problems.append(f"{where}: Verifies: names no versioned anchor (<doc>-<slug>-v<N>)")
+                    continue
                 tests: list[str] = []
                 if is_test_source:
                     if index < header_end:
@@ -323,13 +331,31 @@ def trace(docs: Path, repo: Path, junit: Path) -> tuple[list[Requirement], list[
     # jobs, not by tests.
     gated = {label for label, (number, done, _) in milestones(docs).items() if done and number >= 1}
     for requirement in reqs.values():
-        if gated.intersection(requirement.milestones) and not requirement.tests:
+        done = gated.intersection(requirement.milestones)
+        if done and requirement_result(requirement) not in {"passed", NOT_IN_CTEST}:
             problems.append(
                 f"docs/specs/requirements.md: {requirement.label} v{requirement.version} belongs to done "
-                f"milestone {', '.join(sorted(gated.intersection(requirement.milestones)))} and no test cites it"
+                f"milestone {', '.join(sorted(done))} and no test that ran cites it"
             )
     ordered = sorted(reqs.values(), key=lambda r: (r.label.startswith("NFR"), r.label))
     return ordered, sorted(set(problems))
+
+
+def requirement_result(requirement: Requirement) -> str:
+    """One result per requirement: failed if a citing test failed or did not
+    run; passed if one passed; skipped if all were skipped (a skipped test
+    proves nothing); "not in CTest" if only Python tests cite it (their
+    results are in the docs job); "no test" without citations."""
+    results = set(requirement.tests.values())
+    if not results:
+        return "no test"
+    if results - {"passed", "skipped", NOT_IN_CTEST}:
+        return "failed"
+    if "passed" in results:
+        return "passed"
+    if "skipped" in results:
+        return "skipped"
+    return NOT_IN_CTEST
 
 
 def all_anchor_ids(docs: Path) -> set[str]:
@@ -350,13 +376,16 @@ def matrix_markdown(matrix: list[Requirement]) -> str:
         "([ADR-0010](../adr/0010-traceability-matrix.md)). Do not edit: CI",
         "regenerates it and fails if it differs.",
         "",
+        "Result is per requirement: passed if a citing test passed and none",
+        "failed; skipped if every citing test was skipped; per-test results are",
+        "in `build/traceability.csv`, kept by the CI job.",
+        "",
         "| Requirement | Version | Milestones | Tests | Result |",
         "|---|---|---|---|---|",
     ]
     for r in matrix:
         tests = sorted(r.tests)
-        failed = [t for t in tests if r.tests[t] not in {"passed", "skipped", NOT_IN_CTEST}]
-        result = "no test" if not tests else ("failed" if failed else "passed")
+        result = requirement_result(r)
         names = "<br>".join(f"`{t}`" for t in tests) if tests else "–"
         link = f"[{r.label}](../specs/requirements.md#{r.anchor})"
         lines.append(f"| {link} {r.title} | v{r.version} | {', '.join(r.milestones) or '–'} | {names} | {result} |")
@@ -381,7 +410,11 @@ def main(argv: list[str] | None = None) -> int:
 
     problems = check(DOCS)
     if args.trace:
-        matrix, trace_problems = trace(DOCS, REPO, args.trace)
+        try:
+            matrix, trace_problems = trace(DOCS, REPO, args.trace)
+        except ValueError as error:
+            print(error)
+            return 1
         problems += trace_problems
         text = matrix_markdown(matrix)
         if args.write:

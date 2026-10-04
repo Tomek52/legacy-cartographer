@@ -16,7 +16,9 @@ that links to the requirements it implements.
    block that opens a test file covers every `TEST` in it; one in the
    comment block right above a `TEST` covers that test; in
    `tests/CMakeLists.txt` it covers the `add_test` calls up to the next
-   blank line. Anywhere else a citation is only checked for existence.
+   blank line. A citation anywhere else in a C++ test file is an error;
+   outside the tests (scripts, CI) its anchors are only checked to exist.
+   `Verifies:` must name at least one versioned anchor.
    `scripts/dod.sh` regenerates
    [docs/plan/traceability.md](docs/plan/traceability.md): commit it with
    the change (CI fails if it differs, ADR-0010).

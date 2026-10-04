@@ -7,6 +7,10 @@ tests and the CTest results of the `debug-system` preset
 ([ADR-0010](../adr/0010-traceability-matrix.md)). Do not edit: CI
 regenerates it and fails if it differs.
 
+Result is per requirement: passed if a citing test passed and none
+failed; skipped if every citing test was skipped; per-test results are
+in `build/traceability.csv`, kept by the CI job.
+
 | Requirement | Version | Milestones | Tests | Result |
 |---|---|---|---|---|
 | [FR-001](../specs/requirements.md#fr001-ingest-compilation-database-v1) Ingest a compilation database | v1 | M1 | `ClangAnalyzerTest.CountsParsedAndFailedTranslationUnits`<br>`ClangAnalyzerTest.EmptyOrMissingRootIsAnError`<br>`ClangAnalyzerTest.ExternalFilesAreOnlyIncludeTargetsWithoutModule`<br>`ClangAnalyzerTest.IncludePairsOfTwoModulesMatchTheExpectedList`<br>`ClangAnalyzerTest.MissingCompilationDatabaseIsAnError`<br>`ClangAnalyzerTest.ParsesEveryTranslationUnitOfTwoModules`<br>`ClangAnalyzerTest.RecordsEachIncludeDirectiveOnce`<br>`ClangAnalyzerTest.RecordsFilesUnderTheRootWithHashKindAndModule`<br>`ClangAnalyzerTest.RecordsHeaderForcedWithIncludeOption`<br>`ClangAnalyzerTest.RecordsMainFileWithoutIncludes`<br>`ClangAnalyzerTest.RecordsSpellingLineAndKindOfInclude`<br>`ClangAnalyzerTest.RecordsSyntaxErrorAsDiagnosticWithLocation`<br>`ClangAnalyzerTest.RecordsUnresolvedIncludeWithSpelling`<br>`ClangAnalyzerTest.StripsPluginArgumentsAndWarns`<br>`ClangAnalyzerTest.StripsPluginArgumentsInsideResponseFiles`<br>`ClangAnalyzerTest.WritesFileAndIncludeFactsToTheStore`<br>`CommandLine.AnOptionDoesNotTakeTheNextOptionAsItsValue`<br>`CommandLine.AnalyzeDefaults`<br>`CommandLine.AnalyzeHasNoIncludeSourceSwitch`<br>`CommandLine.AnalyzeOptionsInBothSpellings`<br>`CommandLine.AnalyzeRejectsBadOptions`<br>`CommandLine.DoubleDashEndsOptions`<br>`CommandLine.HelpAndVersion`<br>`CommandLine.MapDefaults`<br>`CommandLine.MapOptionsInBothSpellings`<br>`CommandLine.MapRejectsBadArguments`<br>`CommandLine.NoCommandIsAnError`<br>`CommandLine.OnlyOutputTakesALoneDash`<br>`CommandLine.OutputDashIsStandardOutput`<br>`CommandLine.QueryExport`<br>`CommandLine.QueryKindsWithSubjects`<br>`CommandLine.QueryModuleDepsSubjectIsOptional`<br>`CommandLine.UnknownCommandsAndQueries` | passed |
@@ -36,5 +40,5 @@ regenerates it and fails if it differs.
 | [NFR-009](../specs/requirements.md#nfr009-verifier-accuracy-measured-v1) Verifier accuracy is measured | v1 | M2 | – | no test |
 | [NFR-010](../specs/requirements.md#nfr010-untrusted-input-v1) Analysed code and LLM output are untrusted | v1 | M2, M4 | – | no test |
 | [NFR-011](../specs/requirements.md#nfr011-licensing-v1) Licensing | v1 | M0, M5 | – | no test |
-| [NFR-012](../specs/requirements.md#nfr012-traceability-v2) Traceability | v2 | M0, M1 | `tests/docs/test_docs_check.py (not in CTest)` | passed |
+| [NFR-012](../specs/requirements.md#nfr012-traceability-v2) Traceability | v2 | M0, M1 | `tests/docs/test_docs_check.py (not in CTest)` | not in CTest |
 | [NFR-013](../specs/requirements.md#nfr013-linux-and-wsl2-v1) Linux and WSL2 | v1 | M1 | – | no test |
