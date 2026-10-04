@@ -1,6 +1,7 @@
 #pragma once
 
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace lcart::analysis {
@@ -15,5 +16,10 @@ struct ModuleRule {
 };
 
 using ModuleRules = std::vector<ModuleRule>;
+
+/// The module of a file that matches no rule: the first component of
+/// `relative_path` (root-relative, `/` separators), or `(root)` for a file
+/// directly in the analysis root (FR-005).
+[[nodiscard]] std::string default_module(std::string_view relative_path);
 
 } // namespace lcart::analysis

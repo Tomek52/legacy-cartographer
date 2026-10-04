@@ -15,7 +15,8 @@ struct AnalysisRequest {
     /// parsed as arguments for the Clang frontend, never executed
     /// (docs/security.md).
     std::filesystem::path compilation_database;
-    /// Paths in the fact database are stored relative to this directory.
+    /// Must be an existing directory. Files under it are stored with paths
+    /// relative to it; files outside it with absolute paths.
     std::filesystem::path root;
     std::vector<std::string> exclude_globs;
 };

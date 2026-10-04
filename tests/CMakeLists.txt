@@ -3,6 +3,7 @@ include(GoogleTest)
 # One executable for all unit tests while the project is small.
 add_executable(lcart_unit_tests
     headers_self_contained_test.cpp
+    analysis/module_rules_test.cpp
     facts/sqlite_fact_store_test.cpp
     verify/verification_status_test.cpp)
 # SQLite directly: the schema-version tests tamper with a database.

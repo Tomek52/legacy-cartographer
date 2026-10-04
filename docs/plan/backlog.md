@@ -17,7 +17,7 @@ expanded in place; its version is bumped if its meaning changes
 | [B-05](#b05-libmodbus-compilation-database-v1) | Compilation database for libmodbus | M1 | FR-001 | B-01 | 3 h |
 | [B-06](#b06-sqlite-fact-store-v1) | ✅ SQLite fact store, schema v1 | M1 | FR-002–FR-004, NFR-004 | – | 6 h |
 | [B-07](#b07-clang-libtooling-spike-v2) | ✅ Clang LibTooling spike and analysis driver | M1 | FR-001 | B-02 | 6 h |
-| [B-08](#b08-file-and-include-facts-v1) | File and include facts | M1 | FR-002 | B-06, B-07 | 4 h |
+| [B-08](#b08-file-and-include-facts-v1) | ✅ File and include facts | M1 | FR-002 | B-06, B-07 | 4 h |
 | [B-09](#b09-function-facts-v1) | Function facts | M1 | FR-003 | B-08 | 4 h |
 | [B-10](#b10-call-edges-v1) | Direct and indirect call edges | M1 | FR-004 | B-09 | 5 h |
 | [B-11](#b11-module-rules-v2) | Module rules and module dependencies | M1 | FR-005 | B-08 | 4 h |
@@ -142,6 +142,18 @@ arrives with B-16, so no ADR. Plugin removal list verified against
 
 Acceptance criteria: those of [FR-002](../specs/requirements.md#fr002-record-files-and-includes-v1),
 on the `two_modules` fixture, plus an unresolved include.
+
+Result (2026-10-04): preprocessor callbacks (`InclusionDirective`,
+`FileChanged`) feed `FileFactCollector`
+(`src/analysis/src/file_fact_collector.hpp`), one per analysis, so each file
+is hashed once (LLVM's `SHA256`, no new dependency) and each directive is
+recorded once. The mapping rules are on the
+[data model](../architecture/data-model.md#arch-data-model-file-facts-v1)
+page. Files under the root get FR-005's default module now; rules and
+`exclude_globs` move to B-11, so both use one glob syntax. Diagnostics still
+carry Clang's path and no `file_id`. Both are tracked under
+[open technical questions](../open-questions.md#open-technical-questions)
+until B-11 and B-12 take them up.
 
 ### <a id="b09-function-facts-v1"></a>**[B-09 v1]** Function facts
 

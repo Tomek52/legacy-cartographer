@@ -35,6 +35,7 @@ lcart_add_module(facts
 # sees a Clang header or links Clang.
 lcart_add_module(analysis
     SOURCES analysis/src/argument_filter.cpp analysis/src/clang_analyzer.cpp
+            analysis/src/file_fact_collector.cpp analysis/src/module_rules.cpp
     DEPS lcart::facts
     PRIVATE_DEPS clang-cpp LLVM)
 # Clang's builtin headers (stddef.h, ...) live in its resource directory,

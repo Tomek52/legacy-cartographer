@@ -2,7 +2,9 @@
 
 One SQLite file per analysed project. Schema version 1
 (`facts::schema_version` in `src/facts/fact_model.hpp`); any change bumps it.
-Paths are relative to the analysis root with `/` separators.
+Paths of files under the analysis root are relative to it, with `/`
+separators; files outside it have absolute paths
+([file facts](#arch-data-model-file-facts-v1)).
 
 ```mermaid
 erDiagram
@@ -13,7 +15,7 @@ erDiagram
     TRANSLATION_UNIT {
         int id PK
         text path UK "as in compile_commands.json"
-        int file_id FK "null until file facts exist"
+        int file_id FK "not set yet (B-16)"
         text status "pending | parsed | failed"
         text command_sha256 "compile command"
         text inputs_sha256 "main file + headers read"
@@ -22,7 +24,7 @@ erDiagram
         int id PK
         int tu_id FK
         text file_path "as reported by Clang; empty if none"
-        int file_id FK "null until resolved (B-08)"
+        int file_id FK "null until resolved (B-12)"
         int line
         text severity
         text message
@@ -34,18 +36,18 @@ erDiagram
     FILE {
         int id PK
         text path UK
-        text sha256
-        int is_header
-        int is_external
+        text sha256 "lowercase hex, of the content"
+        int is_header "not a source extension"
+        int is_external "outside the analysis root"
         int module_id FK "null if and only if external"
     }
     INCLUDE_EDGE {
         int id PK
         int includer_id FK
         int included_id FK "null if unresolved"
-        text spelled
-        int line
-        int is_system
+        text spelled "name between the quotes or brackets"
+        int line "of the #, in the includer"
+        int is_system "angle brackets"
     }
     FUNCTION {
         int id PK
@@ -132,3 +134,31 @@ erDiagram
 - The physical DDL is `schema_sql` in `src/facts/src/sqlite_fact_store.cpp`
   (`STRICT` tables, foreign keys on, `CHECK` constraints for the rules above);
   this page is its specification.
+
+## <a id="arch-data-model-file-facts-v1"></a>File and include facts
+
+How [FR-002](../specs/requirements.md#fr002-record-files-and-includes-v1)
+maps onto `FILE` and `INCLUDE_EDGE` (B-08):
+
+- Paths are canonical (symlinks and `..` resolved) before they are compared
+  with the canonical analysis root, so one file has one row however it was
+  reached.
+- A file is a header unless its extension is a source extension (`.c`,
+  `.C`, `.cc`, `.cpp`, `.cxx`, `.c++`, `.m`, `.mm`), so a `.c` file that is
+  `#include`d is still a source and `.inc` files are headers.
+- A file under the root gets a module: the first matching rule, or the
+  default of [FR-005](../specs/requirements.md#fr005-map-files-to-modules-v1)
+  (top-level directory, or `(root)`). Rules arrive with B-11.
+- A file outside the root (system and third-party headers) is recorded only
+  when a file under the root includes it directly, with its absolute path
+  (how bundles and golden exports show such paths is an
+  [open question](../open-questions.md#open-technical-questions)).
+  Directives inside it are not recorded, so the database does not grow with
+  the system's headers.
+- A file under the root forced in with `-include` is recorded although no
+  directive names it (no edge: the includer is the command line).
+- An `#include` directive is recorded once per (includer, line, spelling,
+  target), although a header is reached from many translation units.
+  `is_system` is the spelling (`<...>`), not where the file was found.
+- An unresolved include has no target and keeps its spelling; Clang reports
+  it as a fatal error, so its translation unit also counts as failed.
