@@ -5,6 +5,7 @@
 #include <bitset>
 #include <cstddef>
 #include <cstdint>
+#include <expected>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -46,6 +47,9 @@ private:
         std::vector<Token> tokens;
     };
 
+    /// The tokens of one segment other than `**`, or why it is invalid.
+    [[nodiscard]] static std::expected<std::vector<Token>, std::string_view>
+    parse_tokens(std::string_view text);
     [[nodiscard]] static bool segment_matches(const Segment& segment, std::string_view text);
 
     std::string pattern_;

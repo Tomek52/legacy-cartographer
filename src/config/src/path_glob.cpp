@@ -1,6 +1,7 @@
 #include "config/path_glob.hpp"
 
 #include <cstddef>
+#include <expected>
 #include <optional>
 #include <span>
 #include <string>
@@ -101,9 +102,9 @@ struct ParsedSet {
 
 common::Result<PathGlob> PathGlob::parse(std::string_view pattern) {
     auto invalid = [pattern](std::string_view why) {
-        return std::unexpected(
-            common::Error{.code = common::ErrorCode::invalid_argument,
-                          .message = "path glob '" + std::string{pattern} + "' " + std::string{why}});
+        return std::unexpected(common::Error{.code = common::ErrorCode::invalid_argument,
+                                             .message = "path glob '" + std::string{pattern} +
+                                                        "' " + std::string{why}});
     };
     if (pattern.empty()) {
         return invalid("is empty");
@@ -127,36 +128,46 @@ common::Result<PathGlob> PathGlob::parse(std::string_view pattern) {
         Segment segment;
         if (text == "**") {
             segment.any_depth = true;
-            glob.segments_.push_back(std::move(segment));
-            continue;
-        }
-        for (std::size_t at = 0; at < text.size();) {
-            Token token;
-            if (text[at] == '*') {
-                if (at + 1 < text.size() && text[at + 1] == '*') {
-                    return invalid("has '**' that is not a whole path segment");
-                }
-                token.kind = Token::Kind::any_run;
-                ++at;
-            } else if (text[at] == '?') {
-                token.accepted.set();
-                ++at;
-            } else if (text[at] == '[') {
-                std::optional<ParsedSet> set = parse_set(text, at);
-                if (!set) {
-                    return invalid("has an unclosed '['");
-                }
-                token.accepted = set->accepted;
-                at = set->end;
-            } else {
-                token.accepted.set(byte_of(text[at]));
-                ++at;
+        } else {
+            auto tokens = parse_tokens(text);
+            if (!tokens) {
+                return invalid(tokens.error());
             }
-            segment.tokens.push_back(token);
+            segment.tokens = std::move(*tokens);
         }
         glob.segments_.push_back(std::move(segment));
     }
     return glob;
+}
+
+std::expected<std::vector<PathGlob::Token>, std::string_view>
+PathGlob::parse_tokens(std::string_view text) {
+    std::vector<Token> tokens;
+    for (std::size_t at = 0; at < text.size();) {
+        Token token;
+        if (text[at] == '*') {
+            if (at + 1 < text.size() && text[at + 1] == '*') {
+                return std::unexpected("has '**' that is not a whole path segment");
+            }
+            token.kind = Token::Kind::any_run;
+            ++at;
+        } else if (text[at] == '?') {
+            token.accepted.set();
+            ++at;
+        } else if (text[at] == '[') {
+            std::optional<ParsedSet> set = parse_set(text, at);
+            if (!set) {
+                return std::unexpected("has an unclosed '['");
+            }
+            token.accepted = set->accepted;
+            at = set->end;
+        } else {
+            token.accepted.set(byte_of(text[at]));
+            ++at;
+        }
+        tokens.push_back(token);
+    }
+    return tokens;
 }
 
 bool PathGlob::segment_matches(const Segment& segment, std::string_view text) {

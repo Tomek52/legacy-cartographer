@@ -27,8 +27,9 @@ using lcart::analysis::ModuleRules;
 using namespace lcart::facts;
 
 /// The files of the two_modules fixture (its README).
-const std::vector<std::string> fixture_files{"app/app.h", "app/legacy.c", "app/main.c",
-                                             "core/core.c", "core/core.h"};
+std::vector<std::string> fixture_files() {
+    return {"app/app.h", "app/legacy.c", "app/main.c", "core/core.c", "core/core.h"};
+}
 
 class ModulesTest : public ::testing::Test {
 protected:
@@ -72,8 +73,9 @@ protected:
         ASSERT_TRUE(summary.has_value()) << summary.error().message;
         ASSERT_EQ(summary->translation_units_total, analysed);
         ASSERT_EQ(summary->translation_units_parsed, analysed);
-        for (const std::string& path : fixture_files) {
-            if (const std::optional<FileFact> file = store_->find_file(path).value_or(std::nullopt)) {
+        for (const std::string& path : fixture_files()) {
+            if (const std::optional<FileFact> file =
+                    store_->find_file(path).value_or(std::nullopt)) {
                 paths_.emplace(file->id, path);
             }
         }
@@ -82,7 +84,7 @@ protected:
     /// Fixture file -> the name of its module.
     [[nodiscard]] std::map<std::string, std::string> modules_of_files() const {
         std::map<std::string, std::string> out;
-        for (const std::string& path : fixture_files) {
+        for (const std::string& path : fixture_files()) {
             const std::optional<FileFact> file = store_->find_file(path).value_or(std::nullopt);
             out.emplace(path, file && file->module ? module_name(*file->module) : "<none>");
         }
@@ -94,7 +96,8 @@ protected:
     [[nodiscard]] std::vector<std::string> dependency_edges() const {
         std::vector<std::string> out;
         for (const std::string& module : module_names()) {
-            const std::optional<ModuleFact> from = store_->find_module(module).value_or(std::nullopt);
+            const std::optional<ModuleFact> from =
+                store_->find_module(module).value_or(std::nullopt);
             if (!from) {
                 continue;
             }
@@ -135,7 +138,8 @@ protected:
 private:
     [[nodiscard]] std::string module_name(ModuleId id) const {
         for (const std::string& name : module_names()) {
-            const std::optional<ModuleFact> module = store_->find_module(name).value_or(std::nullopt);
+            const std::optional<ModuleFact> module =
+                store_->find_module(name).value_or(std::nullopt);
             if (module && module->id == id) {
                 return name;
             }
@@ -160,8 +164,9 @@ TEST_F(ModulesTest, WithoutRulesEachTopLevelDirectoryIsAModule) {
                                                                       {"core/core.h", "core"}}));
     EXPECT_EQ(dependencies_of("app"), std::vector<std::string>{"core"});
     EXPECT_TRUE(dependencies_of("core").empty());
-    EXPECT_EQ(dependency_edges(), (std::vector<std::string>{"app -> core: include at app/app.h:4",
-                                                            "app -> core: call at app/main.c:6:28"}));
+    EXPECT_EQ(dependency_edges(),
+              (std::vector<std::string>{"app -> core: include at app/app.h:4",
+                                        "app -> core: call at app/main.c:6:28"}));
 }
 
 TEST_F(ModulesTest, TheFirstMatchingRuleWinsAndUnmatchedFilesKeepTheDefault) {

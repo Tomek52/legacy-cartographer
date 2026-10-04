@@ -16,7 +16,6 @@ namespace {
 using lcart::common::ErrorCode;
 using lcart::config::load_project_config;
 using lcart::config::parse_project_config;
-using lcart::config::ProjectConfig;
 
 constexpr std::string_view libmodbus_config = R"toml(
 [project]
@@ -40,6 +39,7 @@ paths = ["src/modbus.c", "src/modbus-data.c", "src/modbus*.h"]
 
 [[nodiscard]] std::vector<std::string> patterns(const lcart::config::ModuleRule& rule) {
     std::vector<std::string> out;
+    out.reserve(rule.paths.size());
     for (const auto& glob : rule.paths) {
         out.push_back(glob.pattern());
     }
@@ -128,16 +128,17 @@ TEST(ProjectConfig, ALeadingByteOrderMarkIsAllowed) {
 TEST(ProjectConfig, UnknownKeysAreErrorsWithTheirPosition) {
     EXPECT_EQ(error_of("[project]\nname = \"x\"\nroots = \"src\"\n", ErrorCode::invalid_argument),
               "lcart.toml:3:1: unknown key 'project.roots'");
-    EXPECT_EQ(error_of("[[modules]]\nname = \"core\"\npath = [\"src/*\"]\n",
-                       ErrorCode::invalid_argument),
-              "lcart.toml:3:1: unknown key 'modules.path'");
+    EXPECT_EQ(
+        error_of("[[modules]]\nname = \"core\"\npath = [\"src/*\"]\n", ErrorCode::invalid_argument),
+        "lcart.toml:3:1: unknown key 'modules.path'");
     EXPECT_EQ(error_of("[output]\nformat = \"json\"\n", ErrorCode::invalid_argument),
               "lcart.toml:1:2: unknown key 'output'");
 }
 
 TEST(ProjectConfig, ConsentSwitchesAreRejectedAnywhere) {
     for (const std::string_view text :
-         {"include_source = true\n", "include-source = true\n", "[project]\ninclude_source = true\n",
+         {"include_source = true\n", "include-source = true\n",
+          "[project]\ninclude_source = true\n",
           "[[modules]]\nname = \"a\"\npaths = [\"a/*\"]\nallow-remote-source = true\n",
           "allow_remote_source = true\n"}) {
         const std::string message = error_of(text, ErrorCode::invalid_argument);
@@ -155,16 +156,17 @@ TEST(ProjectConfig, ValuesOfTheWrongTypeAreErrors) {
               "lcart.toml:1:1: 'modules' must be an array of tables ([[modules]])");
     EXPECT_EQ(error_of("[[modules]]\nname = \"a\"\npaths = \"a/*\"\n", ErrorCode::invalid_argument),
               "lcart.toml:3:9: 'modules.paths' must be an array of strings");
-    EXPECT_EQ(error_of("[[modules]]\nname = \"a\"\npaths = [\"a/*\", 1]\n",
-                       ErrorCode::invalid_argument),
-              "lcart.toml:3:17: 'modules.paths' must be an array of strings");
+    EXPECT_EQ(
+        error_of("[[modules]]\nname = \"a\"\npaths = [\"a/*\", 1]\n", ErrorCode::invalid_argument),
+        "lcart.toml:3:17: 'modules.paths' must be an array of strings");
 }
 
 TEST(ProjectConfig, AModuleNeedsANameAndAtLeastOnePath) {
     EXPECT_EQ(error_of("[[modules]]\npaths = [\"a/*\"]\n", ErrorCode::invalid_argument),
               "lcart.toml:1:1: module without 'name'");
-    EXPECT_EQ(error_of("[[modules]]\nname = \"\"\npaths = [\"a/*\"]\n", ErrorCode::invalid_argument),
-              "lcart.toml:2:8: module without 'name'");
+    EXPECT_EQ(
+        error_of("[[modules]]\nname = \"\"\npaths = [\"a/*\"]\n", ErrorCode::invalid_argument),
+        "lcart.toml:2:8: module without 'name'");
     EXPECT_EQ(error_of("[[modules]]\nname = \"a\"\n", ErrorCode::invalid_argument),
               "lcart.toml:1:1: module 'a' without 'paths'");
     EXPECT_EQ(error_of("[[modules]]\nname = \"a\"\npaths = []\n", ErrorCode::invalid_argument),

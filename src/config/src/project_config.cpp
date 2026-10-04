@@ -12,7 +12,9 @@
 // sanitizer builds (ADR-0015).
 #pragma push_macro("NDEBUG")
 #undef NDEBUG
+// NOLINTNEXTLINE(cppcoreguidelines-macro-usage): toml++ is configured only by macros.
 #define TOML_ASSERT(expr) static_cast<void>(0)
+// NOLINTNEXTLINE(cppcoreguidelines-macro-usage): toml++ is configured only by macros.
 #define TOML_MAX_NESTED_VALUES 128
 #include <toml++/toml.hpp>
 #pragma pop_macro("NDEBUG")
@@ -25,6 +27,7 @@
 #include <string>
 #include <string_view>
 #include <utility>
+#include <vector>
 
 namespace lcart::config {
 
@@ -85,24 +88,24 @@ private:
 };
 
 /// Finds a consent switch at any depth, before any other check, so that it
-/// is reported as such even inside an unknown table.
-[[nodiscard]] Status reject_consent_switches(const Reporter& report, const toml::node& node) {
-    if (const toml::table* table = node.as_table()) {
-        for (auto&& [key, value] : *table) {
-            if (is_consent_switch(key.str())) {
-                return std::unexpected(
-                    report.at(key.source(), "'" + std::string{key.str()} +
-                                                "' is given on the command line only, never in "
-                                                "the configuration file (ADR-0008)"));
+/// is reported as such even inside an unknown table. Breadth first, without
+/// recursion: the depth is the input's.
+[[nodiscard]] Status reject_consent_switches(const Reporter& report, const toml::table& document) {
+    std::vector<const toml::node*> pending{&document};
+    for (std::size_t next = 0; next < pending.size(); ++next) {
+        if (const toml::table* table = pending[next]->as_table()) {
+            for (auto&& [key, value] : *table) {
+                if (is_consent_switch(key.str())) {
+                    return std::unexpected(
+                        report.at(key.source(), "'" + std::string{key.str()} +
+                                                    "' is given on the command line only, never "
+                                                    "in the configuration file (ADR-0008)"));
+                }
+                pending.push_back(&value);
             }
-            if (auto nested = reject_consent_switches(report, value); !nested) {
-                return nested;
-            }
-        }
-    } else if (const toml::array* array = node.as_array()) {
-        for (const toml::node& element : *array) {
-            if (auto nested = reject_consent_switches(report, element); !nested) {
-                return nested;
+        } else if (const toml::array* array = pending[next]->as_array()) {
+            for (const toml::node& element : *array) {
+                pending.push_back(&element);
             }
         }
     }
@@ -111,24 +114,23 @@ private:
 
 [[nodiscard]] Error unknown_key(const Reporter& report, const toml::key& key,
                                 std::string_view prefix) {
-    return report.at(key.source(), "unknown key '" + std::string{prefix} + std::string{key.str()} +
-                                       "'");
+    return report.at(key.source(),
+                     "unknown key '" + std::string{prefix} + std::string{key.str()} + "'");
 }
 
 [[nodiscard]] Result<std::string> string_of(const Reporter& report, const toml::node& node,
                                             std::string_view name) {
     const toml::value<std::string>* text = node.as_string();
     if (text == nullptr) {
-        return std::unexpected(report.at(node.source(), "'" + std::string{name} +
-                                                            "' must be a string"));
+        return std::unexpected(
+            report.at(node.source(), "'" + std::string{name} + "' must be a string"));
     }
     return text->get();
 }
 
 /// An array of path globs, such as `modules.paths`, called `name` in errors.
-[[nodiscard]] Result<std::vector<PathGlob>> read_globs(const Reporter& report,
-                                                       const toml::node& node,
-                                                       std::string_view name) {
+[[nodiscard]] Result<std::vector<PathGlob>>
+read_globs(const Reporter& report, const toml::node& node, std::string_view name) {
     const std::string must = "'" + std::string{name} + "' must be an array of strings";
     const toml::array* paths = node.as_array();
     if (paths == nullptr) {
@@ -207,7 +209,8 @@ private:
         }
     }
     if (rule.name.empty()) {
-        return std::unexpected(report.at(name_at.value_or(module.source()), "module without 'name'"));
+        return std::unexpected(
+            report.at(name_at.value_or(module.source()), "module without 'name'"));
     }
     if (rule.paths.empty()) {
         return std::unexpected(report.at(paths_at.value_or(module.source()),
@@ -241,15 +244,14 @@ Result<ProjectConfig> parse_project_config(std::string_view text, std::string_vi
         text.remove_prefix(utf8_byte_order_mark.size());
     }
     if (const std::optional<toml::source_position> at = first_non_ascii(text)) {
-        return std::unexpected(
-            report.at({.begin = *at, .end = *at, .path = {}},
-                      "non-ASCII character; lcart.toml must be ASCII (ADR-0015)",
-                      ErrorCode::parse_error));
+        return std::unexpected(report.at({.begin = *at, .end = *at, .path = {}},
+                                         "non-ASCII character; lcart.toml must be ASCII (ADR-0015)",
+                                         ErrorCode::parse_error));
     }
     toml::parse_result parsed = toml::parse(text, source_name);
     if (!parsed) {
-        return std::unexpected(
-            report.at(parsed.error().source(), parsed.error().description(), ErrorCode::parse_error));
+        return std::unexpected(report.at(parsed.error().source(), parsed.error().description(),
+                                         ErrorCode::parse_error));
     }
     const toml::table& document = parsed.table();
     if (auto allowed = reject_consent_switches(report, document); !allowed) {
@@ -275,7 +277,7 @@ Result<ProjectConfig> parse_project_config(std::string_view text, std::string_vi
 
 Result<ProjectConfig> load_project_config(const std::filesystem::path& file) {
     std::ifstream in{file, std::ios::binary};
-    std::string text{std::istreambuf_iterator<char>{in}, std::istreambuf_iterator<char>{}};
+    const std::string text{std::istreambuf_iterator<char>{in}, std::istreambuf_iterator<char>{}};
     if (!in.is_open() || in.bad()) {
         return std::unexpected(Error{.code = ErrorCode::io_error,
                                      .message = "cannot read configuration file " + file.string()});
