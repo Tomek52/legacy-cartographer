@@ -12,8 +12,10 @@ namespace lcart::facts {
 /// Write side of the fact database, used by the analysis module.
 ///
 /// The `id` field of a record passed to add_*() is ignored; the store assigns
-/// ids and returns them. Not thread-safe: one writer per database.
-// TODO(B-06): SQLite implementation (SqliteFactStore) implementing both interfaces.
+/// ids in insertion order and returns them. Adding a module, file or function
+/// that is already recorded (same name, path or USR) returns the existing id,
+/// because headers and functions are seen from many translation units.
+/// Not thread-safe: one writer per database.
 class FactWriter {
 public:
     FactWriter() = default;
@@ -34,9 +36,9 @@ public:
 
 /// Read side of the fact database, used by verify, report and the CLI.
 ///
-/// Every query returning a sequence returns it in a deterministic order
-/// (by path, then line, then id), so outputs built from it are reproducible
-/// (NFR-004).
+/// Every query returning a sequence returns it in a deterministic order,
+/// documented per method, so outputs built from it are reproducible
+/// (NFR-004). Queries fail only if the database cannot be read.
 class FactQuery {
 public:
     FactQuery() = default;
@@ -46,20 +48,36 @@ public:
     FactQuery& operator=(FactQuery&&) = delete;
     virtual ~FactQuery() = default;
 
-    [[nodiscard]] virtual std::optional<ModuleFact> find_module(std::string_view name) const = 0;
-    [[nodiscard]] virtual std::optional<FileFact> find_file(std::string_view path) const = 0;
+    [[nodiscard]] virtual common::Result<std::optional<ModuleFact>>
+    find_module(std::string_view name) const = 0;
+    [[nodiscard]] virtual common::Result<std::optional<FileFact>>
+    find_file(std::string_view path) const = 0;
 
-    /// All functions with this unqualified name. More than one result means
-    /// the name is ambiguous (e.g. `static` functions in different files).
-    [[nodiscard]] virtual std::vector<FunctionFact> find_functions(std::string_view name) const = 0;
+    /// All functions with this unqualified name, by file path, then first
+    /// line, then id. More than one result means the name is ambiguous (e.g.
+    /// `static` functions in different files).
+    [[nodiscard]] virtual common::Result<std::vector<FunctionFact>>
+    find_functions(std::string_view name) const = 0;
 
-    [[nodiscard]] virtual std::vector<CallFact> calls_from(FunctionId caller) const = 0;
-    [[nodiscard]] virtual std::vector<IncludeFact> includes_of(FileId includer) const = 0;
+    /// Calls made by `caller`, by call-site file path, then line, then column,
+    /// then id.
+    [[nodiscard]] virtual common::Result<std::vector<CallFact>>
+    calls_from(FunctionId caller) const = 0;
 
-    /// Modules that `module` depends on through include or call edges.
-    [[nodiscard]] virtual std::vector<ModuleId> module_dependencies(ModuleId module) const = 0;
+    /// Include directives in `includer`, by line, then id.
+    [[nodiscard]] virtual common::Result<std::vector<IncludeFact>>
+    includes_of(FileId includer) const = 0;
 
-    [[nodiscard]] virtual AnalysisCoverage coverage() const = 0;
+    /// Other modules that `module` depends on through an include edge or a
+    /// direct call edge, by module name.
+    [[nodiscard]] virtual common::Result<std::vector<ModuleFact>>
+    module_dependencies(ModuleId module) const = 0;
+
+    /// All diagnostics, by translation unit, then file, then line, then id.
+    [[nodiscard]] virtual common::Result<std::vector<DiagnosticFact>> diagnostics() const = 0;
+
+    /// Zero counts when no analysis has recorded coverage yet.
+    [[nodiscard]] virtual common::Result<AnalysisCoverage> coverage() const = 0;
 };
 
 } // namespace lcart::facts

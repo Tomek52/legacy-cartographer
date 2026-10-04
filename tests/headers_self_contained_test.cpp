@@ -8,6 +8,7 @@
 #include "common/version.hpp"
 #include "facts/fact_model.hpp"
 #include "facts/fact_store.hpp"
+#include "facts/sqlite_fact_store.hpp"
 #include "handoff/handoff.hpp"
 #include "llm/egress_policy.hpp"
 #include "llm/provider.hpp"

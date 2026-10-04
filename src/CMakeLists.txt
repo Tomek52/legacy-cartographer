@@ -26,7 +26,11 @@ endfunction()
 lcart_add_module(common)
 target_compile_definitions(lcart_common INTERFACE LCART_VERSION="${PROJECT_VERSION}")
 
-lcart_add_module(facts    DEPS lcart::common SQLite::SQLite3)
+# SQLite stays private to facts: other modules see only FactWriter/FactQuery.
+lcart_add_module(facts
+    SOURCES facts/src/sqlite_fact_store.cpp
+    DEPS lcart::common
+    PRIVATE_DEPS SQLite::SQLite3)
 # Clang LibTooling stays private to analysis (ADR-0002): no other module
 # sees a Clang header or links Clang.
 lcart_add_module(analysis

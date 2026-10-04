@@ -25,9 +25,11 @@ using ModuleId = Id<struct ModuleTag>;
 
 /// 1-based line and column, as reported by Clang.
 struct SourceLocation {
-    FileId file;
+    FileId file{};
     std::uint32_t line{};
     std::uint32_t column{};
+
+    bool operator==(const SourceLocation&) const = default;
 };
 
 enum class Linkage : std::uint8_t { internal, external };
@@ -37,45 +39,62 @@ enum class Linkage : std::uint8_t { internal, external };
 /// for a caller that has indirect calls (docs/specs/claim-schema.md).
 enum class CallKind : std::uint8_t { direct, indirect };
 
+// Fact records. Every field has a default member initializer, so a record
+// can be built with designated initializers naming only the fields that matter.
+
 struct ModuleFact {
-    ModuleId id;
-    std::string name;
+    ModuleId id{};
+    std::string name{};
+
+    bool operator==(const ModuleFact&) const = default;
 };
 
 struct FileFact {
-    FileId id;
-    std::string path; ///< Relative to the analysis root, '/' separators.
-    std::string content_sha256;
+    FileId id{};
+    std::string path{}; ///< Relative to the analysis root, '/' separators.
+    std::string content_sha256{};
     bool is_header{};
-    ModuleId module;
+    /// Outside the analysis root (e.g. a system header): recorded only as an
+    /// include target and never assigned to a module (FR-002).
+    bool is_external{};
+    std::optional<ModuleId> module{}; ///< Empty if and only if is_external.
+
+    bool operator==(const FileFact&) const = default;
 };
 
 struct IncludeFact {
-    FileId includer;
-    std::optional<FileId> included; ///< Empty when the header was not found.
-    std::string spelled;            ///< As written in the directive.
+    FileId includer{};
+    std::optional<FileId> included{}; ///< Empty when the header was not found.
+    std::string spelled{};            ///< As written in the directive.
     std::uint32_t line{};
     bool is_system{}; ///< Angle-bracket include.
+
+    bool operator==(const IncludeFact&) const = default;
 };
 
 struct FunctionFact {
-    FunctionId id;
-    std::string usr; ///< Clang Unified Symbol Resolution: stable identity across TUs.
-    std::string name;
-    std::string qualified_name;
-    std::string signature;
-    FileId file;
+    FunctionId id{};
+    std::string usr{}; ///< Clang Unified Symbol Resolution: stable identity across TUs.
+    std::string name{};
+    std::string qualified_name{};
+    std::string signature{};
+    FileId file{};
     std::uint32_t line_begin{};
     std::uint32_t line_end{};
     bool is_definition{};
     Linkage linkage{Linkage::external};
+
+    bool operator==(const FunctionFact&) const = default;
 };
 
 struct CallFact {
-    FunctionId caller;
-    std::optional<FunctionId> callee; ///< Empty for CallKind::indirect.
+    FunctionId caller{};
+    std::optional<FunctionId> callee{}; ///< Empty if and only if CallKind::indirect.
     CallKind kind{CallKind::direct};
-    SourceLocation site;
+    std::string via{}; ///< Indirect calls: callee expression's member name (`recv`), if any.
+    SourceLocation site{};
+
+    bool operator==(const CallFact&) const = default;
 };
 
 enum class DiagnosticSeverity : std::uint8_t { warning, error, fatal };
@@ -84,11 +103,13 @@ enum class DiagnosticSeverity : std::uint8_t { warning, error, fatal };
 /// are as given in the compilation database; mapping them to FileIds needs
 /// the file facts of B-08.
 struct DiagnosticFact {
-    std::string translation_unit;
-    std::string file; ///< Empty when the diagnostic has no location.
+    std::string translation_unit{};
+    std::string file{}; ///< Empty when the diagnostic has no location.
     std::uint32_t line{};
     DiagnosticSeverity severity{DiagnosticSeverity::error};
-    std::string message;
+    std::string message{};
+
+    bool operator==(const DiagnosticFact&) const = default;
 };
 
 /// How much of the compilation database was analysed. The verifier only
@@ -96,6 +117,8 @@ struct DiagnosticFact {
 struct AnalysisCoverage {
     std::uint32_t translation_units_total{};
     std::uint32_t translation_units_parsed{};
+
+    bool operator==(const AnalysisCoverage&) const = default;
 };
 
 } // namespace lcart::facts

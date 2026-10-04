@@ -13,6 +13,9 @@ enum class ErrorCode : std::uint8_t {
     io_error,
     parse_error,
     not_found,
+    /// A fact database that this version of lcart cannot read: another
+    /// schema version, or not a fact database at all.
+    incompatible_database,
     /// A request would send source code to a remote provider without explicit
     /// consent (NFR-002; providers arrive in M6, ADR-0006).
     egress_denied,

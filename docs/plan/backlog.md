@@ -15,7 +15,7 @@ expanded in place; its version is bumped if its meaning changes
 | [B-03](#b03-docs-ci-and-anchor-check-v1) | ✅ Docs CI and anchor checker | M0 | NFR-012 | – | 2 h |
 | [B-04](#b04-include-boundary-check-v1) | Include boundary check for the core | M0 | NFR-001 | B-02 | 2 h |
 | [B-05](#b05-libmodbus-compilation-database-v1) | Compilation database for libmodbus | M1 | FR-001 | B-01 | 3 h |
-| [B-06](#b06-sqlite-fact-store-v1) | SQLite fact store, schema v1 | M1 | FR-002–FR-004, NFR-004 | – | 6 h |
+| [B-06](#b06-sqlite-fact-store-v1) | ✅ SQLite fact store, schema v1 | M1 | FR-002–FR-004, NFR-004 | – | 6 h |
 | [B-07](#b07-clang-libtooling-spike-v2) | ✅ Clang LibTooling spike and analysis driver | M1 | FR-001 | B-02 | 6 h |
 | [B-08](#b08-file-and-include-facts-v1) | File and include facts | M1 | FR-002 | B-06, B-07 | 4 h |
 | [B-09](#b09-function-facts-v1) | Function facts | M1 | FR-003 | B-08 | 4 h |
@@ -104,6 +104,14 @@ Acceptance criteria:
 3. All statements use bound parameters (test inserts a name containing
    `'); DROP TABLE file;--`).
 4. Tests use an in-memory database; no files left behind.
+
+Result (2026-10-04): `SqliteFactStore` (`src/facts/sqlite_fact_store.hpp`)
+implements both interfaces; SQLite is a private dependency of `facts`.
+Queries now return `Result` (a read can fail), `FactQuery::diagnostics()`
+was added so diagnostics round-trip, `FileFact` gained `is_external` and an
+optional module, and `CallFact` gained `via`, so B-08 to B-10 need no schema
+change. Schema tests use a named shared in-memory database. Per-TU
+transactions and status updates are left to B-16.
 
 ### <a id="b07-clang-libtooling-spike-v2"></a>**[B-07 v2]** Clang LibTooling spike and analysis driver
 
