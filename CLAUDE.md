@@ -37,11 +37,21 @@ headers (`/usr/lib/llvm-20/include`, `targets/libmodbus/src`). If you cannot
 verify something, write `TODO: verify` in the doc and add a row to
 `docs/open-questions.md`.
 
+## Workflow
+
+Every change goes through a branch and a pull request, reviewed by the
+`reviewer` agent and squash-merged on green CI
+([ADR-0011](docs/adr/0011-pull-request-flow-with-agent-review.md)).
+For a backlog item use `/implement B-NN`; to review, `/review`; to keep a
+pull request green, the `steward` skill.
+
 ## Build and test
 
 ```bash
 cmake --workflow --preset debug-system      # no Conan (Ubuntu packages)
 scripts/conan-install.sh debug && cmake --workflow --preset debug
+scripts/quick-check.sh [-R Suite]           # inner loop: one line, or the errors
+scripts/dod.sh                              # every local check (Definition of Done)
 scripts/check-format.sh                     # --fix to apply
 scripts/run-clang-tidy.sh debug-system
 scripts/docs-check.sh                       # anchors + mkdocs build --strict

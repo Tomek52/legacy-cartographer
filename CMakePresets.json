@@ -91,6 +91,19 @@
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Debug"
       }
+    },
+    {
+      "name": "asan-ubsan-system",
+      "displayName": "Clang 20 Debug + ASan/UBSan + fuzzers, Ubuntu packages, no Conan",
+      "inherits": [
+        "base",
+        "clang"
+      ],
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "LCART_SANITIZERS": "address;undefined",
+        "LCART_BUILD_FUZZERS": "ON"
+      }
     }
   ],
   "buildPresets": [
@@ -113,6 +126,10 @@
     {
       "name": "debug-system",
       "configurePreset": "debug-system"
+    },
+    {
+      "name": "asan-ubsan-system",
+      "configurePreset": "asan-ubsan-system"
     }
   ],
   "testPresets": [
@@ -159,6 +176,16 @@
     {
       "name": "debug-system",
       "configurePreset": "debug-system",
+      "output": {
+        "outputOnFailure": true
+      },
+      "execution": {
+        "noTestsAction": "error"
+      }
+    },
+    {
+      "name": "asan-ubsan-system",
+      "configurePreset": "asan-ubsan-system",
       "output": {
         "outputOnFailure": true
       },
@@ -250,6 +277,23 @@
         {
           "type": "test",
           "name": "debug-system"
+        }
+      ]
+    },
+    {
+      "name": "asan-ubsan-system",
+      "steps": [
+        {
+          "type": "configure",
+          "name": "asan-ubsan-system"
+        },
+        {
+          "type": "build",
+          "name": "asan-ubsan-system"
+        },
+        {
+          "type": "test",
+          "name": "asan-ubsan-system"
         }
       ]
     }

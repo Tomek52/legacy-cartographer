@@ -46,7 +46,7 @@ interfaces without logic, libmodbus submodule.
 - [x] Open question Q1 (toolchain of private code bases) answered:
       Linux/WSL2 only ([ADR-0009](../adr/0009-linux-and-wsl2-only.md)).
 
-## <a id="m1-fact-database-v2"></a>**[M1 v2]** Fact database and module map, without LLM
+## <a id="m1-fact-database-v3"></a>**[M1 v3]** Fact database and module map, without LLM
 
 **Goal:** `lcart analyze` + `lcart map` produce a correct, reproducible
 module map and call graph for libmodbus with no LLM and no network.
@@ -72,6 +72,8 @@ resolution (FR-015, M2), incremental re-analysis, anything LLM.
   check of the functions listed in the [libmodbus plan](../targets/libmodbus.md) done.
 - Analysis time for libmodbus recorded (NFR-005 baseline).
 - Repository made public ([publication](#publication)).
+- A ruleset on `main` requires a pull request and the CI checks
+  ([ADR-0011](../adr/0011-pull-request-flow-with-agent-review.md#adr0011-merge-on-green-v1)).
 - ADR for the threading model of analysis (if it differs from the
   [components page](../architecture/components.md#arch-threading-v1)).
 

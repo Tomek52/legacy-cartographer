@@ -14,10 +14,11 @@ that links to the requirements it implements.
    Each test cites the requirement it verifies:
    `// Verifies: fr004-record-call-edges-v1`.
 3. Implement the smallest change that makes them pass.
-4. Run the Definition of Done (below) and report each item with the command
-   you ran.
-5. Open a pull request that names the backlog item and lists what was not
-   checked, if anything.
+4. Run the Definition of Done (below): `scripts/dod.sh`.
+5. Open a pull request from a branch `b/NN-short-name`, using the template;
+   it is reviewed and merged as described in
+   [ADR-0011](docs/adr/0011-pull-request-flow-with-agent-review.md).
+   Nothing is committed to `main` directly.
 
 LLM-assisted changes follow the same process; the review checklist is in
 [docs/ai-workflow.md](docs/ai-workflow.md).
@@ -25,12 +26,14 @@ LLM-assisted changes follow the same process; the review checklist is in
 ## Definition of Done
 
 - [ ] Acceptance criteria pass; tests cite requirement anchors.
-- [ ] `cmake --workflow --preset <p>` passes for `debug`, `clang-debug`,
-      `release`, `asan-ubsan` (or `debug-system` where Conan is unavailable).
-- [ ] `scripts/check-format.sh` and `scripts/run-clang-tidy.sh` are clean.
-- [ ] `scripts/docs-check.sh` passes (and `python3 -m unittest discover -s tests/docs`
-      if you changed the checker); changed requirements have their `vN`
-      bumped ([ADR-0005](docs/adr/0005-versioned-requirement-anchors.md)).
+- [ ] `scripts/dod.sh` reports PASS on every line: `debug-system` and
+      `asan-ubsan-system` builds and tests, format, clang-tidy, docs check
+      (plus the checker's own tests when it changed), pinned targets,
+      TODO/NOLINT references.
+- [ ] CI is green on the pull request, including the Conan presets
+      `debug`, `clang-debug`, `release` and `asan-ubsan`.
+- [ ] Changed requirements have their `vN` bumped
+      ([ADR-0005](docs/adr/0005-versioned-requirement-anchors.md)).
 - [ ] Roadmap checkboxes, architecture docs and open questions updated.
 - [ ] No `TODO` without a reference (`TODO(B-07)`, `TODO(M2)`); no `NOLINT`
       without a reason on the same line.
