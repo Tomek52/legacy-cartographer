@@ -13,7 +13,6 @@
 #include <fcntl.h>
 #include <filesystem>
 #include <fstream>
-#include <iterator>
 #include <spawn.h>
 #include <sstream>
 #include <string>
@@ -35,8 +34,11 @@ struct Outcome {
 };
 
 std::string read_file(const fs::path& path) {
-    std::ifstream in{path, std::ios::binary};
-    return {std::istreambuf_iterator<char>{in}, std::istreambuf_iterator<char>{}};
+    // Not istreambuf_iterator: GCC 14 at -O3 reports -Wnull-dereference in it.
+    const std::ifstream in{path, std::ios::binary};
+    std::ostringstream text;
+    text << in.rdbuf();
+    return std::move(text).str();
 }
 
 fs::path fixture(std::string_view name) {

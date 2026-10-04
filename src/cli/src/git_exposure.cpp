@@ -5,7 +5,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <fstream>
-#include <iterator>
+#include <ios>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -96,12 +96,23 @@ std::optional<IgnoreFile> read_ignore_file(const fs::path& file, std::string bas
         ignore.uncertain = true;
         return ignore;
     }
-    std::ifstream in{file, std::ios::binary};
-    if (!in) {
+    // A sized read, not istreambuf_iterator: GCC 14 at -O3 reports
+    // -Wnull-dereference inside the inlined iterator (as in config).
+    std::string text(static_cast<std::size_t>(size), '\0');
+    try {
+        std::ifstream in{file, std::ios::binary};
+        in.read(text.data(), static_cast<std::streamsize>(text.size()));
+        if (!in.is_open() || in.bad()) {
+            ignore.uncertain = true;
+            return ignore;
+        }
+        text.resize(static_cast<std::size_t>(in.gcount()));
+    } catch (const std::ios_base::failure&) {
+        // libstdc++'s filebuf throws on a failed read() even without
+        // exceptions() set; an unreadable file only makes the check uncertain.
         ignore.uncertain = true;
         return ignore;
     }
-    const std::string text{std::istreambuf_iterator<char>{in}, std::istreambuf_iterator<char>{}};
     std::string_view rest = text;
     while (!rest.empty()) {
         const std::size_t end = rest.find('\n');
