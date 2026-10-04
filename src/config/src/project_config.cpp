@@ -81,80 +81,115 @@ constexpr std::string_view utf8_byte_order_mark = "\xEF\xBB\xBF";
 constexpr std::size_t max_dotted_parts_per_line = 32;
 constexpr std::size_t max_size = std::size_t{1024} * 1024;
 
-/// The position of the first `.` beyond max_dotted_parts_per_line outside
-/// strings and comments on one line, in ASCII `text`. Dots in numbers count
-/// too: a bare key may be all digits (`0.0.0 = 1`). A newline inside a
-/// string does not reset the count, which only errs on the safe side.
-[[nodiscard]] std::optional<toml::source_position> too_many_dots(std::string_view text) {
-    enum class In : std::uint8_t { code, comment, basic, literal, multi_basic, multi_literal };
-    In in = In::code;
-    std::size_t dots = 0;
-    toml::source_position position{.line = 1, .column = 1};
-    std::size_t at = 0;
-    auto advance = [&](std::size_t count) {
-        for (; count > 0 && at < text.size(); --count, ++at) {
-            if (text[at] == '\n') {
-                ++position.line;
-                position.column = 1;
-            } else {
-                ++position.column;
+/// Finds the first `.` beyond max_dotted_parts_per_line outside strings and
+/// comments on one line of ASCII text. Dots in numbers count too: a bare key
+/// may be all digits (`0.0.0 = 1`). A newline inside a string does not reset
+/// the count, which only errs on the safe side.
+class DotScanner {
+public:
+    explicit DotScanner(std::string_view text) : text_(text) {}
+
+    [[nodiscard]] std::optional<toml::source_position> first_beyond_limit() {
+        while (at_ < text_.size()) {
+            if (step()) {
+                return position_;
             }
+            advance(1);
         }
-    };
-    auto starts = [&](std::string_view token) {
-        return text.substr(at).starts_with(token);
-    };
-    while (at < text.size()) {
-        const char c = text[at];
-        switch (in) {
-        case In::code:
-            if (c == '#') {
-                in = In::comment;
-            } else if (starts(R"(""")")) {
-                in = In::multi_basic;
-                advance(2);
-            } else if (starts("'''")) {
-                in = In::multi_literal;
-                advance(2);
-            } else if (c == '"') {
-                in = In::basic;
-            } else if (c == '\'') {
-                in = In::literal;
-            } else if (c == '\n') {
-                dots = 0;
-            } else if (c == '.' && ++dots > max_dotted_parts_per_line) {
-                return position;
-            }
-            break;
-        case In::comment:
-        case In::literal:
-            if (c == '\n' || (in == In::literal && c == '\'')) {
-                in = In::code;
-                dots = c == '\n' ? 0 : dots;
-            }
-            break;
-        case In::basic:
-        case In::multi_basic:
-            if (c == '\\') {
-                advance(1); // the escaped character
-            } else if (in == In::basic && (c == '"' || c == '\n')) {
-                in = In::code;
-            } else if (in == In::multi_basic && starts(R"(""")")) {
-                in = In::code;
-                advance(2);
-            }
-            break;
-        case In::multi_literal:
-            if (starts("'''")) {
-                in = In::code;
-                advance(2);
-            }
-            break;
-        }
-        advance(1);
+        return std::nullopt;
     }
-    return std::nullopt;
-}
+
+private:
+    enum class In : std::uint8_t { code, comment, basic, literal, multi_basic, multi_literal };
+
+    /// Handles the character at at_; true if it is a dot beyond the limit.
+    [[nodiscard]] bool step() {
+        switch (in_) {
+        case In::code:
+            return step_code();
+        case In::comment:
+            leave_if(text_[at_] == '\n');
+            return false;
+        case In::literal:
+            leave_if(text_[at_] == '\'' || text_[at_] == '\n');
+            return false;
+        case In::basic:
+            step_basic_string(R"(")");
+            return false;
+        case In::multi_basic:
+            step_basic_string(R"(""")");
+            return false;
+        case In::multi_literal:
+            leave_if(starts("'''"), 2);
+            return false;
+        }
+        std::unreachable();
+    }
+
+    [[nodiscard]] bool step_code() {
+        const char c = text_[at_];
+        if (c == '#') {
+            in_ = In::comment;
+        } else if (starts(R"(""")")) {
+            in_ = In::multi_basic;
+            advance(2);
+        } else if (starts("'''")) {
+            in_ = In::multi_literal;
+            advance(2);
+        } else if (c == '"') {
+            in_ = In::basic;
+        } else if (c == '\'') {
+            in_ = In::literal;
+        } else if (c == '\n') {
+            dots_ = 0;
+        } else if (c == '.') {
+            return ++dots_ > max_dotted_parts_per_line;
+        }
+        return false;
+    }
+
+    void step_basic_string(std::string_view closing) {
+        if (text_[at_] == '\\') {
+            advance(1); // the escaped character
+        } else if (closing.size() == 1 && text_[at_] == '\n') {
+            in_ = In::code; // an unterminated string: toml++ reports it
+            dots_ = 0;
+        } else {
+            leave_if(starts(closing), closing.size() - 1);
+        }
+    }
+
+    void leave_if(bool condition, std::size_t extra = 0) {
+        if (condition) {
+            if (text_[at_] == '\n') {
+                dots_ = 0;
+            }
+            in_ = In::code;
+            advance(extra);
+        }
+    }
+
+    [[nodiscard]] bool starts(std::string_view token) const {
+        return text_.substr(at_).starts_with(token);
+    }
+
+    void advance(std::size_t count) {
+        for (; count > 0 && at_ < text_.size(); --count, ++at_) {
+            if (text_[at_] == '\n') {
+                ++position_.line;
+                position_.column = 1;
+            } else {
+                ++position_.column;
+            }
+        }
+    }
+
+    std::string_view text_;
+    std::size_t at_{};
+    In in_{In::code};
+    std::size_t dots_{};
+    toml::source_position position_{.line = 1, .column = 1};
+};
 
 /// Builds errors located in one configuration file.
 class Reporter {
@@ -342,7 +377,7 @@ Result<ProjectConfig> parse_project_config(std::string_view text, std::string_vi
                                          "non-ASCII character; lcart.toml must be ASCII (ADR-0015)",
                                          ErrorCode::parse_error));
     }
-    if (const std::optional<toml::source_position> at = too_many_dots(text)) {
+    if (const std::optional<toml::source_position> at = DotScanner{text}.first_beyond_limit()) {
         return std::unexpected(report.at({.begin = *at, .end = *at, .path = {}},
                                          "more than 32 dotted parts in the keys of one line "
                                          "(ADR-0015)",

@@ -5,6 +5,7 @@
 
 #include <gtest/gtest.h>
 
+#include <cstddef>
 #include <filesystem>
 #include <fstream>
 #include <string>
@@ -150,7 +151,7 @@ TEST(ProjectConfig, DeeplyDottedKeysAreErrorsNotACrash) {
 }
 
 TEST(ProjectConfig, AFileOverOneMebibyteIsAnError) {
-    const std::string text = "# " + std::string(1024 * 1024, 'x') + "\n";
+    const std::string text = "# " + std::string(std::size_t{1024} * 1024, 'x') + "\n";
     EXPECT_EQ(error_of(text, ErrorCode::parse_error),
               "lcart.toml: larger than 1 MiB; lcart.toml is a small file (ADR-0015)");
 }
