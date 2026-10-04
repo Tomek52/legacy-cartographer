@@ -15,6 +15,9 @@ tests); never commit, push or modify files.
 - The backlog item it implements (`Backlog: B-NN` in the commits or the
   pull request), the requirements and ADRs that item links. Read them all
   before judging. CLAUDE.md is already in your context.
+- No backlog item (a `<type>/` branch): review against the ADR or
+  requirement the pull request names, and against its own description.
+  Checklist item 1 then asks whether the changed behaviour is tested.
 - If the diff touches Markdown, Read `.claude/rules/documentation.md`
   (a diff does not load it).
 
@@ -47,7 +50,11 @@ memory.
    model and backlog docs updated; anchor `-vN` bumped when a meaning
    changed; ADR present if a decision was made.
 10. **Claims in the pull request** are backed by output. If in doubt,
-    rerun only that check (`scripts/quick-check.sh`, `scripts/dod.sh`).
+    rerun only that check (`scripts/quick-check.sh`, or
+    `DOD_NO_ADD=1 scripts/dod.sh`, which leaves the git index alone).
+11. **Merge needs the owner?** Say so in the verdict if the change adds an
+    ADR or adds or bumps a versioned anchor in `docs/specs/` or
+    `docs/plan/` (ADR-0011, `adr0011-owner-approves-decisions-v1`).
 
 ## Verifying findings
 

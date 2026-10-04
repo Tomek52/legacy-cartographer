@@ -76,4 +76,6 @@ fix a broken versioned link by reverting the version or deleting the link.
 ## Commits
 
 Conventional Commits; scopes in [CONTRIBUTING.md](CONTRIBUTING.md#commits).
-No model identifiers in commits, code or docs.
+No model identifiers (such as `claude-…` IDs or model names) in code, docs,
+commit subjects or bodies. The one exception is the `Co-Authored-By:`
+attribution trailer that AI-assisted commits end with.

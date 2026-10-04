@@ -13,10 +13,12 @@ description: Conventions for driving a legacy-cartographer pull request to green
 | `C++ <p> (no Conan)` | `cmake --workflow --preset <p>` with `<p>` = `debug-system` or `asan-ubsan-system` |
 | `Targets pinned and clean` | `scripts/check-targets.sh` |
 | `Format + clang-tidy` | `scripts/check-format.sh`, `scripts/run-clang-tidy.sh debug-system` |
-| `Anchors + mkdocs build --strict` | `scripts/docs-check.sh` |
+| Fuzz smoke step in `asan-ubsan` jobs | `build/<preset>/fuzz/claim_json_fuzzer -max_total_time=10` |
+| `Anchors + mkdocs build --strict` | `scripts/docs-check.sh` and `python3 -m unittest discover -s tests/docs` |
+| `CodeQL` (manual trigger only until the repository is public) | none locally |
 
 Reproduce locally first, show the same command passing, then push.
-`scripts/dod.sh` runs all of them except the Conan presets.
+`scripts/dod.sh` runs all of them except the Conan presets and CodeQL.
 
 ## Known failure causes
 

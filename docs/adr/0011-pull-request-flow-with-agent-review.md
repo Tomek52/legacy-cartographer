@@ -38,8 +38,9 @@ One branch per backlog item, `b/NN-short-name` (other changes:
 with the template in `.github/pull_request_template.md`.
 
 <a id="adr0011-agent-review-v1"></a>**Each pull request is reviewed by the
-`reviewer` agent** (`.claude/agents/reviewer.md`), which has no edit tools
-and works from the checklist in [ai-workflow](../ai-workflow.md). Its
+`reviewer` agent** (`.claude/agents/reviewer.md`), which has no Write or
+Edit tool (Bash for inspection only, by instruction) and works from the
+checklist in [ai-workflow](../ai-workflow.md). Its
 findings are posted on the pull request as a `COMMENT` review. Every
 blocker and major finding is fixed or answered before merge.
 
@@ -49,6 +50,14 @@ these hold: CI green on the head commit, no unresolved blocker or major
 finding, no open question or "hold" from the owner on the pull request.
 The owner may merge, hold or revert at any time.
 
+<a id="adr0011-owner-approves-decisions-v1"></a>**Exception: decisions and
+requirements wait for the owner.** A pull request that adds an ADR or
+changes an ADR's decision, or adds or bumps a versioned anchor in
+`docs/specs/` or `docs/plan/` (a new or changed requirement, acceptance
+criterion or milestone), is merged only after the owner approves it
+explicitly (an approving comment on the pull request or in the working
+session). Status updates (✅, result paragraphs, links) need no approval.
+
 Two roles only: `developer` (implements a backlog item) and `reviewer`.
 Backlog items are the specs; there are no separate task files. Agent files
 name no model and inherit the session's.
@@ -57,6 +66,9 @@ name no model and inherit the session's.
 
 - Every commit on `main` is one reviewed, CI-green backlog item; `git log`
   reads as the backlog.
+- The owner still decides what the tool must do and how it is built
+  ([principle 1](../ai-workflow.md#principles)); routine implementation
+  does not wait for them.
 - The merge rule is a convention until the repository is public; then a
   ruleset requiring a pull request and the CI checks is added (M1
   Definition of Done).

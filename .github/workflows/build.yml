@@ -64,6 +64,9 @@ jobs:
           sudo apt-get install -y -qq $APT_PACKAGES libsqlite3-dev nlohmann-json3-dev libgtest-dev
       - name: Configure, build, test
         run: cmake --workflow --preset ${{ matrix.preset }}
+      - name: Fuzz smoke (stub targets, 10 s)
+        if: matrix.preset == 'asan-ubsan-system'
+        run: build/asan-ubsan-system/fuzz/claim_json_fuzzer -max_total_time=10
 
   targets:
     # Analysed code bases stay pinned and unmodified (NFR-008).

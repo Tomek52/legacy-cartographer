@@ -51,7 +51,11 @@ Re-run `scripts/dod.sh` before each push.
 ## 6. Merge
 
 Merge (squash; subject = pull-request title, body = `Backlog: B-NN` and the
-attribution trailers) only when CI is green on the head commit, no blocker
-or major is open, and the owner has not asked to hold. Then
+`Co-Authored-By:` trailer, see CLAUDE.md "Commits") only when CI is green
+on the head commit, no blocker or major is open, and the owner has not
+asked to hold. If the pull request adds an ADR or adds or bumps a versioned
+anchor in `docs/specs/` or `docs/plan/`, also wait for the owner's explicit
+approval and ask for it in one line
+([ADR-0011](../../../docs/adr/0011-pull-request-flow-with-agent-review.md#adr0011-owner-approves-decisions-v1)). Then
 `git switch main && git pull`, delete the branch, and tell the owner in
 two or three lines what landed and what is next.

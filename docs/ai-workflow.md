@@ -49,6 +49,9 @@ Decision: [ADR-0011](adr/0011-pull-request-flow-with-agent-review.md).
 - The agent merges (squash) when CI is green, no blocker or major finding
   is open and the owner has not asked to hold. The owner reads pull
   requests when they choose, and can hold, merge or revert at any time.
+- A pull request that adds an ADR, or adds or bumps a versioned anchor in
+  `docs/specs/` or `docs/plan/`, waits for the owner's explicit approval
+  ([ADR-0011](adr/0011-pull-request-flow-with-agent-review.md#adr0011-owner-approves-decisions-v1)).
 
 ## Agents and skills
 
