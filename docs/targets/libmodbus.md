@@ -84,9 +84,10 @@ rule would give one module. The libmodbus configuration (B-14) defines:
    changes.
 
 **Baseline (NFR-005).** `lcart analyze`
-on the 14 translation units: 1.6 s with a debug build on the development
-container (4 cores), the reference until a CI run of the `libmodbus
-baseline` job, which prints the time on every run. Budget: 60 s
+on the 14 translation units: **1.12 s** with a Release build in the CI job
+`libmodbus baseline` (GitHub-hosted `ubuntu-24.04` runner, first run
+2026-10-04), the reference; 1.6 s with a debug build on the 4-core
+development container. The job prints the time on every run. Budget: 60 s
 ([NFR-005](../specs/requirements.md#nfr005-performance-budget-v2)).
 
 ### M2: generated documentation and verification report

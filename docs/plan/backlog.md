@@ -346,11 +346,11 @@ indirect calls from `_modbus_receive_msg` through `backend.recv` and
 Ubuntu packages, runs the script in a new network namespace (`sudo unshare
 --net`, then `ip link set lo up`: bear talks to its collector over
 127.0.0.1, so loopback must be up; nothing else is reachable) and fails if
-the committed map changed. A local run in such a namespace passed and
-could not reach the internet. `CC` defaults to `clang-20`, as in CI, so a
-local run regenerates the same map. Baseline: 1.6 s for 14 translation units with a
-debug build on the development container, recorded in the
-[libmodbus plan](../targets/libmodbus.md); the 2× regression gate of
+the committed map changed; its first run passed, with the map unchanged. A
+local run in such a namespace passed and could not reach the internet. `CC` defaults to `clang-20`, as in CI, so a
+local run regenerates the same map. Baseline: 1.12 s for 14 translation units with a
+Release build in that CI job (1.6 s with a debug build on the development
+container), recorded in the [libmodbus plan](../targets/libmodbus.md); the 2× regression gate of
 NFR-005 criterion 1 is left until CI has a stable reference. The map
 renders: its Mermaid block, drawn once by hand in Chromium with Mermaid
 11.17.2 (what `mermaid@11`, the tag MkDocs Material loads, resolved to on
