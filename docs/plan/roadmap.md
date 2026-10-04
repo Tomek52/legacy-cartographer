@@ -6,6 +6,10 @@ does something useful at the end of M1 even if M2 never happens.
 Effort is in hours of focused work (at 4–6 h/week, divide by ~5 for weeks).
 Estimates before M1 are guesses; they are revised at each milestone's end.
 
+A milestone's `**Status:**` line starts with `done` or `open`; `done` on M1
+or later switches on the traceability gate for its requirements
+([matrix](traceability.md), B-15). A milestone without the line is open.
+
 ```mermaid
 flowchart LR
     M0["M0<br/>Foundations<br/>~15 h"] --> M1["M1<br/>Fact DB + module map<br/>no LLM<br/>~55 h"]

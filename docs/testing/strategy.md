@@ -18,6 +18,7 @@ and cite the requirement they verify
 | Fuzzing | parsers of untrusted input | libFuzzer + ASan/UBSan | 60 s per change in CI; longer runs locally |
 | End-to-end | CLI on libmodbus: analyze → map (M1); → handoff → ingest of a recorded agent output → report (M2) | shell script, CTest | CI |
 | Verifier accuracy | labelled claim set (below) | GoogleTest data-driven | every change from M2 |
+| Traceability | every `Verifies:` citation names an existing anchor and a passing test; done milestones (from M1) have a citing test per requirement; [matrix](../plan/traceability.md) | `scripts/check-doc-anchors.py --trace` on the CTest JUnit file | every change (`debug-system` job) |
 
 All tests also run under ASan + UBSan (`asan-ubsan` preset).
 

@@ -1,4 +1,4 @@
-// Verifies: docs/security.md T5 (code-loading compiler arguments are removed
+// Verifies: security-malicious-build-input-v1 (T5: code-loading compiler arguments are removed
 // before Clang sees a command). Option names from `clang-20 --help-hidden`
 // and `clang-20 -cc1 --help`.
 #include "analysis/argument_filter.hpp"

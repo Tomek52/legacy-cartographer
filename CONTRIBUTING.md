@@ -12,7 +12,16 @@ that links to the requirements it implements.
    (copy [docs/adr/template.md](docs/adr/template.md)).
 2. Turn the acceptance criteria into tests; run them and see them fail.
    Each test cites the requirement it verifies:
-   `// Verifies: fr004-record-call-edges-v1`.
+   `// Verifies: fr004-record-call-edges-v1`. A citation in the comment
+   block that opens a test file covers every `TEST` in it; one in the
+   comment block right above a `TEST` covers that test; in
+   `tests/CMakeLists.txt` it covers the `add_test` calls up to the next
+   blank line. A citation anywhere else in a C++ test file is an error;
+   outside the tests (scripts, CI) its anchors are only checked to exist.
+   `Verifies:` must name at least one versioned anchor.
+   `scripts/dod.sh` regenerates
+   [docs/plan/traceability.md](docs/plan/traceability.md): commit it with
+   the change (CI fails if it differs, ADR-0010).
 3. Implement the smallest change that makes them pass.
 4. Run the Definition of Done (below): `scripts/dod.sh`.
 5. Open a pull request from a branch `b/NN-short-name`, using the template;

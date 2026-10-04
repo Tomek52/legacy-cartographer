@@ -67,6 +67,18 @@ jobs:
       - name: Fuzz (60 s per target, NFR-010)
         if: matrix.preset == 'asan-ubsan-system'
         run: scripts/fuzz-smoke.sh build/asan-ubsan-system
+      - name: Traceability gate and matrix (B-15, ADR-0010)
+        if: matrix.preset == 'debug-system'
+        run: |
+          python3 scripts/check-doc-anchors.py --trace build/debug-system/junit.xml --write
+          git diff --exit-code -- docs/plan/traceability.md
+      - name: Keep the traceability matrix
+        if: matrix.preset == 'debug-system' && always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: traceability
+          path: build/traceability.csv
+          if-no-files-found: ignore
 
   targets:
     # Analysed code bases stay pinned and unmodified (NFR-008).
