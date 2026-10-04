@@ -6,6 +6,7 @@ add_executable(lcart_unit_tests
     analysis/module_rules_test.cpp
     config/path_glob_test.cpp
     config/project_config_test.cpp
+    facts/fact_export_test.cpp
     facts/sqlite_fact_store_test.cpp
     verify/verification_status_test.cpp)
 # SQLite directly: the schema-version tests tamper with a database.

@@ -28,7 +28,7 @@ target_compile_definitions(lcart_common INTERFACE LCART_VERSION="${PROJECT_VERSI
 
 # SQLite stays private to facts: other modules see only FactWriter/FactQuery.
 lcart_add_module(facts
-    SOURCES facts/src/sqlite_fact_store.cpp
+    SOURCES facts/src/fact_export.cpp facts/src/sqlite_fact_store.cpp
     DEPS lcart::common
     PRIVATE_DEPS SQLite::SQLite3)
 # lcart.toml and its path globs (ADR-0008, ADR-0014); toml++ stays private.
