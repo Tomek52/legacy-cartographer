@@ -257,6 +257,21 @@ TEST_F(LcartCliTest, ExportEqualsTheGoldenFile) {
     EXPECT_EQ(read_file(file), golden);
 }
 
+// ADR-0017: `--output -` and `--output=-` mean standard output.
+TEST_F(LcartCliTest, ExportToStandardOutputWithDash) {
+    const fs::path database = two_modules_database();
+    const std::string golden = read_file(fs::path{LCART_GOLDEN_DIR} / "two_modules.facts.jsonl");
+    for (const std::vector<std::string>& output :
+         {std::vector<std::string>{"--output", "-"}, {"--output=-"}}) {
+        std::vector<std::string> arguments{"export"};
+        arguments.insert(arguments.end(), output.begin(), output.end());
+        const Outcome run = query(database, arguments);
+        EXPECT_EQ(run.status, exit_success) << run.err;
+        EXPECT_EQ(run.out, golden) << output.back();
+        EXPECT_FALSE(fs::exists(work_dir() / "-")) << output.back();
+    }
+}
+
 TEST_F(LcartCliTest, CalleesListDirectAndIndirectCalls) {
     const fs::path database = work_dir() / "fn_pointers.lcart.db";
     analyze("fn_pointers", {"core.c", "rtu.c"}, database);

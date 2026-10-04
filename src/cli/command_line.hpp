@@ -85,7 +85,7 @@ using Command = std::variant<HelpCommand, VersionCommand, AnalyzeCommand, QueryC
 
 /// Parses the arguments after the program name. Options take their value
 /// as the next argument or after `=` (`--db x`, `--db=x`); a value that
-/// starts with `-` needs `=`, except `-` alone (`--output -`: standard
+/// starts with `-` needs `=`, except `-` alone after `--output` (standard
 /// output, ADR-0017). `--` ends the options. Errors: ErrorCode::invalid_argument, with a
 /// message for the user, for an unknown command or option, a missing or extra argument, or an
 /// option given twice.

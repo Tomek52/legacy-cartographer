@@ -145,6 +145,18 @@ TEST(CommandLine, OutputDashIsStandardOutput) {
     expect_usage_error({"map", "--output"}, "--output needs a value");
 }
 
+// ADR-0017: only `--output` takes a lone `-` as its next value; for every
+// other option it stays ADR-0016's missing value.
+TEST(CommandLine, OnlyOutputTakesALoneDash) {
+    expect_usage_error({"analyze", "--db", "-"}, "--db needs a value");
+    expect_usage_error({"analyze", "--config", "-"}, "--config needs a value");
+    expect_usage_error({"analyze", "--root", "-"}, "--root needs a value");
+    expect_usage_error({"analyze", "--compilation-database", "-"},
+                       "--compilation-database needs a value");
+    expect_usage_error({"query", "export", "--db", "-"}, "--db needs a value");
+    expect_usage_error({"map", "--db", "-"}, "--db needs a value");
+}
+
 TEST(CommandLine, MapDefaults) {
     const auto map = parsed_as<MapCommand>({"map"});
     EXPECT_EQ(map.database, "lcart-out/facts.lcart.db");

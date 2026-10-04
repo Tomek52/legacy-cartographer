@@ -89,11 +89,13 @@ common::Status add_value(ParsedArguments& parsed, std::span<const std::string_vi
     std::string_view value;
     if (equals != std::string_view::npos) {
         value = argument.substr(equals + 1);
-    } else if (index + 1 < arguments.size() && (!arguments[index + 1].starts_with('-') ||
-                                                arguments[index + 1] == standard_output)) {
+    } else if (index + 1 < arguments.size() &&
+               (!arguments[index + 1].starts_with('-') ||
+                (name == "--output" && arguments[index + 1] == standard_output))) {
         // `--db --force` is a forgotten value, not a database named
-        // "--force"; a value starting with `-` is given as `--db=-x`. A lone
-        // `-` is never an option, so `--output -` needs no `=` (ADR-0017).
+        // "--force"; a value starting with `-` is given as `--db=-x`. Only
+        // `--output -` (standard output) takes a lone `-` without `=`
+        // (ADR-0017); `--db -` stays a missing value.
         value = arguments[++index];
     }
     if (value.empty()) {
