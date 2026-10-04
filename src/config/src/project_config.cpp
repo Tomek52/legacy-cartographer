@@ -26,7 +26,6 @@
 #include <filesystem>
 #include <fstream>
 #include <ios>
-#include <iterator>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -419,13 +418,20 @@ Result<ProjectConfig> load_project_config(const std::filesystem::path& file) {
     if (!std::filesystem::is_regular_file(file, ec)) {
         return unreadable();
     }
-    std::string text;
+    const std::uintmax_t size = std::filesystem::file_size(file, ec);
+    if (ec) {
+        return unreadable();
+    }
+    // One byte beyond the limit is enough for parse_project_config to
+    // reject the file, so a huge file is not read.
+    std::string text(static_cast<std::size_t>(std::min<std::uintmax_t>(size, max_size + 1)), '\0');
     try {
         std::ifstream in{file, std::ios::binary};
-        text.assign(std::istreambuf_iterator<char>{in}, std::istreambuf_iterator<char>{});
+        in.read(text.data(), static_cast<std::streamsize>(text.size()));
         if (!in.is_open() || in.bad()) {
             return unreadable();
         }
+        text.resize(static_cast<std::size_t>(in.gcount()));
     } catch (const std::ios_base::failure&) {
         // libstdc++'s filebuf throws on a failed read() even without
         // exceptions() set; it does not cross this function.
