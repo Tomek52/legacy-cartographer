@@ -30,7 +30,7 @@ Rules:
 | [0013](0013-functions-with-external-linkage-defined-twice.md) | A function with external linkage defined twice is two functions | Accepted |
 | [0014](0014-path-globs-in-the-configuration.md) | Path globs in the configuration | Accepted |
 | [0015](0015-ascii-configuration-while-tomlplusplus-3-4.md) | lcart.toml is ASCII while toml++ 3.4.0 is in use | Accepted |
-| [0016](0016-facts-export-and-command-line.md) | Facts export, command line and the git exposure warning | Accepted; option syntax amended by 0017 (a lone `-` value for `--output`), export output replacement by 0018 |
+| [0016](0016-facts-export-and-command-line.md) | Facts export, command line and the git exposure warning | Accepted; option syntax amended by 0017 (a lone `-` value for `--output`), export output replacement by 0018; analyze resume, `--jobs` and exit status 5 by 0019 |
 | [0017](0017-module-map-format-and-command-line.md) | Module map: command line, content and escaping | Accepted |
 | [0018](0018-facts-export-replaces-only-exports.md) | Facts export replaces only exports | Accepted |
-| [0019](0019-parallel-resumable-analysis.md) | Parallel, resumable analysis with one writer | Proposed |
+| [0019](0019-parallel-resumable-analysis.md) | Parallel, resumable analysis with one writer | Accepted |

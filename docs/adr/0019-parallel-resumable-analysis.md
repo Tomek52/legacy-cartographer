@@ -1,6 +1,6 @@
 # 0019. Parallel, resumable analysis with one writer
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-10-04
 - **Requirements:** [NFR-005](../specs/requirements.md#nfr005-performance-budget-v2),
   [NFR-004](../specs/requirements.md#nfr004-deterministic-output-v1),
@@ -28,9 +28,10 @@ completed TUs again, with the same export as an uninterrupted run (NFR-004).
 `clang::tooling::ClangTool` uses `llvm::vfs::getRealFileSystem()` by
 default, whose working directory is the process's ("usually
 thread-hostile", `llvm/Support/VirtualFileSystem.h`), and changes it to each
-compile command's directory. ADR-0016 writes a new database to
-`.<name>.partial-<pid>` and renames it over the target only on success, so
-an interrupted run leaves nothing to resume.
+compile command's directory. ADR-0016 writes a new database to a hidden
+file next to the target (`.<name>.partial-<pid>` in `src/cli`) and renames
+it over the target only on success, so an interrupted run leaves nothing to
+resume.
 
 ## Options considered
 
@@ -55,9 +56,11 @@ option only, not read from lcart.toml. TUs are the filtered compilation
 database files sorted byte-wise (today's order); a TU's **index** is its
 position in that list. Each worker has its own `ClangTool` with its own
 `llvm::vfs::createPhysicalFileSystem()` as base file system (its own working
-directory); the compilation database is loaded once and shared read-only;
-every path the main thread derives from the working directory (root,
-exclusions, TU paths) is made absolute before workers start.
+directory). The compilation database is loaded once, and the main thread
+fetches each TU's compile commands (with response files expanded) before
+dispatching it, so a worker's `ClangTool` never calls into the shared
+database; every path the main thread derives from the working directory
+(root, exclusions, TU paths) is made absolute before workers start.
 
 A worker turns a TU into a **batch**: the sequence of events the collectors
 receive today, in the order they happen (files and include directives,
@@ -90,12 +93,14 @@ current run.
 
 <a id="adr0019-resume-v1"></a>**Resume.** A new analysis writes to
 `.<name>.partial` next to the target (no pid: the next run must find it),
-holding an exclusive lock on it for the whole run (a second run on the same
-target exits 1); it is renamed over the target when the analysis completes,
+holding an exclusive `flock` on it for the whole run (a second run on the
+same target exits 1); it is renamed over the target when the analysis completes,
 following ADR-0016's rule for the target (`--force`, only lcart's own
 files). An interrupted or failed run keeps the partial database. Without
 `--resume` an existing, unlocked partial database is replaced (it is
-lcart's own file). `lcart analyze --resume` continues it:
+lcart's own file), together with its `-journal` file, which a crash or a
+second signal can leave behind and SQLite would otherwise roll back into
+the new database. `lcart analyze --resume` continues it:
 
 - it refuses (exit 1, naming what differs) if there is no partial database,
   if it is not an lcart fact database, or if `meta` records a different
@@ -106,7 +111,8 @@ lcart's own file). `lcart analyze --resume` continues it:
   index order); the writer rebuilds its state (file ids, recorded
   functions and renamed bodies) from the partial database, then continues
   with the first `pending` TU;
-- the summary counts the TUs already done.
+- the summary counts the TUs already done; warnings of those TUs were
+  printed by the earlier run and are not repeated.
 
 Source files edited between the runs are not detected (the TU's
 `inputs_sha256` is not checked); a resumed run then mixes old and new code.
@@ -120,7 +126,8 @@ progress cannot be cancelled, so the run waits for up to N parses to end.
 The writer commits every batch that is next in index order, discards the
 others (they are parsed again on resume), prints the summary and exits with
 **status 5, "interrupted"** (the value ADR-0016 reserved). A completed run
-still exits 0 when at least one TU parsed, as ADR-0016 says. A second
+still exits 0 when at least one TU in the database parsed, as ADR-0016
+says. A second
 signal ends the process at once; the partial database stays consistent
 because each TU is one transaction.
 

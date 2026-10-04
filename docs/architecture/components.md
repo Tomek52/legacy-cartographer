@@ -24,7 +24,8 @@ has its interface header and no implementation.
 
 M1 analyses translation units in parallel (one Clang instance per worker).
 Workers do not write to SQLite; they return per-TU fact batches to a single
-writer thread, which inserts them in a fixed order (by TU path). This keeps
+writer thread, which inserts them in a fixed order (the sorted list of TU
+paths from the compilation database). This keeps
 the fact database deterministic
 ([NFR-004](../specs/requirements.md#nfr004-deterministic-output-v1)) and avoids
 SQLite write contention. Confirmed and detailed (order by index in the
