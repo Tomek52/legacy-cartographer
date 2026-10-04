@@ -45,14 +45,13 @@ mkdir -p "$source_dir"
 git -C "$submodule" archive --format=tar HEAD | tar -x -C "$source_dir"
 
 log="$out_dir/build.log"
-# A subshell with its own errexit: `|| die` would switch errexit off in a
-# plain group, and a failed configure would go on to make.
+# Chained with &&: on the left of `||`, bash ignores errexit even inside a
+# subshell, and a failed configure would go on to make.
 (
-    set -e
-    cd "$source_dir"
-    ./autogen.sh
-    CC="$cc" ./configure --enable-tests
-    bear --output "$database" -- make -j"$(nproc)"
+    cd "$source_dir" &&
+        ./autogen.sh &&
+        CC="$cc" ./configure --enable-tests &&
+        bear --output "$database" -- make -j"$(nproc)"
 ) >"$log" 2>&1 || die "build failed; see $log"
 
 for file in modbus.c modbus-data.c modbus-rtu.c modbus-tcp.c; do
