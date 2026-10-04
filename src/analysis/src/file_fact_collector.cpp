@@ -90,20 +90,27 @@ common::Result<facts::FileId> FileFactCollector::record_file(clang::SourceManage
     return id;
 }
 
-void FileFactCollector::on_main_file(clang::SourceManager& sources) {
+std::optional<facts::FileId> FileFactCollector::internal_file(clang::SourceManager& sources,
+                                                              clang::FileEntryRef file) {
     if (!status_) {
-        return;
+        return std::nullopt;
     }
-    const clang::OptionalFileEntryRef main = sources.getFileEntryRefForID(sources.getMainFileID());
-    if (!main) {
-        return;
-    }
-    const FactPath& path = fact_path(sources, *main);
+    const FactPath& path = fact_path(sources, file);
     if (path.is_external) {
-        return;
+        return std::nullopt;
     }
-    if (auto id = record_file(sources, *main, path); !id) {
+    auto id = record_file(sources, file, path);
+    if (!id) {
         status_ = std::unexpected(id.error());
+        return std::nullopt;
+    }
+    return *id;
+}
+
+void FileFactCollector::on_main_file(clang::SourceManager& sources) {
+    if (const clang::OptionalFileEntryRef main =
+            sources.getFileEntryRefForID(sources.getMainFileID())) {
+        static_cast<void>(internal_file(sources, *main));
     }
 }
 
@@ -119,12 +126,7 @@ void FileFactCollector::on_include(clang::SourceManager& sources,
         // A directive in Clang's predefines buffer, i.e. `-include file`:
         // no includer to record an edge for, but the file is still reached.
         if (file) {
-            const FactPath& path = fact_path(sources, *file);
-            if (!path.is_external) {
-                if (auto id = record_file(sources, *file, path); !id) {
-                    status_ = std::unexpected(id.error());
-                }
-            }
+            static_cast<void>(internal_file(sources, *file));
         }
         return;
     }
