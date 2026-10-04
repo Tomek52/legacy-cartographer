@@ -105,7 +105,7 @@ Acceptance criteria:
    `build/targets/libmodbus/compile_commands.json` with entries for
    `modbus.c`, `modbus-data.c`, `modbus-rtu.c`, `modbus-tcp.c`.
 2. After the script, `git -C targets/libmodbus status --porcelain` is empty
-   (out-of-tree build; see the TODO in the [libmodbus plan](../targets/libmodbus.md)).
+   (out-of-tree build; see the [libmodbus plan](../targets/libmodbus.md)).
 3. The script documents its tool requirements (autotools, `bear`) and fails
    with a clear message if one is missing.
 
