@@ -1,0 +1,21 @@
+# lcart configuration for libmodbus (B-14). Paths are relative to this
+# file; the analysis root is the copy that scripts/libmodbus-compdb.sh
+# builds (targets/libmodbus itself is never built in, see B-05).
+[project]
+name = "libmodbus"
+root = "../../build/targets/libmodbus/source"
+compilation_database = "../../build/targets/libmodbus/compile_commands.json"
+
+# First matching rule wins (docs/targets/libmodbus.md, module configuration).
+# Unmatched files fall back to their top-level directory: tests/ is `tests`.
+[[modules]]
+name = "rtu"
+paths = ["src/modbus-rtu*"]
+
+[[modules]]
+name = "tcp"
+paths = ["src/modbus-tcp*"]
+
+[[modules]]
+name = "core"
+paths = ["src/modbus.c", "src/modbus-data.c", "src/modbus.h", "src/modbus-private.h", "src/modbus-version.h"]

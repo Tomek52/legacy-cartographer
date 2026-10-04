@@ -79,25 +79,39 @@ jobs:
       - name: Check submodules
         run: scripts/check-targets.sh
 
-  libmodbus-compdb:
-    # B-05: the compilation database of the pinned libmodbus, built from a
-    # copy so targets/libmodbus stays clean (the script checks both).
-    name: libmodbus compilation database
+  libmodbus:
+    # B-05 and B-14: the compilation database of the pinned libmodbus (built
+    # from a copy, so targets/libmodbus stays clean), then lcart analyze and
+    # lcart map with no network (NFR-001 criterion 2). The committed map must
+    # not change; the analysis time is the NFR-005 baseline.
+    name: libmodbus baseline
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
         with:
           submodules: true
       - name: Install tools
-        run: sudo apt-get update -qq && sudo apt-get install -y -qq autoconf automake libtool make bear clang-20
-      - name: Build libmodbus under bear
-        run: CC=clang-20 scripts/libmodbus-compdb.sh
-      - name: Keep the build log
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq $APT_PACKAGES libsqlite3-dev nlohmann-json3-dev libtomlplusplus-dev libgtest-dev autoconf automake libtool make bear
+      - name: Build lcart (Release)
+        run: |
+          cmake --preset debug-system -B build/release-system -DCMAKE_BUILD_TYPE=Release
+          cmake --build build/release-system --target lcart
+      - name: Analyse libmodbus without network
+        run: >
+          sudo unshare --net --
+          sudo -u "$(id -un)" env "PATH=$PATH" CC=clang-20
+          scripts/libmodbus-baseline.sh build/release-system/src/cli/lcart
+      - name: The committed module map is up to date
+        run: git diff --exit-code -- docs/targets/libmodbus-map.md
+      - name: Keep the libmodbus build log
         if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: libmodbus-build-log
           path: build/targets/libmodbus/build.log
+          if-no-files-found: ignore
 
   lint:
     name: Format + clang-tidy

@@ -176,9 +176,9 @@ and each control character (U+0000 to U+001F, U+007F) becomes U+FFFD. Then:
 - **Mermaid labels** are written as `mN["label"]`. Letters `A-Z a-z`,
   digits, space and `_ . / -` are copied; every other character, ASCII or
   not, becomes Mermaid's entity code `#<decimal code point>;` (Mermaid
-  flowchart syntax, "Entity codes to escape characters"; TODO: verify with
-  the Mermaid version MkDocs Material loads, [open
-  questions](../open-questions.md#not-verified-yet-todo-verify)) (`"` →
+  flowchart syntax, "Entity codes to escape characters"; verified in B-14
+  with Mermaid 11.17.2, the `mermaid@11` MkDocs Material loads: the
+  libmodbus map shows `#40;root#41;` as `(root)`) (`"` →
   `#34;`, `#` → `#35;`, `;` → `#59;`, `<` → `#60;`, `` ` `` → `#96;`,
   `|` → `#124;`, `é` → `#233;`). The label is therefore plain ASCII with
   no character that can end the label, start an entity or HTML, or start

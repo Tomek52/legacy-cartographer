@@ -16,7 +16,7 @@ moving the answer into the relevant spec or ADR and deleting it here.
 | A8 | C4 diagrams as Mermaid flowcharts, not Mermaid's experimental `C4Context`. | [architecture](architecture/index.md) | – |
 | A9 | CodeQL workflow is manual-only while private: it needs GitHub Advanced Security. | `.github/workflows/codeql.yml` | at publication |
 | A10 | Verification covers only structural claims (5 kinds); behaviour stays prose. | [claim schema](specs/claim-schema.md) | M2 end |
-| A11 | The libmodbus `tests/` directory is its own `tests` module. | [libmodbus plan](targets/libmodbus.md) | B-14 |
+| A11 | The libmodbus `tests/` directory is its own `tests` module (by the default rule; kept in B-14). | [libmodbus plan](targets/libmodbus.md) | M3 |
 
 ## Decided
 
@@ -56,8 +56,6 @@ None open. New questions are added here as they come up.
 | `modbus_close` / `modbus_free` semantics for the RAII wrapper | [libmodbus plan](targets/libmodbus.md) | M5 |
 | Exact terms of `tests/LICENSE` in libmodbus | [ADR-0003](adr/0003-licensing.md) | before reusing any upstream test code |
 | Exact Clang 20 flags for MSVC-targeted code; LibTooling handling of `clang-cl` arguments; a tested way to get a compilation database from MSBuild | [ADR-0009](adr/0009-linux-and-wsl2-only.md) | B-17 |
-| How to run a GitHub Actions job without network access | [NFR-001](specs/requirements.md#nfr001-works-without-llm-v2) | B-14 |
-| Mermaid, as loaded by MkDocs Material, decodes `#<decimal>;` entity codes in quoted flowchart labels (the module map's escaping) | [ADR-0017](adr/0017-module-map-format-and-command-line.md#adr0017-escaping-v1) | B-14 (rendered libmodbus map) |
 | MkDocs/Material settings that keep raw HTML in generated docs from executing | [security](security.md) | M2 |
 | Usable local model sizes for claim generation | [NFR-003](specs/requirements.md#nfr003-fully-local-mode-v1) | M6 |
 | Claude Code permission rule syntax for a bundle's `.claude/settings.json` | [handoff contract](specs/handoff-contract.md#claim-agent-permissions-v1) | M2 |
