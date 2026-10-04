@@ -39,7 +39,7 @@ cmake --workflow --preset debug
 # presets: debug-system, asan-ubsan-system)
 sudo apt-get install ninja-build g++-14 clang-20 libclang-rt-20-dev \
     llvm-20-dev libclang-20-dev libclang-cpp20-dev \
-    libsqlite3-dev nlohmann-json3-dev libgtest-dev
+    libsqlite3-dev nlohmann-json3-dev libtomlplusplus-dev libgtest-dev
 cmake --workflow --preset debug-system
 
 build/debug-system/src/cli/lcart --help

@@ -6,7 +6,8 @@ Paths of files under the analysis root are relative to it, with `/`
 separators; files outside it have absolute paths
 ([file facts](#arch-data-model-file-facts-v1)). How functions are
 identified: [function facts](#arch-data-model-function-facts-v2),
-[call edges](#arch-data-model-call-edges-v1).
+[call edges](#arch-data-model-call-edges-v1); how files get modules and
+modules dependencies: [modules](#arch-data-model-modules-v1).
 
 ```mermaid
 erDiagram
@@ -121,8 +122,7 @@ erDiagram
   by name and files by path; adding a known one returns its id.
 - `MODULE_DEPENDENCY` is derived from `INCLUDE_EDGE` and direct
   `CALL_EDGE`s after analysis and keeps the justifying edge, so `depends_on`
-  claims have evidence. Until B-11 fills the table, `module_dependencies()`
-  derives the same set on each query.
+  claims have evidence ([modules](#arch-data-model-modules-v1)).
 - `kind = 'indirect'` if and only if `callee_id` is null; `may_call` edges
   ([FR-015](../specs/requirements.md#fr015-resolve-function-pointer-tables-v1)) are never returned with direct calls.
 - Claims and verdicts live in the same file so a report can be regenerated
@@ -150,7 +150,7 @@ maps onto `FILE` and `INCLUDE_EDGE` (B-08):
   `#include`d is still a source and `.inc` files are headers.
 - A file under the root gets a module: the first matching rule, or the
   default of [FR-005](../specs/requirements.md#fr005-map-files-to-modules-v1)
-  (top-level directory, or `(root)`). Rules arrive with B-11.
+  (top-level directory, or `(root)`); see [modules](#arch-data-model-modules-v1).
 - A file outside the root (system and third-party headers) is recorded only
   when a file under the root includes it directly, with its absolute path
   (how bundles and golden exports show such paths is an
@@ -237,3 +237,30 @@ How [FR-004](../specs/requirements.md#fr004-record-call-edges-v1) maps onto
   member initializers are not recorded (they are not in its body), nor are
   constructor calls themselves (not call expressions in Clang). A virtual
   call is `direct` to the method it names.
+
+## <a id="arch-data-model-modules-v1"></a>Modules and module dependencies
+
+How [FR-005](../specs/requirements.md#fr005-map-files-to-modules-v1) maps
+onto `MODULE`, `FILE.module_id` and `MODULE_DEPENDENCY` (B-11):
+
+- The rules are the `[[modules]]` tables of `lcart.toml`, in file order. A
+  file under the root belongs to the first rule with a path glob matching
+  its whole root-relative path
+  ([ADR-0014](../adr/0014-path-globs-in-the-configuration.md#adr0014-path-glob-syntax-v1)),
+  else to its top-level directory, or `(root)` for a file directly in the
+  root. A `MODULE` row exists for every module that has a file; a rule that
+  matches no file creates none.
+- `[project] exclude` removes translation units before analysis; a header
+  that matches is still recorded when an analysed unit includes it
+  ([ADR-0014](../adr/0014-path-globs-in-the-configuration.md#adr0014-exclude-selects-translation-units-v1)).
+- After the last translation unit, `MODULE_DEPENDENCY` is replaced in one
+  transaction: one row per include edge from a file of one module to a file
+  of another (`via = 'include'`), and one per direct call edge from a
+  function of one module to a function of another (`via = 'call'`), with
+  the edge's id. A function belongs to the module of the file it is located
+  in: its definition, else its first declaration. Edges within a module,
+  to external files, unresolved includes and indirect calls justify
+  nothing.
+- `module_dependencies()` lists the modules depended on by name;
+  `module_dependency_edges()` lists the justifying edges with the directive
+  (file and line) or call site (file, line and column).

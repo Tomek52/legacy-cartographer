@@ -31,8 +31,9 @@ namespace {
 
 } // namespace
 
-FileFactCollector::FileFactCollector(std::filesystem::path root, facts::FactWriter& out)
-    : root_(std::move(root)), out_(&out) {}
+FileFactCollector::FileFactCollector(std::filesystem::path root, ModuleRules rules,
+                                     facts::FactWriter& out)
+    : root_(std::move(root)), rules_(std::move(rules)), out_(&out) {}
 
 const FileFactCollector::FactPath& FileFactCollector::fact_path(const clang::SourceManager& sources,
                                                                 clang::FileEntryRef file) {
@@ -76,8 +77,7 @@ common::Result<facts::FileId> FileFactCollector::record_file(clang::SourceManage
                          .is_external = path.is_external,
                          .module = std::nullopt};
     if (!path.is_external) {
-        // TODO(B-11): apply the module rules from lcart.toml before the default.
-        auto module = out_->add_module({.id = {}, .name = default_module(path.path)});
+        auto module = out_->add_module({.id = {}, .name = module_of(path.path, rules_)});
         if (!module) {
             return std::unexpected(module.error());
         }

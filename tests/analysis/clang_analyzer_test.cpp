@@ -76,6 +76,7 @@ public:
         coverage_ = value;
         return {};
     }
+    Status derive_module_dependencies() override { return {}; }
 
     [[nodiscard]] const std::vector<DiagnosticFact>& diagnostics() const { return diagnostics_; }
     [[nodiscard]] const AnalysisCoverage& coverage() const { return coverage_; }
@@ -160,7 +161,8 @@ protected:
             {.compilation_database = write_fixture_database(
                  two_modules_dir(), {"app/legacy.c", "app/main.c", "core/core.c"}),
              .root = two_modules_dir(),
-             .exclude_globs = {}},
+             .exclude_globs = {},
+             .module_rules = {}},
             facts);
     }
 
@@ -174,7 +176,8 @@ TEST_F(ClangAnalyzerTest, CountsParsedAndFailedTranslationUnits) {
     const auto summary = analyzer.analyze(
         {.compilation_database = write_compilation_database({"ok.c", "broken.c", "also_ok.c"}),
          .root = fixture_dir(),
-         .exclude_globs = {}},
+         .exclude_globs = {},
+         .module_rules = {}},
         facts);
 
     ASSERT_TRUE(summary.has_value()) << summary.error().message;
@@ -190,7 +193,8 @@ TEST_F(ClangAnalyzerTest, RecordsSyntaxErrorAsDiagnosticWithLocation) {
     const auto summary =
         analyzer.analyze({.compilation_database = write_compilation_database({"broken.c", "ok.c"}),
                           .root = fixture_dir(),
-                          .exclude_globs = {}},
+                          .exclude_globs = {},
+                          .module_rules = {}},
                          facts);
 
     ASSERT_TRUE(summary.has_value()) << summary.error().message;
@@ -213,7 +217,8 @@ TEST_F(ClangAnalyzerTest, StripsPluginArgumentsAndWarns) {
         {.compilation_database = write_compilation_database(
              {"ok.c"}, "-fplugin=/nonexistent/evil.so -Xclang -load -Xclang /nonexistent/evil.so"),
          .root = fixture_dir(),
-         .exclude_globs = {}},
+         .exclude_globs = {},
+         .module_rules = {}},
         facts);
 
     ASSERT_TRUE(summary.has_value()) << summary.error().message;
@@ -233,7 +238,8 @@ TEST_F(ClangAnalyzerTest, StripsPluginArgumentsInsideResponseFiles) {
     const auto summary = analyzer.analyze({.compilation_database = write_compilation_database(
                                                {"ok.c"}, "@" + (work_dir() / "flags.rsp").string()),
                                            .root = fixture_dir(),
-                                           .exclude_globs = {}},
+                                           .exclude_globs = {},
+                                           .module_rules = {}},
                                           facts);
 
     ASSERT_TRUE(summary.has_value()) << summary.error().message;
@@ -247,7 +253,8 @@ TEST_F(ClangAnalyzerTest, MissingCompilationDatabaseIsAnError) {
     ClangAnalyzer analyzer;
     const auto summary = analyzer.analyze({.compilation_database = work_dir() / "missing.json",
                                            .root = fixture_dir(),
-                                           .exclude_globs = {}},
+                                           .exclude_globs = {},
+                                           .module_rules = {}},
                                           facts);
 
     ASSERT_FALSE(summary.has_value());
@@ -272,7 +279,8 @@ TEST_F(ClangAnalyzerTest, EmptyOrMissingRootIsAnError) {
         const auto summary =
             analyzer.analyze({.compilation_database = write_compilation_database({"ok.c"}),
                               .root = root,
-                              .exclude_globs = {}},
+                              .exclude_globs = {},
+                              .module_rules = {}},
                              facts);
 
         ASSERT_FALSE(summary.has_value()) << root;
@@ -377,7 +385,8 @@ TEST_F(ClangAnalyzerTest, RecordsUnresolvedIncludeWithSpelling) {
     const auto summary = analyzer.analyze(
         {.compilation_database = write_fixture_database(unresolved_include_dir(), {"main.c"}),
          .root = unresolved_include_dir(),
-         .exclude_globs = {}},
+         .exclude_globs = {},
+         .module_rules = {}},
         facts);
 
     ASSERT_TRUE(summary.has_value()) << summary.error().message;
@@ -477,7 +486,8 @@ TEST_F(ClangAnalyzerTest, RecordsMainFileWithoutIncludes) {
     const auto summary =
         analyzer.analyze({.compilation_database = write_compilation_database({"also_ok.c"}),
                           .root = fixture_dir(),
-                          .exclude_globs = {}},
+                          .exclude_globs = {},
+                          .module_rules = {}},
                          facts);
 
     ASSERT_TRUE(summary.has_value()) << summary.error().message;
@@ -495,7 +505,8 @@ TEST_F(ClangAnalyzerTest, RecordsHeaderForcedWithIncludeOption) {
     const auto summary = analyzer.analyze({.compilation_database = write_compilation_database(
                                                {"also_ok.c"}, "-include include/forced.h"),
                                            .root = fixture_dir(),
-                                           .exclude_globs = {}},
+                                           .exclude_globs = {},
+                                           .module_rules = {}},
                                           facts);
 
     ASSERT_TRUE(summary.has_value()) << summary.error().message;

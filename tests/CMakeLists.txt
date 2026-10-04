@@ -4,6 +4,8 @@ include(GoogleTest)
 add_executable(lcart_unit_tests
     headers_self_contained_test.cpp
     analysis/module_rules_test.cpp
+    config/path_glob_test.cpp
+    config/project_config_test.cpp
     facts/sqlite_fact_store_test.cpp
     verify/verification_status_test.cpp)
 # SQLite directly: the schema-version tests tamper with a database.
@@ -18,7 +20,8 @@ add_executable(lcart_analysis_tests
     analysis/argument_filter_test.cpp
     analysis/call_edges_test.cpp
     analysis/clang_analyzer_test.cpp
-    analysis/function_facts_test.cpp)
+    analysis/function_facts_test.cpp
+    analysis/modules_test.cpp)
 target_link_libraries(lcart_analysis_tests PRIVATE lcart::analysis GTest::gtest_main)
 target_compile_definitions(lcart_analysis_tests PRIVATE
     LCART_FIXTURES_DIR="${CMAKE_CURRENT_SOURCE_DIR}/fixtures")

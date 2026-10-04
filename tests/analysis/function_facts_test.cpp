@@ -71,8 +71,11 @@ protected:
             out << "]\n";
         }
         ClangAnalyzer analyzer;
-        const auto summary = analyzer.analyze(
-            {.compilation_database = database, .root = root_, .exclude_globs = {}}, *store_);
+        const auto summary = analyzer.analyze({.compilation_database = database,
+                                               .root = root_,
+                                               .exclude_globs = {},
+                                               .module_rules = {}},
+                                              *store_);
         ASSERT_TRUE(summary.has_value()) << summary.error().message;
         ASSERT_EQ(summary->translation_units_parsed, files.size());
     }

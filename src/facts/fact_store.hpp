@@ -32,6 +32,10 @@ public:
     virtual common::Status add_call(const CallFact& call) = 0;
     virtual common::Status add_diagnostic(const DiagnosticFact& diagnostic) = 0;
     virtual common::Status set_coverage(const AnalysisCoverage& coverage) = 0;
+    /// Replaces the module dependencies with those that the include edges
+    /// and direct call edges written so far justify (FR-005 criterion 3).
+    /// Call once every edge is written.
+    virtual common::Status derive_module_dependencies() = 0;
 };
 
 /// Read side of the fact database, used by verify, report and the CLI.
@@ -68,10 +72,16 @@ public:
     [[nodiscard]] virtual common::Result<std::vector<IncludeFact>>
     includes_of(FileId includer) const = 0;
 
-    /// Other modules that `module` depends on through an include edge or a
-    /// direct call edge, by module name.
+    /// Other modules that `module` depends on, by module name: empty until
+    /// FactWriter::derive_module_dependencies() has run.
     [[nodiscard]] virtual common::Result<std::vector<ModuleFact>>
     module_dependencies(ModuleId module) const = 0;
+
+    /// The edges that justify the dependencies of `module`, by the name of
+    /// the module depended on, then include edges before call edges, then
+    /// edge id.
+    [[nodiscard]] virtual common::Result<std::vector<ModuleDependencyFact>>
+    module_dependency_edges(ModuleId module) const = 0;
 
     /// All diagnostics, by translation unit, then file, then line, then id.
     [[nodiscard]] virtual common::Result<std::vector<DiagnosticFact>> diagnostics() const = 0;

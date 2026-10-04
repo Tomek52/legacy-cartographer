@@ -41,6 +41,7 @@ public:
     common::Status add_call(const CallFact& call) override;
     common::Status add_diagnostic(const DiagnosticFact& diagnostic) override;
     common::Status set_coverage(const AnalysisCoverage& coverage) override;
+    common::Status derive_module_dependencies() override;
 
     [[nodiscard]] common::Result<std::optional<ModuleFact>>
     find_module(std::string_view name) const override;
@@ -54,6 +55,8 @@ public:
     includes_of(FileId includer) const override;
     [[nodiscard]] common::Result<std::vector<ModuleFact>>
     module_dependencies(ModuleId module) const override;
+    [[nodiscard]] common::Result<std::vector<ModuleDependencyFact>>
+    module_dependency_edges(ModuleId module) const override;
     [[nodiscard]] common::Result<std::vector<DiagnosticFact>> diagnostics() const override;
     [[nodiscard]] common::Result<AnalysisCoverage> coverage() const override;
 

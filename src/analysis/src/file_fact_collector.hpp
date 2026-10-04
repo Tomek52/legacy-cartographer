@@ -1,5 +1,6 @@
 #pragma once
 
+#include "analysis/module_rules.hpp"
 #include "common/result.hpp"
 #include "facts/fact_store.hpp"
 
@@ -38,8 +39,9 @@ public:
         bool is_external{};
     };
 
-    /// `root` must be absolute and canonical.
-    FileFactCollector(std::filesystem::path root, facts::FactWriter& out);
+    /// `root` must be absolute and canonical. A file under it belongs to the
+    /// module module_of() gives for its root-relative path.
+    FileFactCollector(std::filesystem::path root, ModuleRules rules, facts::FactWriter& out);
 
     /// Records the main file of a translation unit.
     void on_main_file(clang::SourceManager& sources);
@@ -64,6 +66,7 @@ private:
     record_file(clang::SourceManager& sources, clang::FileEntryRef file, const FactPath& path);
 
     std::filesystem::path root_;
+    ModuleRules rules_;
     facts::FactWriter* out_;
     common::Status status_;
     /// Clang's absolute file name -> path as stored in the facts.

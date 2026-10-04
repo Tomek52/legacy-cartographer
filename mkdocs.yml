@@ -89,6 +89,8 @@ nav:
       - adr/0011-pull-request-flow-with-agent-review.md
       - adr/0012-function-identity-for-internal-linkage.md
       - adr/0013-functions-with-external-linkage-defined-twice.md
+      - adr/0014-path-globs-in-the-configuration.md
+      - adr/0015-ascii-configuration-while-tomlplusplus-3-4.md
   - Testing:
       - testing/index.md
       - Strategy: testing/strategy.md

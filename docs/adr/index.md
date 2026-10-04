@@ -28,3 +28,5 @@ Rules:
 | [0011](0011-pull-request-flow-with-agent-review.md) | Pull-request flow with agent review and merge on green CI | Accepted |
 | [0012](0012-function-identity-for-internal-linkage.md) | Function identity: Clang's USR, path-prefixed for internal linkage | Accepted (extended to duplicate external definitions by 0013) |
 | [0013](0013-functions-with-external-linkage-defined-twice.md) | A function with external linkage defined twice is two functions | Accepted |
+| [0014](0014-path-globs-in-the-configuration.md) | Path globs in the configuration | Proposed |
+| [0015](0015-ascii-configuration-while-tomlplusplus-3-4.md) | lcart.toml is ASCII while toml++ 3.4.0 is in use | Proposed |

@@ -31,6 +31,11 @@ lcart_add_module(facts
     SOURCES facts/src/sqlite_fact_store.cpp
     DEPS lcart::common
     PRIVATE_DEPS SQLite::SQLite3)
+# lcart.toml and its path globs (ADR-0008, ADR-0014); toml++ stays private.
+lcart_add_module(config
+    SOURCES config/src/path_glob.cpp config/src/project_config.cpp
+    DEPS lcart::common
+    PRIVATE_DEPS lcart::tomlplusplus)
 # Clang LibTooling stays private to analysis (ADR-0002): no other module
 # sees a Clang header or links Clang.
 lcart_add_module(analysis
@@ -38,7 +43,7 @@ lcart_add_module(analysis
             analysis/src/call_fact_collector.cpp analysis/src/file_fact_collector.cpp
             analysis/src/function_fact_collector.cpp
             analysis/src/module_rules.cpp
-    DEPS lcart::facts
+    DEPS lcart::facts lcart::config
     PRIVATE_DEPS clang-cpp LLVM)
 # Clang's builtin headers (stddef.h, ...) live in its resource directory,
 # which LibTooling would otherwise look for next to the lcart executable.
