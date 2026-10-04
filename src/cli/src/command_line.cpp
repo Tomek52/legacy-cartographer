@@ -40,7 +40,9 @@ lcart query <query> [--db FILE]
   includes <file>         include directives in the file
   included-by <file>      include directives naming the file
   module-deps [<module>]  module dependencies
-  export [--output FILE]  all facts as JSON Lines (default: standard output)
+  export [--output FILE]  all facts as JSON Lines (default: standard output);
+                          replaces an earlier export, never another file
+                          or the database
   <function> is a name or a stored USR; <file> a path relative to the
   analysis root.
 

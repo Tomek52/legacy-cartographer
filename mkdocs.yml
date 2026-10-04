@@ -93,6 +93,7 @@ nav:
       - adr/0015-ascii-configuration-while-tomlplusplus-3-4.md
       - adr/0016-facts-export-and-command-line.md
       - adr/0017-module-map-format-and-command-line.md
+      - adr/0018-facts-export-replaces-only-exports.md
   - Testing:
       - testing/index.md
       - Strategy: testing/strategy.md

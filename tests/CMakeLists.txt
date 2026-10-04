@@ -37,7 +37,7 @@ gtest_discover_tests(lcart_analysis_tests PROPERTIES LABELS analysis)
 # The lcart executable end to end on the fixtures (FR-006): starts the
 # binary, so it gets its own executable and label.
 add_executable(lcart_cli_tests cli/lcart_cli_test.cpp)
-target_link_libraries(lcart_cli_tests PRIVATE GTest::gtest_main)
+target_link_libraries(lcart_cli_tests PRIVATE SQLite::SQLite3 GTest::gtest_main)
 target_compile_definitions(lcart_cli_tests PRIVATE
     LCART_EXECUTABLE="$<TARGET_FILE:lcart>"
     LCART_FIXTURES_DIR="${CMAKE_CURRENT_SOURCE_DIR}/fixtures"

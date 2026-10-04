@@ -267,7 +267,7 @@ map file. The map (`report::write_module_map`, the first code in
 the include and call sites behind each dependency, and the modules with
 their files and function definition counts; external files are left out.
 Command line, content, order and escaping are
-[ADR-0017](../adr/0017-module-map-format-and-command-line.md) (Proposed).
+[ADR-0017](../adr/0017-module-map-format-and-command-line.md).
 Mermaid nodes get generated ids (`m0`, `m1`, ...) and labels in which every
 character but letters, digits, space and `_ . / -` is an entity code;
 Markdown shows names and paths only as code spans in list items, never in
@@ -276,8 +276,9 @@ tables, where `|` would split a cell. The golden file
 first run, and is checked by a unit test and against a real analysis by
 the CLI test. A lone `-` is now a value for `--output` only, so
 `query export --output -` writes to standard output too, which amends
-ADR-0016's option syntax. `query export --output` still replaces any file;
-the same protection there is a follow-up (open questions). Files under the
+ADR-0016's option syntax. `query export --output` still replaced any file;
+the same protection there followed in
+[ADR-0018](../adr/0018-facts-export-replaces-only-exports.md). Files under the
 root without a module cannot occur with schema 2, so `(unassigned)` is
 tested with a `FactQuery` double. FR-007 criterion 1 (renders with MkDocs +
 Mermaid) is checked in CI on the libmodbus map by
