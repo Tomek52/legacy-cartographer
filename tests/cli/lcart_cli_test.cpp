@@ -167,6 +167,16 @@ protected:
         return lcart(std::move(arguments));
     }
 
+    /// Runs `lcart arguments...` and expects it to refuse with exit 1, an
+    /// error naming `reason`, and `file` still holding `content`.
+    void expect_refused(const std::vector<std::string>& arguments, std::string_view reason,
+                        const fs::path& file, const std::string& content) const {
+        const Outcome run = lcart(arguments);
+        EXPECT_EQ(run.status, exit_failure) << arguments.back();
+        EXPECT_NE(run.err.find(reason), std::string::npos) << run.err;
+        EXPECT_EQ(read_file(file), content) << arguments.back();
+    }
+
 private:
     fs::path work_dir_;
 };
@@ -523,6 +533,41 @@ TEST_F(LcartCliTest, ForceDoesNotRemoveADirectory) {
     EXPECT_TRUE(fs::is_directory(directory));
 }
 
+// ADR-0017: lcart replaces only its own files. The database being read is
+// never replaced, however it is spelled.
+TEST_F(LcartCliTest, MapRefusesToReplaceTheDatabase) {
+    analyze("two_modules", {"app/legacy.c", "app/main.c", "core/core.c"},
+            work_dir() / "lcart-out" / "facts.lcart.db");
+    const fs::path database = work_dir() / "lcart-out" / "facts.lcart.db";
+    const std::string bytes = read_file(database);
+    ASSERT_FALSE(bytes.empty());
+
+    for (const std::vector<std::string>& arguments :
+         {std::vector<std::string>{"map", "--output", "lcart-out/facts.lcart.db"},
+          {"map", "--output", "./lcart-out/../lcart-out/facts.lcart.db"},
+          {"map", "--db", database.string(), "--output", "lcart-out/facts.lcart.db"}}) {
+        expect_refused(arguments, "fact database", database, bytes);
+    }
+    // A link to the database is the same file.
+    fs::create_symlink(database, work_dir() / "link.lcart.db");
+    expect_refused({"map", "--db", "link.lcart.db", "--output", database.string()}, "fact database",
+                   database, bytes);
+}
+
+// ADR-0017: an existing file is replaced only if it is a module map (its
+// first line is exactly "# Module map").
+TEST_F(LcartCliTest, MapRefusesToReplaceAFileThatIsNotAMap) {
+    const fs::path database = two_modules_database();
+    for (const std::string& content :
+         {std::string{"int main(void) { return 0; }\n"}, std::string{"# Module mapping\n"},
+          std::string{" # Module map\n"}, std::string{}}) {
+        const fs::path other = work_dir() / "other.c";
+        std::ofstream{other, std::ios::binary | std::ios::trunc} << content;
+        expect_refused({"map", "--db", database.string(), "--output", other.string()},
+                       "not a module map", other, content);
+    }
+}
+
 TEST_F(LcartCliTest, FailedWriteToStandardOutputIsAFailure) {
     const fs::path database = two_modules_database();
     for (const std::vector<std::string>& arguments :
@@ -572,8 +617,8 @@ TEST_F(LcartCliTest, MapWritesTheDefaultPath) {
     EXPECT_NE(first.out.find(output.string()), std::string::npos) << first.out;
     EXPECT_EQ(read_file(output), golden_map());
 
-    // Derived output: replaced without --force.
-    std::ofstream{output} << "stale\n";
+    // An earlier map is derived output: replaced without --force.
+    std::ofstream{output} << "# Module map\nstale\n";
     const Outcome second = lcart({"map"});
     EXPECT_EQ(second.status, exit_success) << second.err;
     EXPECT_EQ(read_file(output), golden_map());
@@ -629,6 +674,11 @@ TEST_F(LcartCliTest, MapToADirectoryFails) {
     const Outcome run = lcart({"map", "--db", database.string(), "--output", directory.string()});
     EXPECT_EQ(run.status, exit_failure);
     EXPECT_TRUE(fs::is_directory(directory));
+    EXPECT_TRUE(fs::is_empty(directory));
+    // No hidden partial file is left next to it.
+    for (const std::string& name : sorted_names(work_dir())) {
+        EXPECT_FALSE(name.starts_with(".a-directory")) << name;
+    }
 }
 
 // Security T2 for the map file (ADR-0017).

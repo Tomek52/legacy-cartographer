@@ -532,8 +532,9 @@ ExitStatus run_query(const QueryCommand& command, std::ostream& out, std::ostrea
 
 /// Writes `text` to `target`, creating its directory: first to a hidden
 /// file next to it, then renamed over it, so an existing map is replaced in
-/// one step and a failed write leaves it as it was (ADR-0017). A map is
-/// derived output, so an existing file is replaced without `--force`.
+/// one step and a failed write leaves it as it was (ADR-0017). Call
+/// check_map_output() first: a map is derived output and replaced without
+/// `--force`, but no other file is.
 Outcome<void> replace_file(const fs::path& target, const std::string& text) {
     std::error_code ec;
     fs::create_directories(target.parent_path(), ec);
@@ -562,6 +563,41 @@ Outcome<void> replace_file(const fs::path& target, const std::string& text) {
     return {};
 }
 
+/// First line of every module map (report::write_module_map): how `lcart
+/// map` recognises a file it may replace.
+constexpr std::string_view module_map_first_line = "# Module map";
+
+/// lcart replaces only its own files (ADR-0016, ADR-0017): `output` may be
+/// replaced if nothing is there or it is a module map, and never if it is
+/// the fact database being read, however it is spelled.
+Outcome<void> check_map_output(const fs::path& output, const fs::path& database) {
+    std::error_code ec;
+    const fs::path database_path = fs::absolute(database, ec).lexically_normal();
+    if (output.lexically_normal() == database_path ||
+        (fs::exists(output, ec) && fs::equivalent(output, database_path, ec))) {
+        return fail(ExitStatus::failure,
+                    output.string() + " is the fact database being read; choose another --output");
+    }
+    const fs::file_status status = fs::symlink_status(output, ec);
+    if (!fs::exists(status)) {
+        return {};
+    }
+    std::string first_line;
+    if (fs::is_regular_file(status)) {
+        std::ifstream file{output, std::ios::binary};
+        std::getline(file, first_line);
+        if (!file) {
+            first_line.clear();
+        }
+    }
+    if (first_line != module_map_first_line) {
+        return fail(ExitStatus::failure, output.string() +
+                                             " exists and is not a module map; lcart replaces"
+                                             " only its own files");
+    }
+    return {};
+}
+
 ExitStatus run_map(const MapCommand& command, std::ostream& out, std::ostream& err) {
     auto store = open_database(command.database);
     if (!store) {
@@ -573,6 +609,9 @@ ExitStatus run_map(const MapCommand& command, std::ostream& out, std::ostream& e
     }
     std::error_code ec;
     const fs::path output = fs::absolute(*command.output, ec);
+    if (auto allowed = check_map_output(output, command.database); !allowed) {
+        return report(allowed.error(), err);
+    }
     warn_if_exposed(output, "the module map", err);
     std::ostringstream text;
     if (auto written = or_failure(report::write_module_map(**store, text)); !written) {

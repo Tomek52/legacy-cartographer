@@ -46,8 +46,9 @@ lcart query <query> [--db FILE]
 
 lcart map [--db FILE] [--output FILE]
   Writes the module list and a Mermaid graph of module dependencies as
-  Markdown. Default output: lcart-out/map.md, replaced if it exists;
-  --output - writes to standard output.
+  Markdown. Default output: lcart-out/map.md. Replaces an earlier map,
+  never another file or the database; --output - writes to standard
+  output.
 
 --output - (or --output=-) means standard output.
 
