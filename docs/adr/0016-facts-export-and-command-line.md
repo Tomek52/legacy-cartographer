@@ -1,6 +1,6 @@
 # 0016. Facts export, command line and the git exposure warning
 
-- **Status:** Accepted; option syntax amended by [ADR-0017](0017-module-map-format-and-command-line.md#adr0017-command-line-v1) (a lone `-` value for `--output`); which file `query export --output` replaces amended by [ADR-0018](0018-facts-export-replaces-only-exports.md#adr0018-replace-only-exports-v1)
+- **Status:** Accepted; option syntax amended by [ADR-0017](0017-module-map-format-and-command-line.md#adr0017-command-line-v1) (a lone `-` value for `--output`); which file `query export --output` replaces amended by [ADR-0018](0018-facts-export-replaces-only-exports.md#adr0018-replace-only-exports-v1); exit status 5, `--jobs`, `--resume` and the partial database of `lcart analyze` amended by [ADR-0019](0019-parallel-resumable-analysis.md)
 - **Date:** 2026-10-04
 - **Requirements:** [FR-006](../specs/requirements.md#fr006-query-and-export-facts-v1),
   [NFR-004](../specs/requirements.md#nfr004-deterministic-output-v1),
