@@ -416,6 +416,16 @@ const char* to_text(DiagnosticSeverity severity) {
     std::unreachable();
 }
 
+Result<DependencyVia> dependency_via_from(std::string_view text) {
+    if (text == "include") {
+        return DependencyVia::include;
+    }
+    if (text == "call") {
+        return DependencyVia::call;
+    }
+    return std::unexpected(corrupt_value("module dependency via", text));
+}
+
 Result<DiagnosticSeverity> severity_from(std::string_view text) {
     if (text == "warning") {
         return DiagnosticSeverity::warning;
@@ -727,23 +737,66 @@ Result<std::vector<IncludeFact>> SqliteFactStore::includes_of(FileId includer) c
 }
 
 Result<std::vector<ModuleFact>> SqliteFactStore::module_dependencies(ModuleId module) const {
-    // A caller's module is the module of the file holding the caller's
-    // definition, likewise for the callee; indirect calls have no callee.
     return select_all<ModuleFact>(database_,
-                                  "SELECT m.id, m.name FROM module m WHERE m.id <> ?1 AND m.id IN ("
-                                  " SELECT target.module_id FROM include_edge e"
-                                  "  JOIN file source ON source.id = e.includer_id"
-                                  "  JOIN file target ON target.id = e.included_id"
-                                  "  WHERE source.module_id = ?1"
-                                  " UNION"
-                                  " SELECT callee_file.module_id FROM call_edge c"
-                                  "  JOIN function caller ON caller.id = c.caller_id"
-                                  "  JOIN file caller_file ON caller_file.id = caller.file_id"
-                                  "  JOIN function callee ON callee.id = c.callee_id"
-                                  "  JOIN file callee_file ON callee_file.id = callee.file_id"
-                                  "  WHERE caller_file.module_id = ?1 AND c.kind = 'direct')"
+                                  "SELECT m.id, m.name FROM module m WHERE m.id IN ("
+                                  " SELECT to_module_id FROM module_dependency"
+                                  " WHERE from_module_id = ?1)"
                                   " ORDER BY m.name",
                                   read_module, module);
+}
+
+Status SqliteFactStore::derive_module_dependencies() {
+    // A function belongs to the module of the file it is located in (its
+    // definition, once seen); indirect calls have no callee. An edge to an
+    // external file has a NULL module, so the `<>` excludes it.
+    constexpr const char* derive_sql = R"sql(
+BEGIN;
+DELETE FROM module_dependency;
+INSERT INTO module_dependency (from_module_id, to_module_id, via, edge_id)
+    SELECT source.module_id, target.module_id, 'include', e.id FROM include_edge e
+    JOIN file source ON source.id = e.includer_id
+    JOIN file target ON target.id = e.included_id
+    WHERE source.module_id <> target.module_id;
+INSERT INTO module_dependency (from_module_id, to_module_id, via, edge_id)
+    SELECT caller_file.module_id, callee_file.module_id, 'call', c.id FROM call_edge c
+    JOIN function caller ON caller.id = c.caller_id
+    JOIN file caller_file ON caller_file.id = caller.file_id
+    JOIN function callee ON callee.id = c.callee_id
+    JOIN file callee_file ON callee_file.id = callee.file_id
+    WHERE c.kind = 'direct' AND caller_file.module_id <> callee_file.module_id;
+COMMIT;
+)sql";
+    if (auto derived = execute_constant(database_, derive_sql); !derived) {
+        rollback(database_);
+        return derived;
+    }
+    return {};
+}
+
+Result<std::vector<ModuleDependencyFact>>
+SqliteFactStore::module_dependency_edges(ModuleId module) const {
+    auto read_edge = [](const Statement& row) -> Result<ModuleDependencyFact> {
+        auto via = dependency_via_from(row.text(2));
+        if (!via) {
+            return std::unexpected(via.error());
+        }
+        return ModuleDependencyFact{
+            .from = row.id<ModuleId>(0),
+            .to = row.id<ModuleId>(1),
+            .via = *via,
+            .edge_id = row.integer(3),
+            .site = {.file = row.id<FileId>(4), .line = row.uint32(5), .column = row.uint32(6)}};
+    };
+    return select_all<ModuleDependencyFact>(
+        database_,
+        "SELECT d.from_module_id, d.to_module_id, d.via, d.edge_id,"
+        " coalesce(i.includer_id, c.file_id), coalesce(i.line, c.line), coalesce(c.col, 0)"
+        " FROM module_dependency d JOIN module m ON m.id = d.to_module_id"
+        " LEFT JOIN include_edge i ON d.via = 'include' AND i.id = d.edge_id"
+        " LEFT JOIN call_edge c ON d.via = 'call' AND c.id = d.edge_id"
+        " WHERE d.from_module_id = ?1"
+        " ORDER BY m.name, d.via = 'call', d.edge_id",
+        read_edge, module);
 }
 
 Result<std::vector<DiagnosticFact>> SqliteFactStore::diagnostics() const {

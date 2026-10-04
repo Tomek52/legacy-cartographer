@@ -54,7 +54,7 @@ building a wrapper on top of it (M3, then M5).
 | Target | Input | Milestone |
 |---|---|---|
 | `claim_json_fuzzer` | arbitrary bytes as agent output → `parse_claims` | M2 (stub exists) |
-| config parser fuzzer | arbitrary `lcart.toml` | M1 (B-11) |
+| `project_config_fuzzer` | arbitrary bytes as `lcart.toml` → `parse_project_config`, then every accepted glob matched | M1 (B-11, runs in CI) |
 | libmodbus frame parsing | arbitrary bytes as a received frame through the seam above | M4 |
 
 - Sanitizers: ASan + UBSan. Corpora are kept out of the repository except a

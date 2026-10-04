@@ -20,7 +20,7 @@ expanded in place; its version is bumped if its meaning changes
 | [B-08](#b08-file-and-include-facts-v1) | ✅ File and include facts | M1 | FR-002 | B-06, B-07 | 4 h |
 | [B-09](#b09-function-facts-v1) | ✅ Function facts | M1 | FR-003 | B-08 | 4 h |
 | [B-10](#b10-call-edges-v1) | ✅ Direct and indirect call edges | M1 | FR-004 | B-09 | 5 h |
-| [B-11](#b11-module-rules-v2) | Module rules and module dependencies | M1 | FR-005 | B-08 | 4 h |
+| [B-11](#b11-module-rules-v2) | ✅ Module rules and module dependencies | M1 | FR-005 | B-08 | 4 h |
 | [B-12](#b12-query-and-export-v1) | `lcart analyze` / `lcart query` / export | M1 | FR-006, NFR-004 | B-10, B-11 | 5 h |
 | [B-13](#b13-module-map-v1) | `lcart map` | M1 | FR-007 | B-12 | 3 h |
 | [B-14](#b14-libmodbus-baseline-v1) | libmodbus baseline map and timing | M1 | NFR-001, NFR-005 | B-05, B-13 | 3 h |
@@ -203,6 +203,23 @@ plus:
    consent switches in the file are errors.
 2. A fuzz target for the configuration parser exists and runs in CI
    ([NFR-010](../specs/requirements.md#nfr010-untrusted-input-v1)).
+
+Result (2026-10-04): a new `config` module (`src/config/`) parses
+`lcart.toml` with toml++ 3.4.0, header-only and without exceptions, into
+`ProjectConfig`; errors name file, line and column. The glob syntax, for
+module rules and for `[project] exclude` (moved here from B-08), is
+[ADR-0014](../adr/0014-path-globs-in-the-configuration.md). After the last
+translation unit the analysis fills `MODULE_DEPENDENCY`
+([data model](../architecture/data-model.md#arch-data-model-modules-v1)).
+`fuzz/project_config_fuzzer.cpp` runs with the other fuzzers in CI
+(`scripts/fuzz-smoke.sh`); within seconds it found two kinds of undefined
+behaviour in toml++ 3.4.0 on malformed input, fixed upstream but not
+released, and review found unbounded recursion on deeply dotted keys, so
+`lcart.toml` is ASCII, small and shallow, and toml++'s assertions are off
+([ADR-0015](../adr/0015-ascii-configuration-while-tomlplusplus-3-4.md)).
+Conan Center's recipe has `tomlplusplus` 3.4.0
+(`recipes/tomlplusplus/config.yml` in conan-center-index). Reading
+`lcart.toml` from the command line is B-12.
 
 ### <a id="b12-query-and-export-v1"></a>**[B-12 v1]** `lcart analyze`, `lcart query`, export
 

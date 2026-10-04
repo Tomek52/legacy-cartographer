@@ -43,9 +43,9 @@ jobs:
         run: cmake --build --preset ${{ matrix.preset }}
       - name: Test
         run: ctest --preset ${{ matrix.preset }}
-      - name: Fuzz smoke (stub targets, 10 s)
+      - name: Fuzz (60 s per target, NFR-010)
         if: matrix.preset == 'asan-ubsan'
-        run: build/asan-ubsan/fuzz/claim_json_fuzzer -max_total_time=10
+        run: scripts/fuzz-smoke.sh build/asan-ubsan
 
   cpp-system:
     # Same build from Ubuntu packages only: the offline / air-gapped path
@@ -61,12 +61,12 @@ jobs:
       - name: Install toolchain and libraries
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y -qq $APT_PACKAGES libsqlite3-dev nlohmann-json3-dev libgtest-dev
+          sudo apt-get install -y -qq $APT_PACKAGES libsqlite3-dev nlohmann-json3-dev libtomlplusplus-dev libgtest-dev
       - name: Configure, build, test
         run: cmake --workflow --preset ${{ matrix.preset }}
-      - name: Fuzz smoke (stub targets, 10 s)
+      - name: Fuzz (60 s per target, NFR-010)
         if: matrix.preset == 'asan-ubsan-system'
-        run: build/asan-ubsan-system/fuzz/claim_json_fuzzer -max_total_time=10
+        run: scripts/fuzz-smoke.sh build/asan-ubsan-system
 
   targets:
     # Analysed code bases stay pinned and unmodified (NFR-008).
@@ -87,7 +87,7 @@ jobs:
       - name: Install toolchain and libraries
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y -qq $APT_PACKAGES libsqlite3-dev nlohmann-json3-dev libgtest-dev
+          sudo apt-get install -y -qq $APT_PACKAGES libsqlite3-dev nlohmann-json3-dev libtomlplusplus-dev libgtest-dev
       - name: clang-format
         run: scripts/check-format.sh
       - name: clang-tidy

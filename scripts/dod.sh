@@ -52,7 +52,7 @@ for preset in $presets; do
     run "build+test $preset" cmake --workflow --preset "$preset"
 done
 if [[ " $presets " == *" asan-ubsan-system "* ]]; then
-    run "fuzz smoke (10 s)" build/asan-ubsan-system/fuzz/claim_json_fuzzer -max_total_time=10
+    run "fuzz (60 s per target)" scripts/fuzz-smoke.sh build/asan-ubsan-system
 fi
 run "check-format" scripts/check-format.sh
 run "clang-tidy" bash -c 'cmake --preset debug-system >/dev/null && scripts/run-clang-tidy.sh debug-system'

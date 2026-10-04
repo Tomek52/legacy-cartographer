@@ -1,5 +1,6 @@
 #pragma once
 
+#include "analysis/module_rules.hpp"
 #include "common/result.hpp"
 #include "facts/fact_store.hpp"
 
@@ -18,7 +19,14 @@ struct AnalysisRequest {
     /// Must be an existing directory. Files under it are stored with paths
     /// relative to it; files outside it with absolute paths.
     std::filesystem::path root;
-    std::vector<std::string> exclude_globs;
+    /// Translation units whose main file is under the root and matches one
+    /// of these are skipped: not analysed and not counted in the coverage.
+    /// Headers they match are still recorded when an analysed unit includes
+    /// them.
+    std::vector<config::PathGlob> exclude_globs;
+    /// Files under the root belong to the module of the first rule with a
+    /// matching glob, else to default_module() (FR-005).
+    ModuleRules module_rules;
 };
 
 struct AnalysisSummary {

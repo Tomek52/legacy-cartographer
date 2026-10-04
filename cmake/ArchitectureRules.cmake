@@ -3,7 +3,7 @@
 # forbidden target_link_libraries() fails `cmake --preset ...` immediately.
 
 set(LCART_DETERMINISTIC_MODULES
-    lcart_common lcart_facts lcart_analysis lcart_claims lcart_verify lcart_report
+    lcart_common lcart_config lcart_facts lcart_analysis lcart_claims lcart_verify lcart_report
     lcart_handoff)
 set(LCART_FORBIDDEN_IN_DETERMINISTIC lcart_llm)
 

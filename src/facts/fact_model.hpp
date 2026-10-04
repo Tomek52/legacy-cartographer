@@ -99,6 +99,25 @@ struct CallFact {
     bool operator==(const CallFact&) const = default;
 };
 
+/// What makes one module depend on another (FR-005 criterion 3).
+enum class DependencyVia : std::uint8_t { include, call };
+
+/// One edge that makes module `from` depend on module `to`: an include
+/// directive in a file of `from` naming a file of `to`, or a direct call from
+/// a function of `from` to a function of `to` (a function belongs to the
+/// module of the file it is located in: its definition, else its first
+/// declaration).
+struct ModuleDependencyFact {
+    ModuleId from{};
+    ModuleId to{};
+    DependencyVia via{DependencyVia::include};
+    std::int64_t edge_id{}; ///< Row id of the include or call edge.
+    /// The include directive (column 0: not recorded) or the call site.
+    SourceLocation site{};
+
+    bool operator==(const ModuleDependencyFact&) const = default;
+};
+
 enum class DiagnosticSeverity : std::uint8_t { warning, error, fatal };
 
 /// A compiler diagnostic from analysing one translation unit (FR-001). Paths

@@ -1,6 +1,7 @@
 #include "analysis/clang_analyzer.hpp"
 
 #include "analysis/argument_filter.hpp"
+#include "config/path_glob.hpp"
 
 #include <clang/AST/ASTConsumer.h>
 #include <clang/AST/DynamicRecursiveASTVisitor.h>
@@ -21,6 +22,7 @@
 #include <filesystem>
 #include <iterator>
 #include <optional>
+#include <span>
 #include <string>
 #include <utility>
 #include <vector>
@@ -232,11 +234,32 @@ load_compilation_database(const std::filesystem::path& path) {
     return clang::tooling::expandResponseFiles(std::move(database), llvm::vfs::getRealFileSystem());
 }
 
+/// Whether the translation unit `file` (as the compilation database names
+/// it) is under `root` and its root-relative path matches one of `exclude`.
+/// The path is computed as FileFactCollector computes it.
+[[nodiscard]] bool is_excluded(const std::string& file, const std::filesystem::path& root,
+                               std::span<const config::PathGlob> exclude) {
+    if (exclude.empty()) {
+        return false;
+    }
+    std::error_code ec;
+    std::filesystem::path canonical = std::filesystem::weakly_canonical(file, ec);
+    if (ec) {
+        canonical = std::filesystem::path{file}.lexically_normal();
+    }
+    const std::filesystem::path relative = canonical.lexically_relative(root);
+    if (relative.empty() || *relative.begin() == std::filesystem::path{".."}) {
+        return false;
+    }
+    const std::string path = relative.generic_string();
+    return std::ranges::any_of(
+        exclude, [&path](const config::PathGlob& glob) { return glob.matches(path); });
+}
+
 } // namespace
 
 common::Result<AnalysisSummary> ClangAnalyzer::analyze(const AnalysisRequest& request,
                                                        facts::FactWriter& out) {
-    // TODO(B-11): apply request.exclude_globs, with the glob syntax of the module rules.
     auto database = load_compilation_database(request.compilation_database);
     if (!database) {
         return std::unexpected(database.error());
@@ -258,7 +281,10 @@ common::Result<AnalysisSummary> ClangAnalyzer::analyze(const AnalysisRequest& re
             common::Error{.code = common::ErrorCode::invalid_argument,
                           .message = "analysis root is not a directory: " + request.root.string()});
     }
-    FileFactCollector file_collector{std::move(root), out};
+    std::erase_if(files, [&root, &request](const std::string& file) {
+        return is_excluded(file, root, request.exclude_globs);
+    });
+    FileFactCollector file_collector{std::move(root), request.module_rules, out};
     FunctionFactCollector function_collector{file_collector, out};
     CallFactCollector call_collector{file_collector, function_collector, out};
     FactActionFactory action_factory{Collectors{
@@ -307,6 +333,9 @@ common::Result<AnalysisSummary> ClangAnalyzer::analyze(const AnalysisRequest& re
         }
     }
 
+    if (auto derived = out.derive_module_dependencies(); !derived) {
+        return std::unexpected(derived.error());
+    }
     if (auto written =
             out.set_coverage({.translation_units_total = summary.translation_units_total,
                               .translation_units_parsed = summary.translation_units_parsed});

@@ -12,7 +12,7 @@ and the ADRs it links **before** writing code.
 
 ## Boundaries (enforced; do not work around the enforcement)
 
-- **Deterministic core** (`src/{common,facts,analysis,claims,verify,report,handoff}`)
+- **Deterministic core** (`src/{common,config,facts,analysis,claims,verify,report,handoff}`)
   never includes or links `src/llm`. `cmake/ArchitectureRules.cmake` fails
   configure if it does. Do not edit the rule to make a change pass.
 - **Clang stays in `analysis`.** No Clang type in any other module's

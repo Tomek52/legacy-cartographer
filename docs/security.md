@@ -19,7 +19,10 @@ the design does about it. Decisions:
 
 ## Trust boundaries
 
-1. Analysed code and `compile_commands.json` → tool: **untrusted input**.
+1. Analysed code, `compile_commands.json` and an `lcart.toml` that comes
+   with the code → tool: **untrusted input**. The configuration parser is
+   fuzzed, and works around undefined behaviour in toml++ 3.4.0
+   ([ADR-0015](adr/0015-ascii-configuration-while-tomlplusplus-3-4.md)).
 2. Handoff bundle → external agent and its LLM provider: **may leave the
    machine**, under the user's control.
 3. Agent output → tool: **untrusted input** (the model has read untrusted data).

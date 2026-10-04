@@ -13,7 +13,7 @@ description: Conventions for driving a legacy-cartographer pull request to green
 | `C++ <p> (no Conan)` | `cmake --workflow --preset <p>` with `<p>` = `debug-system` or `asan-ubsan-system` |
 | `Targets pinned and clean` | `scripts/check-targets.sh` |
 | `Format + clang-tidy` | `scripts/check-format.sh`, `scripts/run-clang-tidy.sh debug-system` |
-| Fuzz smoke step in `asan-ubsan` jobs | `build/<preset>/fuzz/claim_json_fuzzer -max_total_time=10` |
+| Fuzz step in `asan-ubsan` jobs | `scripts/fuzz-smoke.sh build/<preset>` (60 s per target) |
 | `Anchors + mkdocs build --strict` | `scripts/docs-check.sh` and `python3 -m unittest discover -s tests/docs` |
 | `CodeQL` (manual trigger only until the repository is public) | none locally |
 
@@ -29,6 +29,10 @@ Reproduce locally first, show the same command passing, then push.
   the job log before changing code.
 - **No Conan Center behind a proxy:** use the `*-system` presets locally;
   CI covers the Conan ones.
+- **`release` red with `-Wnull-dereference` inside libstdc++** (GCC -O3
+  inlining, e.g. `istreambuf_iterator`): reproduce with
+  `cmake --preset debug-system -B build/rel-repro -DCMAKE_BUILD_TYPE=Release`
+  and rewrite the code (a sized `read()`), never suppress the warning.
 - **clang-tidy `bugprone-unchecked-optional-access` in tests:** gtest
   `ASSERT_*` is not understood by the check; compare whole values
   (`EXPECT_EQ(opt, expected)`) instead of dereferencing.

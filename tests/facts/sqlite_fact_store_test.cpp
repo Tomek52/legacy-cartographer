@@ -190,10 +190,52 @@ TEST(SqliteFactStore, IncludesInLineOrderWithUnresolvedTarget) {
 
 TEST(SqliteFactStore, ModuleDependenciesFromIncludesAndCalls) {
     Fixture f;
+    EXPECT_TRUE(value_of(f.store->module_dependencies(f.app)).empty()); // not derived yet
+    expect_ok(f.store->derive_module_dependencies());
+
     auto app_deps = value_of(f.store->module_dependencies(f.app));
     ASSERT_EQ(app_deps.size(), 1U); // external stdio.h is in no module
     EXPECT_EQ(app_deps[0].id, f.core);
     EXPECT_TRUE(value_of(f.store->module_dependencies(f.core)).empty());
+}
+
+// Verifies: fr005-map-files-to-modules-v1 (criterion 3: dependencies are
+// stored with the edges that justify them).
+TEST(SqliteFactStore, ModuleDependenciesKeepTheirEdges) {
+    Fixture f;
+    expect_ok(f.store->derive_module_dependencies());
+
+    // Ids follow insertion order: the second include, the fourth call.
+    const std::vector<ModuleDependencyFact> expected{
+        {.from = f.app,
+         .to = f.core,
+         .via = DependencyVia::include,
+         .edge_id = 2,
+         .site = {.file = f.main_c, .line = 1, .column = 0}},
+        {.from = f.app,
+         .to = f.core,
+         .via = DependencyVia::call,
+         .edge_id = 4,
+         .site = {.file = f.main_c, .line = 3, .column = 5}},
+    };
+    EXPECT_EQ(value_of(f.store->module_dependency_edges(f.app)), expected);
+    // Calls and includes within core justify nothing.
+    EXPECT_TRUE(value_of(f.store->module_dependency_edges(f.core)).empty());
+}
+
+TEST(SqliteFactStore, DerivingModuleDependenciesAgainReplacesThem) {
+    Fixture f;
+    expect_ok(f.store->derive_module_dependencies());
+    const ModuleId tools = value_of(f.store->add_module({.name = "tools"}));
+    const FileId tool_c = f.add_file("tools/tool.c", tools);
+    expect_ok(f.store->add_include(
+        {.includer = tool_c, .included = f.core_h, .spelled = "core.h", .line = 1}));
+    expect_ok(f.store->derive_module_dependencies());
+
+    EXPECT_EQ(value_of(f.store->module_dependency_edges(f.app)).size(), 2U);
+    auto tool_deps = value_of(f.store->module_dependencies(tools));
+    ASSERT_EQ(tool_deps.size(), 1U);
+    EXPECT_EQ(tool_deps[0].name, "core");
 }
 
 TEST(SqliteFactStore, DiagnosticsAndCoverageRoundTrip) {

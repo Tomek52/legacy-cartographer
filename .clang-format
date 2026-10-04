@@ -15,9 +15,9 @@ PointerAlignment: Left
 IncludeBlocks: Regroup
 IncludeCategories:
   # Project headers first, then third-party, then the standard library.
-  - Regex: '^"(common|facts|analysis|handoff|llm|claims|verify|report|cli)/'
+  - Regex: '^"(common|config|facts|analysis|handoff|llm|claims|verify|report|cli)/'
     Priority: 1
-  - Regex: '^<(gtest|gmock|nlohmann|sqlite3|clang|llvm)'
+  - Regex: '^<(gtest|gmock|nlohmann|sqlite3|toml\+\+|clang|llvm)'
     Priority: 2
   - Regex: '^<.*>'
     Priority: 3

@@ -29,6 +29,8 @@ moving the answer into the relevant spec or ADR and deleting it here.
 | HTTP client | not needed before M6; decided then | [M6](plan/roadmap.md#m6-built-in-providers-v1) |
 | Platform / MSVC code | Linux and WSL2 only; MSVC code parsed by Clang in MSVC mode | [ADR-0009](adr/0009-linux-and-wsl2-only.md) |
 | Traceability format | IDs + versioned anchors, plus a generated traceability matrix that also gates CI; no restructuring after a standard | [ADR-0010](adr/0010-traceability-matrix.md) |
+| Path glob syntax for module rules and exclusions | `*` within a directory, `**` across directories, anchored at the root; exclusions select translation units | [ADR-0014](adr/0014-path-globs-in-the-configuration.md) |
+| Undefined behaviour in toml++ 3.4.0 on malformed input | `lcart.toml` is ASCII and toml++'s assertions are off until a fixed release is packaged | [ADR-0015](adr/0015-ascii-configuration-while-tomlplusplus-3-4.md) |
 | Function with external linkage defined in several translation units | each definition is a function with its own calls; the analysis warns | [ADR-0013](adr/0013-functions-with-external-linkage-defined-twice.md) |
 | Performance for large code bases | hours or days are acceptable; the tool must use all cores, show progress and resume interrupted runs; incremental re-analysis later | [NFR-005](specs/requirements.md#nfr005-performance-budget-v2) |
 
@@ -42,7 +44,6 @@ None open. New questions are added here as they come up.
 |---|---|---|
 | Run each translation unit in a child process so a Clang crash cannot end the run? Costs process start-up per TU. | [security T5](security.md) | B-16, after measuring on libmodbus |
 | How to show paths of files outside the analysis root (now absolute, e.g. Clang's resource directory or a home directory) in golden exports and handoff bundles: spelling, path relative to the include directory, or absolute but stripped? | [file facts](architecture/data-model.md#arch-data-model-file-facts-v1), [security](security.md) | B-12 (golden export), M2 (bundles) |
-| `AnalysisRequest::exclude_globs` is not applied yet; it should share the glob syntax of the module rules. | [B-08 result](plan/backlog.md#b08-file-and-include-facts-v1) | B-11 |
 | `DIAGNOSTIC.file_id` stays null: diagnostics carry Clang's path, not the root-relative one. | [data model](architecture/data-model.md) | B-12 |
 | `TRANSLATION_UNIT.file_id` is not set yet: the row is written with diagnostics, before per-TU status exists. | [data model](architecture/data-model.md) | B-16 |
 
@@ -59,6 +60,5 @@ None open. New questions are added here as they come up.
 | How to run a GitHub Actions job without network access | [NFR-001](specs/requirements.md#nfr001-works-without-llm-v1) | B-14 |
 | MkDocs/Material settings that keep raw HTML in generated docs from executing | [security](security.md) | M2 |
 | Usable local model sizes for claim generation | [NFR-003](specs/requirements.md#nfr003-fully-local-mode-v1) | M6 |
-| Conan Center has `tomlplusplus` 3.4.0 | [ADR-0008](adr/0008-configuration-file-format.md) | B-11 |
 | Claude Code permission rule syntax for a bundle's `.claude/settings.json` | [handoff contract](specs/handoff-contract.md#claim-agent-permissions-v1) | M2 |
 | Parsing Mermaid without a browser to validate agent diagrams | [FR-008](specs/requirements.md#fr008-generate-documentation-v2) | M2 |

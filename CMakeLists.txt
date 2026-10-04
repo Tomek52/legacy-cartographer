@@ -18,12 +18,26 @@ set(LCART_SANITIZERS "" CACHE STRING "Semicolon-separated -fsanitize= values, e.
 list(APPEND CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake")
 include(CompilerOptions)
 include(Sanitizers)
+# libFuzzer's coverage feedback needs every library the fuzz targets link
+# instrumented, not only the targets themselves (fuzz/CMakeLists.txt).
+if(LCART_BUILD_FUZZERS AND CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+    add_compile_options(-fsanitize=fuzzer-no-link)
+endif()
 include(ArchitectureRules)
 
 # Third-party dependencies: from Conan (CMakeDeps) or from distribution
 # packages (the *-system presets). Both provide the same imported targets.
 find_package(SQLite3 REQUIRED)
 find_package(nlohmann_json 3.11 REQUIRED)
+# toml++ header-only and without exceptions in every build (ADR-0008): the
+# Ubuntu package's imported target links a shared library built with
+# exceptions, which the sanitizer and fuzzer builds would not instrument.
+find_package(tomlplusplus 3.4 REQUIRED)
+add_library(lcart_tomlplusplus INTERFACE)
+add_library(lcart::tomlplusplus ALIAS lcart_tomlplusplus)
+get_target_property(_lcart_toml_includes tomlplusplus::tomlplusplus INTERFACE_INCLUDE_DIRECTORIES)
+target_include_directories(lcart_tomlplusplus SYSTEM INTERFACE ${_lcart_toml_includes})
+target_compile_definitions(lcart_tomlplusplus INTERFACE TOML_HEADER_ONLY=1 TOML_EXCEPTIONS=0)
 
 # Clang/LLVM 20 from the distribution packages (ADR-0002, ADR-0007), never
 # from Conan. On Ubuntu: llvm-20-dev libclang-20-dev libclang-cpp20-dev.

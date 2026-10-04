@@ -1,21 +1,23 @@
 # Components
 
-Status: `analysis` has the Clang driver (B-07: compilation database, coverage,
-diagnostics, argument filter); every other module has its interface header
-and no implementation.
+Status: `facts` (SQLite store, B-06), `analysis` (Clang driver and file,
+function, call and module facts, B-07–B-11) and `config` (B-11) are
+implemented; every other module has its interface header and no
+implementation.
 
 | Module | Responsibility | Main interface | Depends on | Delivered in |
 |---|---|---|---|---|
 | `common` | error type, `Result<T>` = `std::expected<T, Error>`, version | `common/result.hpp` | — | M0 |
+| `config` | parse `lcart.toml` (toml++); path globs | `config/project_config.hpp`, `config/path_glob.hpp` | common, toml++ | M1 (B-11) |
 | `facts` | fact model; write and query interfaces; SQLite implementation | `facts/fact_store.hpp` (`FactWriter`, `FactQuery`) | common, SQLite | M1 (B-06) |
-| `analysis` | parse TUs with Clang, emit facts; map files to modules | `analysis/analyzer.hpp` (`Analyzer`), `analysis/module_rules.hpp` | facts, Clang 20 | M1 (B-07…B-11) |
+| `analysis` | parse TUs with Clang, emit facts; map files to modules | `analysis/analyzer.hpp` (`Analyzer`), `analysis/module_rules.hpp` | facts, config, Clang 20 | M1 (B-07…B-11) |
 | `claims` | claim model; parse and validate claims JSON | `claims/claim.hpp`, `claims/claim_parser.hpp` | common, nlohmann_json | M2 |
 | `verify` | verification rules | `verify/claim_verifier.hpp`, `verify/verdict.hpp` | claims, facts | M2 |
 | `report` | module map (M1), verification report and document annotation (M2) | `report/report_writer.hpp` | verify | M1 (B-13), M2 |
 | `handoff` | write bundles for an external agent, read its output | `handoff/handoff.hpp` | claims, facts | M2 |
 | `llm` | built-in providers, egress gate, egress log | `llm/provider.hpp`, `llm/egress_policy.hpp` | common, HTTP client (TBD) | M6 |
 | `testgen` | characterization test skeletons | not created yet | facts | M3 |
-| `cli` | the `lcart` executable, `lcart.toml` (toml++) | `cli/main.cpp` | all | M0 (help/version) |
+| `cli` | the `lcart` executable; reads `lcart.toml` through `config` | `cli/main.cpp` | all | M0 (help/version) |
 
 ## <a id="arch-threading-v1"></a>Threading
 

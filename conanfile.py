@@ -22,6 +22,8 @@ class LegacyCartographerConan(ConanFile):
         # first CI run (could not be checked offline; docs/open-questions.md).
         self.requires("sqlite3/3.46.1")
         self.requires("nlohmann_json/3.11.3")
+        # Header-only; built without exceptions by our CMake (ADR-0008).
+        self.requires("tomlplusplus/3.4.0")
 
     def build_requirements(self):
         self.test_requires("gtest/1.15.0")
