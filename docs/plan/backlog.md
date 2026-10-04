@@ -163,11 +163,14 @@ on the `two_modules` and `static_same_name` fixtures.
 Result (2026-10-04): an AST consumer hands every `FunctionDecl` to
 `FunctionFactCollector` (`src/analysis/src/function_fact_collector.hpp`),
 which writes a function once per USR, and once more when its definition is
-first seen. Clang's USR for a `static` function names only its file's base
+first seen. Clang's USR for a `static` function names only a file's base
 name, so `left/util.c` and `right/util.c` would share one; the stored USR
-gets the root-relative path as a prefix. That rule and the others are on the
+gets the path of the defining file as a prefix
+([ADR-0012](../adr/0012-function-identity-for-internal-linkage.md)). The
+other rules are on the
 [data model](../architecture/data-model.md#arch-data-model-function-facts-v1)
-page.
+page; duplicate external definitions are an
+[open question](../open-questions.md#open-technical-questions).
 
 ### <a id="b10-call-edges-v1"></a>**[B-10 v1]** Direct and indirect call edges
 

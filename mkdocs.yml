@@ -87,6 +87,7 @@ nav:
       - adr/0009-linux-and-wsl2-only.md
       - adr/0010-traceability-matrix.md
       - adr/0011-pull-request-flow-with-agent-review.md
+      - adr/0012-function-identity-for-internal-linkage.md
   - Testing:
       - testing/index.md
       - Strategy: testing/strategy.md

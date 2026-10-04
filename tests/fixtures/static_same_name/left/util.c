@@ -5,5 +5,9 @@ static int helper(void) {
 }
 
 int left_value(void) {
-    return helper();
+    return twice(helper()) + callback();
+}
+
+static int callback(void) {
+    return 10;
 }

@@ -3,7 +3,7 @@
 #include "analysis/argument_filter.hpp"
 
 #include <clang/AST/ASTConsumer.h>
-#include <clang/AST/RecursiveASTVisitor.h>
+#include <clang/AST/DynamicRecursiveASTVisitor.h>
 #include <clang/Basic/Diagnostic.h>
 #include <clang/Basic/SourceManager.h>
 #include <clang/Frontend/CompilerInstance.h>
@@ -119,14 +119,15 @@ private:
 
 /// Hands every function declaration of a parsed translation unit to the
 /// collector. Template instantiations and implicit code are not visited
-/// (RecursiveASTVisitor's defaults).
-class FunctionVisitor final : public clang::RecursiveASTVisitor<FunctionVisitor> {
+/// (the visitor's defaults). The dynamic visitor, not the RecursiveASTVisitor
+/// template: inlining that template trips GCC's -Wnull-dereference in Clang's
+/// own headers in release builds.
+class FunctionVisitor final : public clang::DynamicRecursiveASTVisitor {
 public:
     FunctionVisitor(clang::ASTContext& context, FunctionFactCollector& collector)
         : context_(&context), collector_(&collector) {}
 
-    // NOLINTNEXTLINE(readability-identifier-naming): RecursiveASTVisitor's CRTP hook.
-    bool VisitFunctionDecl(clang::FunctionDecl* function) {
+    bool VisitFunctionDecl(clang::FunctionDecl* function) override {
         collector_->on_function(*context_, *function);
         return true;
     }

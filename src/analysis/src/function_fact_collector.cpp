@@ -12,8 +12,8 @@ namespace lcart::analysis {
 
 namespace {
 
-/// Declarations FR-003 does not mean by "function": compiler-generated ones
-/// (implicit builtins, special members), lambda call operators and C++17
+/// Skips declarations FR-003 does not mean by "function": compiler-generated
+/// ones (implicit builtins, special members), lambda call operators and C++17
 /// deduction guides.
 [[nodiscard]] bool is_recorded_kind(const clang::FunctionDecl& function) {
     if (function.isImplicit() || function.isInvalidDecl() ||
@@ -21,7 +21,8 @@ namespace {
         return false;
     }
     const auto* method = llvm::dyn_cast<clang::CXXMethodDecl>(&function);
-    return method == nullptr || !method->getParent()->isLambda();
+    const clang::CXXRecordDecl* parent = method == nullptr ? nullptr : method->getParent();
+    return parent == nullptr || !parent->isLambda();
 }
 
 [[nodiscard]] clang::OptionalFileEntryRef file_of(const clang::SourceManager& sources,
@@ -60,11 +61,16 @@ void FunctionFactCollector::on_function(clang::ASTContext& context,
     if (is_internal) {
         // Clang's USR for internal linkage names only the base name of the
         // file of the first declaration (`c:util.c@F@helper`), so `static`
-        // functions in a/util.c and b/util.c would be one function
-        // (FR-003 criterion 1). Prefix the path of that file.
-        const clang::OptionalFileEntryRef first =
-            file_of(sources, function.getCanonicalDecl()->getLocation());
-        usr.insert(0, (first ? files_->fact_path(sources, *first).path : std::string{}) + "#");
+        // functions in a/util.c and b/util.c, or two definitions of a
+        // `static` declared in one shared header, would be one function
+        // (FR-003 criterion 1). Prefix the path of the file of this TU's
+        // definition, or of the first declaration if the TU has none (ADR-0012).
+        const clang::FunctionDecl* definition = function.getDefinition();
+        const clang::FunctionDecl* named =
+            definition != nullptr ? definition : function.getCanonicalDecl();
+        const clang::OptionalFileEntryRef named_file = file_of(sources, named->getLocation());
+        usr.insert(0, (named_file ? files_->fact_path(sources, *named_file).path : std::string{}) +
+                          "#");
     }
 
     const bool is_definition = function.isThisDeclarationADefinition();

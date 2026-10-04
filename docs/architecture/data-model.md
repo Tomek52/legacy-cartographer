@@ -52,7 +52,7 @@ erDiagram
     }
     FUNCTION {
         int id PK
-        text usr UK "path-prefixed if internal"
+        text usr UK "path-prefixed if internal (ADR-0012)"
         text name
         text qualified_name
         text signature "type as Clang prints it"
@@ -173,12 +173,14 @@ How [FR-003](../specs/requirements.md#fr003-record-functions-v1) maps onto
   recorded; `printf` declared in `<stdio.h>` is not. Compiler-generated
   declarations, lambda call operators and deduction guides are skipped, and
   so are template instantiations (the template itself is recorded).
-- `usr` is Clang's USR. For a function with internal linkage it is prefixed
-  with the root-relative path of the file of its first declaration and `#`
-  (`left/util.c#c:util.c@F@helper`), because Clang's USR then names only the
-  file's base name and two `static` functions in `left/util.c` and
-  `right/util.c` would be one row. A `static` function in a header reached
-  from several translation units stays one row.
+- `usr` is Clang's USR; for a function with internal linkage it is
+  prefixed with the root-relative path of the file of its definition (else
+  of its first declaration) and `#`, e.g. `left/util.c#c:util.c@F@helper`
+  ([ADR-0012](../adr/0012-function-identity-for-internal-linkage.md#adr0012-internal-linkage-usr-v1)),
+  because Clang's USR then names only the base name of a file. Two `static`
+  functions in `left/util.c` and `right/util.c`, or two definitions of a
+  `static` declared in one shared header, are two rows; a `static inline`
+  function defined in a header is one row.
 - `linkage` is `external` if the function is visible outside its
   translation unit, else `internal` (`static`, anonymous namespace).
 - `signature` is the function's type as Clang prints it, without parameter
@@ -188,3 +190,7 @@ How [FR-003](../specs/requirements.md#fr003-record-functions-v1) maps onto
   line range runs from the first token (`static`, the return type) to the
   closing brace or semicolon. A function written by a macro is located at
   the macro's use.
+- A function with external linkage defined in two translation units (two
+  programs' `main` in one compilation database) is one row at the first
+  definition in path order; later definitions are not recorded
+  ([open question](../open-questions.md#open-technical-questions)).

@@ -12,6 +12,7 @@
 #include <optional>
 #include <ostream>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace {
@@ -76,8 +77,14 @@ protected:
         ASSERT_EQ(summary->translation_units_parsed, files.size());
     }
 
+    /// A query error fails the test, so an empty result means no function.
     [[nodiscard]] std::vector<FunctionFact> functions(const std::string& name) const {
-        return store_->find_functions(name).value_or(std::vector<FunctionFact>{});
+        auto found = store_->find_functions(name);
+        if (!found) {
+            ADD_FAILURE() << "find_functions(" << name << "): " << found.error().message;
+            return {};
+        }
+        return std::move(*found);
     }
 
     /// `functions(name)` with file paths; `known_files` are the paths the
@@ -86,9 +93,11 @@ protected:
     summaries(const std::string& name, const std::vector<std::string>& known_files) const {
         std::map<FileId, std::string> paths;
         for (const std::string& path : known_files) {
-            const auto file = store_->find_file(path).value_or(std::nullopt);
-            if (file) {
-                paths.emplace(file->id, path);
+            const auto file = store_->find_file(path);
+            if (!file) {
+                ADD_FAILURE() << "find_file(" << path << "): " << file.error().message;
+            } else if (*file) {
+                paths.emplace((*file)->id, path);
             }
         }
         std::vector<FunctionSummary> result;
@@ -146,6 +155,44 @@ TEST_F(FunctionFactsTest, StaticFunctionsWithOneNameInFilesWithOneBaseNameAreTwo
                                                                   .linkage = Linkage::internal,
                                                                   .signature = "int (void)"},
                                                              }));
+}
+
+// Verifies: fr003-record-functions-v1 (criterion 1, with the first
+// declaration in a header both files include)
+TEST_F(FunctionFactsTest, StaticFunctionDeclaredInSharedHeaderAndDefinedTwiceIsTwoFunctions) {
+    analyze_static_same_name();
+
+    const std::vector<FunctionFact> callbacks = functions("callback");
+    ASSERT_EQ(callbacks.size(), 2U);
+    EXPECT_NE(callbacks[0].usr, callbacks[1].usr);
+    EXPECT_EQ(summaries("callback", static_same_name_files()), (std::vector<FunctionSummary>{
+                                                                   {.file = "left/util.c",
+                                                                    .line_begin = 11,
+                                                                    .line_end = 13,
+                                                                    .is_definition = true,
+                                                                    .linkage = Linkage::internal,
+                                                                    .signature = "int (void)"},
+                                                                   {.file = "right/util.c",
+                                                                    .line_begin = 14,
+                                                                    .line_end = 16,
+                                                                    .is_definition = true,
+                                                                    .linkage = Linkage::internal,
+                                                                    .signature = "int (void)"},
+                                                               }));
+}
+
+// Verifies: fr003-record-functions-v1 (a static function defined in a header
+// is one function, however many translation units include it)
+TEST_F(FunctionFactsTest, StaticInlineFunctionInHeaderIsOneFunction) {
+    analyze_static_same_name();
+
+    EXPECT_EQ(summaries("twice", static_same_name_files()),
+              (std::vector<FunctionSummary>{{.file = "shared.h",
+                                             .line_begin = 8,
+                                             .line_end = 8,
+                                             .is_definition = true,
+                                             .linkage = Linkage::internal,
+                                             .signature = "int (int)"}}));
 }
 
 // Verifies: fr003-record-functions-v1 (criteria 2 and 3)
