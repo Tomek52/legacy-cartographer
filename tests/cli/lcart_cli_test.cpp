@@ -56,7 +56,7 @@ class LcartCliTest : public ::testing::Test {
 protected:
     void SetUp() override {
         work_dir_ = fs::temp_directory_path() /
-                    ("lcart-cli-" +
+                    ("lcart-cli-" + std::to_string(getpid()) + "-" +
                      std::string{::testing::UnitTest::GetInstance()->current_test_info()->name()});
         fs::remove_all(work_dir_);
         fs::create_directories(work_dir_);

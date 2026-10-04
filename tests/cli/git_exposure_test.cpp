@@ -9,6 +9,8 @@
 #include <fstream>
 #include <string>
 #include <string_view>
+#include <sys/stat.h>
+#include <unistd.h>
 
 namespace {
 
@@ -19,7 +21,7 @@ class GitExposureTest : public ::testing::Test {
 protected:
     void SetUp() override {
         base_ = fs::temp_directory_path() /
-                ("lcart-git-exposure-" +
+                ("lcart-git-exposure-" + std::to_string(getpid()) + "-" +
                  std::string{::testing::UnitTest::GetInstance()->current_test_info()->name()});
         fs::remove_all(base_);
         fs::create_directories(repo() / ".git" / "info");
@@ -167,6 +169,39 @@ TEST_F(GitExposureTest, SymbolicLinkIgnoreFileIsNotFollowed) {
     write(repo() / "rules", "lcart-out/\n");
     fs::create_symlink(repo() / "rules", repo() / ".gitignore");
     EXPECT_EQ(unignored_git_work_tree(database(), false), repo());
+}
+
+TEST_F(GitExposureTest, OversizedIgnoreFileCountsAsUncertain) {
+    write(repo() / ".git" / "info" / "exclude", "lcart-out/\n");
+    // Over 1 MiB: not read, and it might re-include the database.
+    write(repo() / ".gitignore", std::string(1024UL * 1024UL + 1, '#'));
+    EXPECT_EQ(unignored_git_work_tree(database(), false), repo());
+    write(repo() / ".gitignore", "# small\n");
+    EXPECT_EQ(unignored_git_work_tree(database(), false), std::nullopt); // control
+}
+
+TEST_F(GitExposureTest, FifoIgnoreFileIsNotOpened) {
+    write(repo() / ".git" / "info" / "exclude", "lcart-out/\n");
+    // Opening a FIFO would block until a writer appears.
+    ASSERT_EQ(mkfifo((repo() / ".gitignore").c_str(), 0600), 0);
+    EXPECT_EQ(unignored_git_work_tree(database(), false), repo());
+}
+
+TEST_F(GitExposureTest, DirectoryNamedLikeAnIgnoreFileCountsAsUncertain) {
+    write(repo() / ".git" / "info" / "exclude", "lcart-out/\n");
+    fs::create_directories(repo() / ".gitignore");
+    EXPECT_EQ(unignored_git_work_tree(database(), false), repo());
+}
+
+TEST_F(GitExposureTest, UnreadableIgnoreFileCountsAsUncertain) {
+    if (geteuid() == 0) {
+        GTEST_SKIP() << "root can read a file without read permission";
+    }
+    write(repo() / ".git" / "info" / "exclude", "lcart-out/\n");
+    write(repo() / ".gitignore", "!lcart-out/facts.lcart.db\n");
+    fs::permissions(repo() / ".gitignore", fs::perms::none);
+    EXPECT_EQ(unignored_git_work_tree(database(), false), repo());
+    fs::permissions(repo() / ".gitignore", fs::perms::owner_read | fs::perms::owner_write);
 }
 
 TEST_F(GitExposureTest, TrailingSpacesAndCarriageReturnsAreTrimmed) {
