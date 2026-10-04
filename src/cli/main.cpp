@@ -1,41 +1,23 @@
-#include "common/version.hpp"
+#include "cli/command_line.hpp"
+#include "cli/commands.hpp"
 
-#include <cstdlib>
+#include <cstddef>
 #include <iostream>
 #include <span>
 #include <string_view>
-
-namespace {
-
-constexpr std::string_view usage = R"(usage: lcart <command> [options]
-
-Commands (planned, see docs/plan/roadmap.md):
-  analyze    build the fact database from compile_commands.json   (M1)
-  query      query facts: callers, callees, includes, modules     (M1)
-  map        write the module map (Markdown + Mermaid), no LLM    (M1)
-  handoff    write a bundle for an external coding agent          (M2)
-  ingest     validate agent output, verify claims, write report   (M2)
-  verify     verify a claims file against the fact database       (M2)
-  testgen    generate a characterization test skeleton           (M3)
-
-Options:
-  --help       show this message
-  --version    show the tool version
-)";
-
-} // namespace
+#include <vector>
 
 int main(int argc, char** argv) {
-    const std::span args(argv, static_cast<std::size_t>(argc));
-    if (args.size() == 2 && std::string_view{args[1]} == "--version") {
-        std::cout << "lcart " << lcart::common::version << '\n';
-        return EXIT_SUCCESS;
+    const std::span program_arguments(argv, static_cast<std::size_t>(argc));
+    std::vector<std::string_view> arguments;
+    for (const char* argument : program_arguments.subspan(1)) {
+        arguments.emplace_back(argument);
     }
-    if (args.size() == 2 && std::string_view{args[1]} == "--help") {
-        std::cout << usage;
-        return EXIT_SUCCESS;
+    const auto command = lcart::cli::parse_command_line(arguments);
+    if (!command) {
+        std::cerr << "lcart: " << command.error().message
+                  << "\n(lcart --help lists the commands)\n";
+        return static_cast<int>(lcart::cli::ExitStatus::usage);
     }
-    // TODO(B-12): command dispatch (analyze, query) once the fact store exists.
-    std::cerr << usage;
-    return 2;
+    return static_cast<int>(lcart::cli::run(*command, std::cout, std::cerr));
 }

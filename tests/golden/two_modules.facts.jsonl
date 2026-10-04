@@ -1,0 +1,27 @@
+{"record":"header","format":"lcart-facts","format_version":1,"translation_units_total":3,"translation_units_parsed":3}
+{"record":"module","name":"app"}
+{"record":"module","name":"core"}
+{"record":"file","path":"app/app.h","external":false,"header":true,"module":"app","sha256":"e3cf35f02e930d661de4201b25445434ae644789e55bf037d2ced14b4ed04fe1"}
+{"record":"file","path":"app/legacy.c","external":false,"header":false,"module":"app","sha256":"7e5a5fdcb319aca6012c6f7798b440b7caaed354b436135a192ebbaba8cfec88"}
+{"record":"file","path":"app/main.c","external":false,"header":false,"module":"app","sha256":"61bd5865431f07d98ce8d8dbd3d4f559962361b27e548865501e5cd8e9282465"}
+{"record":"file","path":"core/core.c","external":false,"header":false,"module":"core","sha256":"2ab898c7ec59e3a8d0185c88c23e702cccb35086431b2aa93c6538aca4529049"}
+{"record":"file","path":"core/core.h","external":false,"header":true,"module":"core","sha256":"4669d955a5dcd8795387a6677f2cab893513fe100b74c49a9828304efe3a028a"}
+{"record":"file","path":"stddef.h","external":true,"header":true,"module":null,"sha256":null}
+{"record":"file","path":"stdio.h","external":true,"header":true,"module":null,"sha256":null}
+{"record":"file","path":"string.h","external":true,"header":true,"module":null,"sha256":null}
+{"record":"function","usr":"c:@F@legacy_run","name":"legacy_run","qualified_name":"legacy_run","signature":"int (void)","file":"app/legacy.c","line_begin":3,"line_end":5,"definition":true,"linkage":"external"}
+{"record":"function","usr":"c:@F@app_run","name":"app_run","qualified_name":"app_run","signature":"int (const char *)","file":"app/main.c","line_begin":5,"line_end":7,"definition":true,"linkage":"external"}
+{"record":"function","usr":"c:@F@main","name":"main","qualified_name":"main","signature":"int (void)","file":"app/main.c","line_begin":9,"line_end":11,"definition":true,"linkage":"external"}
+{"record":"function","usr":"c:@F@core_length","name":"core_length","qualified_name":"core_length","signature":"size_t (const char *)","file":"core/core.c","line_begin":5,"line_end":7,"definition":true,"linkage":"external"}
+{"record":"include","file":"app/app.h","line":4,"spelled":"core/core.h","system":false,"target":"core/core.h","target_external":false}
+{"record":"include","file":"app/legacy.c","line":1,"spelled":"app.h","system":false,"target":"app/app.h","target_external":false}
+{"record":"include","file":"app/main.c","line":1,"spelled":"app.h","system":false,"target":"app/app.h","target_external":false}
+{"record":"include","file":"app/main.c","line":3,"spelled":"stdio.h","system":true,"target":"stdio.h","target_external":true}
+{"record":"include","file":"core/core.c","line":1,"spelled":"core.h","system":false,"target":"core/core.h","target_external":false}
+{"record":"include","file":"core/core.c","line":3,"spelled":"string.h","system":true,"target":"string.h","target_external":true}
+{"record":"include","file":"core/core.h","line":4,"spelled":"stddef.h","system":true,"target":"stddef.h","target_external":true}
+{"record":"call","caller":"c:@F@legacy_run","file":"app/legacy.c","line":4,"column":12,"kind":"direct","callee":"c:@F@app_run","via":""}
+{"record":"call","caller":"c:@F@app_run","file":"app/main.c","line":6,"column":28,"kind":"direct","callee":"c:@F@core_length","via":""}
+{"record":"call","caller":"c:@F@main","file":"app/main.c","line":10,"column":12,"kind":"direct","callee":"c:@F@app_run","via":""}
+{"record":"module_dependency","from":"app","to":"core","via":"include","file":"app/app.h","line":4,"column":null}
+{"record":"module_dependency","from":"app","to":"core","via":"call","file":"app/main.c","line":6,"column":28}

@@ -59,5 +59,10 @@ lcart_add_module(verify   DEPS lcart::claims lcart::facts)
 lcart_add_module(report   DEPS lcart::verify)
 lcart_add_module(handoff  DEPS lcart::claims lcart::facts)
 lcart_add_module(llm      DEPS lcart::common)  # built-in providers, M6 (ADR-0006)
+# Command-line parsing and the commands, as a library so tests can call
+# them without starting the executable.
+lcart_add_module(cli
+    SOURCES cli/src/command_line.cpp cli/src/commands.cpp cli/src/git_exposure.cpp
+    DEPS lcart::analysis lcart::config lcart::facts)
 
 add_subdirectory(cli)
