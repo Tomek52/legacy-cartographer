@@ -139,7 +139,8 @@ a recorded file gets its `file_id`; that changes column meaning, so the
 schema version becomes 2. Handoff bundles (M2) decide their own rule.
 
 <a id="adr0016-command-line-v1"></a>**Command line.** Subcommands and
-options (`--name value` or `--name=value`, `--` ends options; an unknown
+options (`--name value` or `--name=value`; a value starting with `-`
+needs `=`; `--` ends options; an unknown
 or repeated option is an error):
 
 - `lcart analyze [--config FILE] [--compilation-database FILE|DIR]

@@ -74,10 +74,10 @@ struct QueryCommand {
 using Command = std::variant<HelpCommand, VersionCommand, AnalyzeCommand, QueryCommand>;
 
 /// Parses the arguments after the program name. Options take their value
-/// as the next argument or after `=` (`--db x`, `--db=x`); `--` ends the
-/// options. Errors: ErrorCode::invalid_argument, with a message for the
-/// user, for an unknown command or option, a missing or extra argument, or
-/// an option given twice.
+/// as the next argument or after `=` (`--db x`, `--db=x`); a value that
+/// starts with `-` needs `=`. `--` ends the options. Errors: ErrorCode::invalid_argument, with a
+/// message for the user, for an unknown command or option, a missing or extra argument, or an
+/// option given twice.
 [[nodiscard]] common::Result<Command>
 parse_command_line(std::span<const std::string_view> arguments);
 

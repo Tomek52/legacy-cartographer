@@ -67,7 +67,8 @@ struct ParsedArguments {
 };
 
 /// Records the value of the option at `arguments[index]`, given after `=` or
-/// as the next argument (then `index` moves past it).
+/// as the next argument unless that starts with `-` (then `index` moves
+/// past it).
 common::Status add_value(ParsedArguments& parsed, std::span<const std::string_view> arguments,
                          std::size_t& index) {
     const std::string_view argument = arguments[index];
@@ -76,7 +77,9 @@ common::Status add_value(ParsedArguments& parsed, std::span<const std::string_vi
     std::string_view value;
     if (equals != std::string_view::npos) {
         value = argument.substr(equals + 1);
-    } else if (index + 1 < arguments.size()) {
+    } else if (index + 1 < arguments.size() && !arguments[index + 1].starts_with('-')) {
+        // `--db --force` is a forgotten value, not a database named
+        // "--force"; a value starting with `-` is given as `--db=-x`.
         value = arguments[++index];
     }
     if (value.empty()) {

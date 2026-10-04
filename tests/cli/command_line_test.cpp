@@ -83,6 +83,13 @@ TEST(CommandLine, AnalyzeRejectsBadOptions) {
     expect_usage_error({"analyze", "--db="}, "--db");
 }
 
+TEST(CommandLine, AnOptionDoesNotTakeTheNextOptionAsItsValue) {
+    expect_usage_error({"analyze", "--db", "--force"}, "--db needs a value");
+    expect_usage_error({"query", "export", "--output", "--db", "x"}, "--output needs a value");
+    // A value that starts with `-` is given after `=`.
+    EXPECT_EQ(parsed_as<AnalyzeCommand>({"analyze", "--db=-odd.db"}).database, "-odd.db");
+}
+
 // Consent switches are never read from anywhere but the command line, and
 // analyze has none (ADR-0008); the parser must not accept unknown ones.
 TEST(CommandLine, AnalyzeHasNoIncludeSourceSwitch) {
