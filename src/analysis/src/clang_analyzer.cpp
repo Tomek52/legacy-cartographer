@@ -179,7 +179,10 @@ common::Result<AnalysisSummary> ClangAnalyzer::analyze(const AnalysisRequest& re
     std::error_code ec;
     std::filesystem::path root;
     if (!request.root.empty() && std::filesystem::is_directory(request.root, ec)) {
-        root = std::filesystem::weakly_canonical(std::filesystem::absolute(request.root), ec);
+        const std::filesystem::path absolute = std::filesystem::absolute(request.root, ec);
+        if (!ec) {
+            root = std::filesystem::weakly_canonical(absolute, ec);
+        }
     }
     if (root.empty() || ec) {
         return std::unexpected(
