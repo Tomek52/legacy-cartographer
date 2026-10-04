@@ -4,7 +4,8 @@ One SQLite file per analysed project. Schema version 1
 (`facts::schema_version` in `src/facts/fact_model.hpp`); any change bumps it.
 Paths of files under the analysis root are relative to it, with `/`
 separators; files outside it have absolute paths
-([file facts](#arch-data-model-file-facts-v1)).
+([file facts](#arch-data-model-file-facts-v1)). How functions are
+identified: [function facts](#arch-data-model-function-facts-v1).
 
 ```mermaid
 erDiagram
@@ -51,15 +52,15 @@ erDiagram
     }
     FUNCTION {
         int id PK
-        text usr UK
+        text usr UK "path-prefixed if internal (ADR-0012)"
         text name
         text qualified_name
-        text signature
-        int file_id FK
+        text signature "type as Clang prints it"
+        int file_id FK "definition, else first declaration"
         int line_begin
         int line_end
         int is_definition
-        text linkage
+        text linkage "internal | external"
     }
     CALL_EDGE {
         int id PK
@@ -162,3 +163,34 @@ maps onto `FILE` and `INCLUDE_EDGE` (B-08):
   `is_system` is the spelling (`<...>`), not where the file was found.
 - An unresolved include has no target and keeps its spelling; Clang reports
   it as a fatal error, so its translation unit also counts as failed.
+
+## <a id="arch-data-model-function-facts-v1"></a>Function facts
+
+How [FR-003](../specs/requirements.md#fr003-record-functions-v1) maps onto
+`FUNCTION` (B-09):
+
+- Only functions whose declaration is in a file under the root are
+  recorded; `printf` declared in `<stdio.h>` is not. Compiler-generated
+  declarations, lambda call operators and deduction guides are skipped, and
+  so are template instantiations (the template itself is recorded).
+- `usr` is Clang's USR; for a function with internal linkage it is
+  prefixed with the root-relative path of the file of its definition (else
+  of its first declaration) and `#`, e.g. `left/util.c#c:util.c@F@helper`
+  ([ADR-0012](../adr/0012-function-identity-for-internal-linkage.md#adr0012-internal-linkage-usr-v1)),
+  because Clang's USR then names only the base name of a file. Two `static`
+  functions in `left/util.c` and `right/util.c`, or two definitions of a
+  `static` declared in one shared header, are two rows; a `static inline`
+  function defined in a header is one row.
+- `linkage` is `external` if the function is visible outside its
+  translation unit, else `internal` (`static`, anonymous namespace).
+- `signature` is the function's type as Clang prints it, without parameter
+  names: `size_t (const char *)`, `int (int, ...)`.
+- File and lines are those of the definition once one is seen, else of the
+  first declaration seen (translation units are analysed in path order). The
+  line range runs from the first token (`static`, the return type) to the
+  closing brace or semicolon. A function written by a macro is located at
+  the macro's use.
+- A function with external linkage defined in two translation units (two
+  programs' `main` in one compilation database) is one row at the first
+  definition in path order; later definitions are not recorded
+  ([open question](../open-questions.md#open-technical-questions)).

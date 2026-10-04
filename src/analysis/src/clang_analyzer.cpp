@@ -2,6 +2,8 @@
 
 #include "analysis/argument_filter.hpp"
 
+#include <clang/AST/ASTConsumer.h>
+#include <clang/AST/DynamicRecursiveASTVisitor.h>
 #include <clang/Basic/Diagnostic.h>
 #include <clang/Basic/SourceManager.h>
 #include <clang/Frontend/CompilerInstance.h>
@@ -23,6 +25,7 @@
 #include <vector>
 
 #include "file_fact_collector.hpp"
+#include "function_fact_collector.hpp"
 
 namespace lcart::analysis {
 
@@ -114,32 +117,76 @@ private:
     FileFactCollector* collector_;
 };
 
-/// Syntax-only parse that also feeds file and include facts to `collector`.
+/// Hands every function declaration of a parsed translation unit to the
+/// collector. Template instantiations and implicit code are not visited
+/// (the visitor's defaults). The dynamic visitor, not the RecursiveASTVisitor
+/// template: inlining that template trips GCC's -Wnull-dereference in Clang's
+/// own headers in release builds.
+class FunctionVisitor final : public clang::DynamicRecursiveASTVisitor {
+public:
+    FunctionVisitor(clang::ASTContext& context, FunctionFactCollector& collector)
+        : context_(&context), collector_(&collector) {}
+
+    bool VisitFunctionDecl(clang::FunctionDecl* function) override {
+        collector_->on_function(*context_, *function);
+        return true;
+    }
+
+private:
+    clang::ASTContext* context_;
+    FunctionFactCollector* collector_;
+};
+
+class FunctionFactConsumer final : public clang::ASTConsumer {
+public:
+    explicit FunctionFactConsumer(FunctionFactCollector& collector) : collector_(&collector) {}
+
+    void HandleTranslationUnit(clang::ASTContext& context) override {
+        FunctionVisitor{context, *collector_}.TraverseAST(context);
+    }
+
+private:
+    FunctionFactCollector* collector_;
+};
+
+/// The collectors of one analysis.
+struct Collectors {
+    FileFactCollector* files;
+    FunctionFactCollector* functions;
+};
+
+/// Syntax-only parse that also feeds file, include and function facts to
+/// the collectors.
 class FactAction final : public clang::SyntaxOnlyAction {
 public:
-    explicit FactAction(FileFactCollector& collector) : collector_(&collector) {}
+    explicit FactAction(Collectors collectors) : collectors_(collectors) {}
 
 protected:
     bool BeginSourceFileAction(clang::CompilerInstance& compiler) override {
         compiler.getPreprocessor().addPPCallbacks(
-            std::make_unique<FileFactCallbacks>(compiler.getSourceManager(), *collector_));
+            std::make_unique<FileFactCallbacks>(compiler.getSourceManager(), *collectors_.files));
         return SyntaxOnlyAction::BeginSourceFileAction(compiler);
     }
 
+    std::unique_ptr<clang::ASTConsumer> CreateASTConsumer(clang::CompilerInstance& /*compiler*/,
+                                                          llvm::StringRef /*file*/) override {
+        return std::make_unique<FunctionFactConsumer>(*collectors_.functions);
+    }
+
 private:
-    FileFactCollector* collector_;
+    Collectors collectors_;
 };
 
 class FactActionFactory final : public clang::tooling::FrontendActionFactory {
 public:
-    explicit FactActionFactory(FileFactCollector& collector) : collector_(&collector) {}
+    explicit FactActionFactory(Collectors collectors) : collectors_(collectors) {}
 
     std::unique_ptr<clang::FrontendAction> create() override {
-        return std::make_unique<FactAction>(*collector_);
+        return std::make_unique<FactAction>(collectors_);
     }
 
 private:
-    FileFactCollector* collector_;
+    Collectors collectors_;
 };
 
 [[nodiscard]] common::Result<std::unique_ptr<clang::tooling::CompilationDatabase>>
@@ -189,8 +236,10 @@ common::Result<AnalysisSummary> ClangAnalyzer::analyze(const AnalysisRequest& re
             common::Error{.code = common::ErrorCode::invalid_argument,
                           .message = "analysis root is not a directory: " + request.root.string()});
     }
-    FileFactCollector collector{std::move(root), out};
-    FactActionFactory action_factory{collector};
+    FileFactCollector file_collector{std::move(root), out};
+    FunctionFactCollector function_collector{file_collector, out};
+    FactActionFactory action_factory{
+        Collectors{.files = &file_collector, .functions = &function_collector}};
 
     AnalysisSummary summary;
     summary.translation_units_total = static_cast<std::uint32_t>(files.size());
@@ -217,8 +266,11 @@ common::Result<AnalysisSummary> ClangAnalyzer::analyze(const AnalysisRequest& re
         tool.setDiagnosticConsumer(&consumer);
 
         const int status = tool.run(&action_factory);
-        if (auto collected = collector.status(); !collected) {
-            return std::unexpected(collected.error());
+        for (const common::Status& collected :
+             {file_collector.status(), function_collector.status()}) {
+            if (!collected) {
+                return std::unexpected(collected.error());
+            }
         }
         if (status == 0) {
             ++summary.translation_units_parsed;

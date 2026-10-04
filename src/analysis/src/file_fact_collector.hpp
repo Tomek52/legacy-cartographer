@@ -33,6 +33,11 @@ namespace lcart::analysis {
 /// would depend on scheduling (NFR-004).
 class FileFactCollector {
 public:
+    struct FactPath {
+        std::string path; ///< Root-relative with `/`, or absolute if external.
+        bool is_external{};
+    };
+
     /// `root` must be absolute and canonical.
     FileFactCollector(std::filesystem::path root, facts::FactWriter& out);
 
@@ -41,18 +46,20 @@ public:
     void on_include(clang::SourceManager& sources, clang::SourceLocation hash_location,
                     llvm::StringRef spelled, bool is_angled, clang::OptionalFileEntryRef file);
 
+    /// The id of `file` if it is under the root, recorded if it was not yet;
+    /// empty for an external file or once status() holds an error.
+    [[nodiscard]] std::optional<facts::FileId> internal_file(clang::SourceManager& sources,
+                                                             clang::FileEntryRef file);
+
+    /// How `file` is named in the facts.
+    [[nodiscard]] const FactPath& fact_path(const clang::SourceManager& sources,
+                                            clang::FileEntryRef file);
+
     /// The first error from the fact writer; Clang's callbacks cannot return
     /// one, so later callbacks are ignored once this is set.
     [[nodiscard]] common::Status status() const { return status_; }
 
 private:
-    struct FactPath {
-        std::string path;
-        bool is_external{};
-    };
-
-    [[nodiscard]] const FactPath& fact_path(const clang::SourceManager& sources,
-                                            clang::FileEntryRef file);
     [[nodiscard]] common::Result<facts::FileId>
     record_file(clang::SourceManager& sources, clang::FileEntryRef file, const FactPath& path);
 

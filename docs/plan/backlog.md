@@ -18,7 +18,7 @@ expanded in place; its version is bumped if its meaning changes
 | [B-06](#b06-sqlite-fact-store-v1) | ✅ SQLite fact store, schema v1 | M1 | FR-002–FR-004, NFR-004 | – | 6 h |
 | [B-07](#b07-clang-libtooling-spike-v2) | ✅ Clang LibTooling spike and analysis driver | M1 | FR-001 | B-02 | 6 h |
 | [B-08](#b08-file-and-include-facts-v1) | ✅ File and include facts | M1 | FR-002 | B-06, B-07 | 4 h |
-| [B-09](#b09-function-facts-v1) | Function facts | M1 | FR-003 | B-08 | 4 h |
+| [B-09](#b09-function-facts-v1) | ✅ Function facts | M1 | FR-003 | B-08 | 4 h |
 | [B-10](#b10-call-edges-v1) | Direct and indirect call edges | M1 | FR-004 | B-09 | 5 h |
 | [B-11](#b11-module-rules-v2) | Module rules and module dependencies | M1 | FR-005 | B-08 | 4 h |
 | [B-12](#b12-query-and-export-v1) | `lcart analyze` / `lcart query` / export | M1 | FR-006, NFR-004 | B-10, B-11 | 5 h |
@@ -159,6 +159,18 @@ until B-11 and B-12 take them up.
 
 Acceptance criteria: those of [FR-003](../specs/requirements.md#fr003-record-functions-v1),
 on the `two_modules` and `static_same_name` fixtures.
+
+Result (2026-10-04): an AST consumer hands every `FunctionDecl` to
+`FunctionFactCollector` (`src/analysis/src/function_fact_collector.hpp`),
+which writes a function once per USR, and once more when its definition is
+first seen. Clang's USR for a `static` function names only a file's base
+name, so `left/util.c` and `right/util.c` would share one; the stored USR
+gets the path of the defining file as a prefix
+([ADR-0012](../adr/0012-function-identity-for-internal-linkage.md)). The
+other rules are on the
+[data model](../architecture/data-model.md#arch-data-model-function-facts-v1)
+page; duplicate external definitions are an
+[open question](../open-questions.md#open-technical-questions).
 
 ### <a id="b10-call-edges-v1"></a>**[B-10 v1]** Direct and indirect call edges
 

@@ -43,6 +43,7 @@ None open. New questions are added here as they come up.
 | How to show paths of files outside the analysis root (now absolute, e.g. Clang's resource directory or a home directory) in golden exports and handoff bundles: spelling, path relative to the include directory, or absolute but stripped? | [file facts](architecture/data-model.md#arch-data-model-file-facts-v1), [security](security.md) | B-12 (golden export), M2 (bundles) |
 | `AnalysisRequest::exclude_globs` is not applied yet; it should share the glob syntax of the module rules. | [B-08 result](plan/backlog.md#b08-file-and-include-facts-v1) | B-11 |
 | `DIAGNOSTIC.file_id` stays null: diagnostics carry Clang's path, not the root-relative one. | [data model](architecture/data-model.md) | B-12 |
+| A function with external linkage defined in several translation units (several programs in one compilation database, e.g. libmodbus's tests) keeps only the first definition in path order. Record each definition, warn, or split the database per program? | [function facts](architecture/data-model.md#arch-data-model-function-facts-v1) | B-10, before call edges rely on it |
 | `TRANSLATION_UNIT.file_id` is not set yet: the row is written with diagnostics, before per-TU status exists. | [data model](architecture/data-model.md) | B-16 |
 
 ## Not verified yet ("TODO: verify")
