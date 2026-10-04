@@ -646,7 +646,7 @@ Status SqliteFactStore::add_diagnostic(const DiagnosticFact& diagnostic) {
     if (!tu) {
         return std::unexpected(tu.error());
     }
-    // file_id stays NULL until file facts exist for the path (B-08).
+    // TODO(B-12): resolve file_id; file_path is Clang's path, not the root-relative one.
     return execute(database_,
                    "INSERT INTO diagnostic (tu_id, file_path, line, severity, message)"
                    " VALUES (?1, ?2, ?3, ?4, ?5)",

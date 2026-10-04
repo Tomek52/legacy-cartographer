@@ -4,7 +4,10 @@
 
 #include <clang/Basic/Diagnostic.h>
 #include <clang/Basic/SourceManager.h>
+#include <clang/Frontend/CompilerInstance.h>
 #include <clang/Frontend/FrontendActions.h>
+#include <clang/Lex/PPCallbacks.h>
+#include <clang/Lex/Preprocessor.h>
 #include <clang/Tooling/ArgumentsAdjusters.h>
 #include <clang/Tooling/CompilationDatabase.h>
 #include <clang/Tooling/JSONCompilationDatabase.h>
@@ -18,6 +21,8 @@
 #include <string>
 #include <utility>
 #include <vector>
+
+#include "file_fact_collector.hpp"
 
 namespace lcart::analysis {
 
@@ -80,6 +85,63 @@ private:
     std::vector<facts::DiagnosticFact> diagnostics_;
 };
 
+/// Forwards the preprocessor's file events to the collector.
+class FileFactCallbacks final : public clang::PPCallbacks {
+public:
+    FileFactCallbacks(clang::SourceManager& sources, FileFactCollector& collector)
+        : sources_(&sources), collector_(&collector) {}
+
+    void FileChanged(clang::SourceLocation location, FileChangeReason reason,
+                     clang::SrcMgr::CharacteristicKind /*file_type*/,
+                     clang::FileID /*previous*/) override {
+        // Covers a main file without any #include, which no directive reaches.
+        if (reason == EnterFile && sources_->getFileID(location) == sources_->getMainFileID()) {
+            collector_->on_main_file(*sources_);
+        }
+    }
+
+    void InclusionDirective(clang::SourceLocation hash_location, const clang::Token& /*token*/,
+                            llvm::StringRef spelled, bool is_angled,
+                            clang::CharSourceRange /*range*/, clang::OptionalFileEntryRef file,
+                            llvm::StringRef /*search_path*/, llvm::StringRef /*relative_path*/,
+                            const clang::Module* /*module*/, bool /*module_imported*/,
+                            clang::SrcMgr::CharacteristicKind /*file_type*/) override {
+        collector_->on_include(*sources_, hash_location, spelled, is_angled, file);
+    }
+
+private:
+    clang::SourceManager* sources_;
+    FileFactCollector* collector_;
+};
+
+/// Syntax-only parse that also feeds file and include facts to `collector`.
+class FactAction final : public clang::SyntaxOnlyAction {
+public:
+    explicit FactAction(FileFactCollector& collector) : collector_(&collector) {}
+
+protected:
+    bool BeginSourceFileAction(clang::CompilerInstance& compiler) override {
+        compiler.getPreprocessor().addPPCallbacks(
+            std::make_unique<FileFactCallbacks>(compiler.getSourceManager(), *collector_));
+        return SyntaxOnlyAction::BeginSourceFileAction(compiler);
+    }
+
+private:
+    FileFactCollector* collector_;
+};
+
+class FactActionFactory final : public clang::tooling::FrontendActionFactory {
+public:
+    explicit FactActionFactory(FileFactCollector& collector) : collector_(&collector) {}
+
+    std::unique_ptr<clang::FrontendAction> create() override {
+        return std::make_unique<FactAction>(*collector_);
+    }
+
+private:
+    FileFactCollector* collector_;
+};
+
 [[nodiscard]] common::Result<std::unique_ptr<clang::tooling::CompilationDatabase>>
 load_compilation_database(const std::filesystem::path& path) {
     std::error_code ec;
@@ -105,7 +167,7 @@ load_compilation_database(const std::filesystem::path& path) {
 
 common::Result<AnalysisSummary> ClangAnalyzer::analyze(const AnalysisRequest& request,
                                                        facts::FactWriter& out) {
-    // TODO(B-08): apply request.exclude_globs and store paths relative to request.root.
+    // TODO(B-11): apply request.exclude_globs, with the glob syntax of the module rules.
     auto database = load_compilation_database(request.compilation_database);
     if (!database) {
         return std::unexpected(database.error());
@@ -113,6 +175,22 @@ common::Result<AnalysisSummary> ClangAnalyzer::analyze(const AnalysisRequest& re
 
     std::vector<std::string> files = (*database)->getAllFiles();
     std::ranges::sort(files); // deterministic order (NFR-004)
+
+    std::error_code ec;
+    std::filesystem::path root;
+    if (!request.root.empty() && std::filesystem::is_directory(request.root, ec)) {
+        const std::filesystem::path absolute = std::filesystem::absolute(request.root, ec);
+        if (!ec) {
+            root = std::filesystem::weakly_canonical(absolute, ec);
+        }
+    }
+    if (root.empty() || ec) {
+        return std::unexpected(
+            common::Error{.code = common::ErrorCode::invalid_argument,
+                          .message = "analysis root is not a directory: " + request.root.string()});
+    }
+    FileFactCollector collector{std::move(root), out};
+    FactActionFactory action_factory{collector};
 
     AnalysisSummary summary;
     summary.translation_units_total = static_cast<std::uint32_t>(files.size());
@@ -138,8 +216,10 @@ common::Result<AnalysisSummary> ClangAnalyzer::analyze(const AnalysisRequest& re
         CollectingDiagnosticConsumer consumer{file};
         tool.setDiagnosticConsumer(&consumer);
 
-        const int status =
-            tool.run(clang::tooling::newFrontendActionFactory<clang::SyntaxOnlyAction>().get());
+        const int status = tool.run(&action_factory);
+        if (auto collected = collector.status(); !collected) {
+            return std::unexpected(collected.error());
+        }
         if (status == 0) {
             ++summary.translation_units_parsed;
         }

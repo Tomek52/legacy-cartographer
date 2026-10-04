@@ -40,6 +40,10 @@ None open. New questions are added here as they come up.
 | Question | Context | Decide by |
 |---|---|---|
 | Run each translation unit in a child process so a Clang crash cannot end the run? Costs process start-up per TU. | [security T5](security.md) | B-16, after measuring on libmodbus |
+| How to show paths of files outside the analysis root (now absolute, e.g. Clang's resource directory or a home directory) in golden exports and handoff bundles: spelling, path relative to the include directory, or absolute but stripped? | [file facts](architecture/data-model.md#arch-data-model-file-facts-v1), [security](security.md) | B-12 (golden export), M2 (bundles) |
+| `AnalysisRequest::exclude_globs` is not applied yet; it should share the glob syntax of the module rules. | [B-08 result](plan/backlog.md#b08-file-and-include-facts-v1) | B-11 |
+| `DIAGNOSTIC.file_id` stays null: diagnostics carry Clang's path, not the root-relative one. | [data model](architecture/data-model.md) | B-12 |
+| `TRANSLATION_UNIT.file_id` is not set yet: the row is written with diagnostics, before per-TU status exists. | [data model](architecture/data-model.md) | B-16 |
 
 ## Not verified yet ("TODO: verify")
 
