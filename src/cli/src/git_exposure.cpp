@@ -2,6 +2,7 @@
 
 #include "config/path_glob.hpp"
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <fstream>
@@ -59,16 +60,26 @@ std::optional<IgnorePattern> parse_line(std::string_view line, bool& uncertain) 
         pattern.directory_only = true;
         line.remove_suffix(1);
     }
-    // Escapes and `[^...]` mean something else in git than in PathGlob.
-    const bool supported = !line.empty() && line.find('\\') == std::string_view::npos &&
-                           line.find("[^") == std::string_view::npos;
+    // Escapes, `[^...]` and POSIX classes (`[[:alpha:]]`) mean something
+    // else in git than in PathGlob; non-ASCII patterns are left out too, so
+    // no encoding question can make a negation invisible.
+    const bool supported =
+        !line.empty() && line.find('\\') == std::string_view::npos &&
+        line.find("[^") == std::string_view::npos && line.find("[:") == std::string_view::npos &&
+        std::ranges::none_of(line, [](char c) { return static_cast<unsigned char>(c) >= 0x80; });
     // A pattern with a slash other than at its end is anchored at the
     // directory of its file; one without matches at any depth.
     const bool anchored = line.find('/') != std::string_view::npos;
     if (line.starts_with('/')) {
         line.remove_prefix(1);
     }
-    auto glob = config::PathGlob::parse(anchored ? std::string{line} : "**/" + std::string{line});
+    std::string text{line};
+    // In git a trailing `/**` matches everything inside, not the directory
+    // itself; ADR-0014's `**` also matches zero segments, so require one.
+    if (text.ends_with("/**")) {
+        text.insert(text.size() - 2, "*/");
+    }
+    auto glob = config::PathGlob::parse(anchored ? text : "**/" + text);
     if (!supported || !glob) {
         uncertain = uncertain || pattern.negated;
         return std::nullopt;
@@ -114,6 +125,10 @@ std::optional<IgnoreFile> read_ignore_file(const fs::path& file, std::string bas
         return ignore;
     }
     std::string_view rest = text;
+    // git skips a UTF-8 byte order mark at the start of an ignore file.
+    if (rest.starts_with("\xEF\xBB\xBF")) {
+        rest.remove_prefix(3);
+    }
     while (!rest.empty()) {
         const std::size_t end = rest.find('\n');
         if (auto pattern = parse_line(rest.substr(0, end), ignore.uncertain)) {

@@ -173,8 +173,11 @@ is re-included (gitignore(5)). Patterns are translated to the path globs
 of [ADR-0014](0014-path-globs-in-the-configuration.md): `!` negates, a
 trailing `/` matches directories only, a pattern with another `/` is
 anchored at its file's directory, one without matches at any depth
-(`**/` in front). A pattern with `\` or `[^` or that ADR-0014 rejects is
-skipped; if it negates, or an ignore file is unreadable, not a regular file
+(`**/` in front), and a trailing `/**` becomes `/*/**` (in git it matches
+what is inside the directory, not the directory). A UTF-8 byte order mark
+at the start of an ignore file is skipped, as git does. A pattern with
+`\`, `[^`, a POSIX class (`[:`), a non-ASCII byte, or that ADR-0014 rejects
+is skipped; if it negates, or an ignore file is unreadable, not a regular file
 (git does not follow a symbolic link there either, since
 2.32: its release notes) or over 1 MiB, the
 output counts as not ignored. The user's global excludes file and the
@@ -192,10 +195,14 @@ index (an output that is already tracked) are not read.
 - The export reads all facts into memory before writing; fine for libmodbus
   and the fixtures, to be revisited (streaming per kind) if large code
   bases need it.
-- The warning can be a false alarm when only the global excludes file, a
-  skipped pattern or the `abc/**` corner (ADR-0014's `**` also matches the
-  directory itself) is involved; it never stays silent because of a rule it
-  did not understand. Revisit if users report noise, for example by reading
-  `core.excludesFile` from the user's own git configuration.
+- The warning can be a false alarm when only the global excludes file or a
+  skipped pattern ignores the output. It is meant never to stay silent
+  because of a rule it did not understand, but the translation to ADR-0014
+  globs is our reading of gitignore(5): review of B-12 found three rules it
+  got wrong in the silent direction (a trailing `/**`, POSIX classes, a byte
+  order mark before a negation), each now a test checked against
+  `git check-ignore` (git 2.43). Another such difference would be a missed
+  warning, not a crash. Revisit if users report noise, for example by
+  reading `core.excludesFile` from the user's own git configuration.
 - Fact databases from before B-12 (schema 1) are refused; re-run the
   analysis, as for any schema change in v1.

@@ -101,6 +101,39 @@ TEST_F(GitExposureTest, NegationCannotReincludeBelowAnIgnoredDirectory) {
     EXPECT_EQ(unignored_git_work_tree(repo() / "facts.lcart.db", false), repo());
 }
 
+// Expected values in the next three tests are those of
+// `git check-ignore --no-index` (git 2.43).
+TEST_F(GitExposureTest, TrailingDoubleStarDoesNotExcludeTheDirectoryItself) {
+    write(repo() / ".gitignore", "lcart-out/**\n!lcart-out/facts.lcart.db\n");
+    EXPECT_EQ(unignored_git_work_tree(database(), false), repo());
+    write(repo() / ".gitignore", "lcart-out/**\n");
+    EXPECT_EQ(unignored_git_work_tree(database(), false), std::nullopt);
+    EXPECT_EQ(unignored_git_work_tree(repo() / "lcart-out", true), repo());
+}
+
+TEST_F(GitExposureTest, PosixCharacterClassCountsAsUncertain) {
+    write(repo() / ".gitignore", "*.db\n!facts.lcart.[[:alpha:]]b\n");
+    EXPECT_EQ(unignored_git_work_tree(database(), false), repo());
+    write(repo() / ".gitignore", "*.db\n");
+    EXPECT_EQ(unignored_git_work_tree(database(), false), std::nullopt); // control
+}
+
+TEST_F(GitExposureTest, ByteOrderMarkBeforeTheFirstLineIsSkipped) {
+    write(repo() / ".git" / "info" / "exclude", "*.db\n");
+    write(repo() / ".gitignore", "\xEF\xBB\xBF!facts.lcart.db\n");
+    EXPECT_EQ(unignored_git_work_tree(database(), false), repo());
+    write(repo() / ".gitignore", "\xEF\xBB\xBFlcart-out/\n");
+    write(repo() / ".git" / "info" / "exclude", "");
+    EXPECT_EQ(unignored_git_work_tree(database(), false), std::nullopt);
+}
+
+TEST_F(GitExposureTest, NonAsciiNegationCountsAsUncertain) {
+    // Not a git behaviour: non-ASCII patterns are left to git, so the check
+    // cannot conclude "ignored" past one that negates.
+    write(repo() / ".gitignore", "lcart-out/\n!d\xC3\xA9j\xC3\xA0\n");
+    EXPECT_EQ(unignored_git_work_tree(database(), false), repo());
+}
+
 TEST_F(GitExposureTest, InfoExcludeIsRead) {
     write(repo() / ".git" / "info" / "exclude", "lcart-out/\n");
     EXPECT_EQ(unignored_git_work_tree(database(), false), std::nullopt);
