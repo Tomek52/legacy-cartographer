@@ -5,7 +5,8 @@ One SQLite file per analysed project. Schema version 1
 Paths of files under the analysis root are relative to it, with `/`
 separators; files outside it have absolute paths
 ([file facts](#arch-data-model-file-facts-v1)). How functions are
-identified: [function facts](#arch-data-model-function-facts-v1).
+identified: [function facts](#arch-data-model-function-facts-v2),
+[call edges](#arch-data-model-call-edges-v1).
 
 ```mermaid
 erDiagram
@@ -52,7 +53,7 @@ erDiagram
     }
     FUNCTION {
         int id PK
-        text usr UK "path-prefixed if internal (ADR-0012)"
+        text usr UK "path-prefixed if internal or a second definition (ADR-0012, ADR-0013)"
         text name
         text qualified_name
         text signature "type as Clang prints it"
@@ -67,7 +68,7 @@ erDiagram
         int caller_id FK
         int callee_id FK "null if indirect"
         text kind "direct | indirect | may_call"
-        text via "member name for indirect, else empty"
+        text via "indirect: object.member as written, else empty"
         int file_id FK
         int line
         int col
@@ -164,7 +165,7 @@ maps onto `FILE` and `INCLUDE_EDGE` (B-08):
 - An unresolved include has no target and keeps its spelling; Clang reports
   it as a fatal error, so its translation unit also counts as failed.
 
-## <a id="arch-data-model-function-facts-v1"></a>Function facts
+## <a id="arch-data-model-function-facts-v2"></a>Function facts
 
 How [FR-003](../specs/requirements.md#fr003-record-functions-v1) maps onto
 `FUNCTION` (B-09):
@@ -190,7 +191,39 @@ How [FR-003](../specs/requirements.md#fr003-record-functions-v1) maps onto
   line range runs from the first token (`static`, the return type) to the
   closing brace or semicolon. A function written by a macro is located at
   the macro's use.
-- A function with external linkage defined in two translation units (two
-  programs' `main` in one compilation database) is one row at the first
-  definition in path order; later definitions are not recorded
-  ([open question](../open-questions.md#open-technical-questions)).
+- A function with external linkage defined at two places (two programs'
+  `main` in one compilation database) is two rows: the first definition in
+  path order keeps Clang's USR, a later one gets its file's path and `#` in
+  front (`two/main.c#c:@F@main`), and the analysis reports a warning
+  ([ADR-0013](../adr/0013-functions-with-external-linkage-defined-twice.md#adr0013-each-definition-a-function-v1)).
+  One definition reached from several translation units (a header) is one
+  row.
+
+## <a id="arch-data-model-call-edges-v1"></a>Call edges
+
+How [FR-004](../specs/requirements.md#fr004-record-call-edges-v1) maps onto
+`CALL_EDGE` (B-10):
+
+- Every call expression in the body of a recorded definition is one edge,
+  in source order: a function called twice is two edges. Calls in a lambda
+  belong to the enclosing function. A function named without being called
+  (`apply(checksum, ...)`) is not an edge.
+- `direct`: the callee is the function the call names, as the caller's
+  translation unit sees it: its own definition of that name if it has one
+  (ADR-0013), else the function its USR names. A call to a function that is
+  not recorded (declared outside the root, such as `strlen`, or a builtin)
+  is not an edge, because `callee_id` must name a `FUNCTION`.
+- `indirect`: there is no named callee (a function pointer, a struct member
+  function pointer). `via` is the called member and the member or variable
+  it is read from, as written: `ctx->backend->recv(...)` gives
+  `backend.recv`, `local.recv(...)` gives `local.recv`; a plain function
+  pointer (`handler(...)`, `(*handler)(...)`) gives an empty `via`.
+- The site is the first character of the call; a call written in a macro
+  is located at the macro's use, and belongs to the function where the
+  macro expands.
+- The calls of a function are recorded once, from the translation unit that
+  writes its definition, although a header's `static inline` body is seen
+  by many.
+- Not recorded yet: calls in templates (only instantiations are resolved,
+  and they are not recorded) and constructor calls (not call expressions in
+  Clang). A C++ virtual call is `direct` to the method it names.

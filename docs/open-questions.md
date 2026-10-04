@@ -29,6 +29,7 @@ moving the answer into the relevant spec or ADR and deleting it here.
 | HTTP client | not needed before M6; decided then | [M6](plan/roadmap.md#m6-built-in-providers-v1) |
 | Platform / MSVC code | Linux and WSL2 only; MSVC code parsed by Clang in MSVC mode | [ADR-0009](adr/0009-linux-and-wsl2-only.md) |
 | Traceability format | IDs + versioned anchors, plus a generated traceability matrix that also gates CI; no restructuring after a standard | [ADR-0010](adr/0010-traceability-matrix.md) |
+| Function with external linkage defined in several translation units | each definition is a function with its own calls; the analysis warns | [ADR-0013](adr/0013-functions-with-external-linkage-defined-twice.md) |
 | Performance for large code bases | hours or days are acceptable; the tool must use all cores, show progress and resume interrupted runs; incremental re-analysis later | [NFR-005](specs/requirements.md#nfr005-performance-budget-v2) |
 
 ## Questions for the maintainer
@@ -43,7 +44,6 @@ None open. New questions are added here as they come up.
 | How to show paths of files outside the analysis root (now absolute, e.g. Clang's resource directory or a home directory) in golden exports and handoff bundles: spelling, path relative to the include directory, or absolute but stripped? | [file facts](architecture/data-model.md#arch-data-model-file-facts-v1), [security](security.md) | B-12 (golden export), M2 (bundles) |
 | `AnalysisRequest::exclude_globs` is not applied yet; it should share the glob syntax of the module rules. | [B-08 result](plan/backlog.md#b08-file-and-include-facts-v1) | B-11 |
 | `DIAGNOSTIC.file_id` stays null: diagnostics carry Clang's path, not the root-relative one. | [data model](architecture/data-model.md) | B-12 |
-| A function with external linkage defined in several translation units (several programs in one compilation database, e.g. libmodbus's tests) keeps only the first definition in path order. Record each definition, warn, or split the database per program? | [function facts](architecture/data-model.md#arch-data-model-function-facts-v1) | B-10, before call edges rely on it |
 | `TRANSLATION_UNIT.file_id` is not set yet: the row is written with diagnostics, before per-TU status exists. | [data model](architecture/data-model.md) | B-16 |
 
 ## Not verified yet ("TODO: verify")
@@ -51,7 +51,6 @@ None open. New questions are added here as they come up.
 | Item | Where | Verified by |
 |---|---|---|
 | libmodbus builds out of tree with autotools | [libmodbus plan](targets/libmodbus.md) | B-05 |
-| Initializer form of libmodbus backend tables (`modbus-rtu.c`, `modbus-tcp.c`) | [FR-015](specs/requirements.md#fr015-resolve-function-pointer-tables-v1) | B-10 |
 | Seam for feeding frames to libmodbus through the public API only | [testing strategy](testing/strategy.md#testing-characterization-v1) | M3 |
 | `modbus_mapping_new` signature and per-iteration cost for fuzzing | [libmodbus plan](targets/libmodbus.md) | M4 |
 | `modbus_close` / `modbus_free` semantics for the RAII wrapper | [libmodbus plan](targets/libmodbus.md) | M5 |

@@ -16,6 +16,7 @@ gtest_discover_tests(lcart_unit_tests PROPERTIES LABELS unit)
 # Analysis against real Clang: slower, own executable and label.
 add_executable(lcart_analysis_tests
     analysis/argument_filter_test.cpp
+    analysis/call_edges_test.cpp
     analysis/clang_analyzer_test.cpp
     analysis/function_facts_test.cpp)
 target_link_libraries(lcart_analysis_tests PRIVATE lcart::analysis GTest::gtest_main)

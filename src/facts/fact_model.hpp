@@ -91,7 +91,9 @@ struct CallFact {
     FunctionId caller{};
     std::optional<FunctionId> callee{}; ///< Empty if and only if CallKind::indirect.
     CallKind kind{CallKind::direct};
-    std::string via{}; ///< Indirect calls: callee expression's member name (`recv`), if any.
+    /// Indirect calls: the called member and what it is read from, as written
+    /// (`backend.recv` for `ctx->backend->recv(...)`); empty otherwise.
+    std::string via{};
     SourceLocation site{};
 
     bool operator==(const CallFact&) const = default;

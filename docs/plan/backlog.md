@@ -19,7 +19,7 @@ expanded in place; its version is bumped if its meaning changes
 | [B-07](#b07-clang-libtooling-spike-v2) | ✅ Clang LibTooling spike and analysis driver | M1 | FR-001 | B-02 | 6 h |
 | [B-08](#b08-file-and-include-facts-v1) | ✅ File and include facts | M1 | FR-002 | B-06, B-07 | 4 h |
 | [B-09](#b09-function-facts-v1) | ✅ Function facts | M1 | FR-003 | B-08 | 4 h |
-| [B-10](#b10-call-edges-v1) | Direct and indirect call edges | M1 | FR-004 | B-09 | 5 h |
+| [B-10](#b10-call-edges-v1) | ✅ Direct and indirect call edges | M1 | FR-004 | B-09 | 5 h |
 | [B-11](#b11-module-rules-v2) | Module rules and module dependencies | M1 | FR-005 | B-08 | 4 h |
 | [B-12](#b12-query-and-export-v1) | `lcart analyze` / `lcart query` / export | M1 | FR-006, NFR-004 | B-10, B-11 | 5 h |
 | [B-13](#b13-module-map-v1) | `lcart map` | M1 | FR-007 | B-12 | 3 h |
@@ -168,7 +168,7 @@ name, so `left/util.c` and `right/util.c` would share one; the stored USR
 gets the path of the defining file as a prefix
 ([ADR-0012](../adr/0012-function-identity-for-internal-linkage.md)). The
 other rules are on the
-[data model](../architecture/data-model.md#arch-data-model-function-facts-v1)
+[data model](../architecture/data-model.md#arch-data-model-function-facts-v2)
 page; duplicate external definitions are an
 [open question](../open-questions.md#open-technical-questions).
 
@@ -178,6 +178,19 @@ Acceptance criteria: those of [FR-004](../specs/requirements.md#fr004-record-cal
 on the `fn_pointers` and `macros` fixtures. The `fn_pointers` fixture
 contains a backend table modelled on libmodbus's (struct of function
 pointers initialized statically), in preparation for FR-015.
+
+Result (2026-10-04): after a translation unit's functions are recorded,
+`CallFactCollector` (`src/analysis/src/call_fact_collector.hpp`) walks the
+body of each definition written in that translation unit and records its
+call expressions; calls to functions outside the root are not edges. A
+third fixture, `two_programs`, settles the open question on functions with
+external linkage defined twice: each definition is a function with its own
+calls, and a warning
+([ADR-0013](../adr/0013-functions-with-external-linkage-defined-twice.md)).
+The rules are on the
+[data model](../architecture/data-model.md#arch-data-model-call-edges-v1)
+page. The libmodbus backend tables use positional initializers, now noted
+in FR-015.
 
 ### <a id="b11-module-rules-v2"></a>**[B-11 v2]** Module rules and module dependencies
 
