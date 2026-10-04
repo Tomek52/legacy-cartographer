@@ -223,9 +223,9 @@ TEST(ModuleMap, EdgeLabelsCountIncludeAndCallSites) {
 // names are code spans that no character can break.
 TEST(ModuleMap, AwkwardNamesAreEscaped) {
     auto store = empty_store();
-    const std::vector<std::string> names{"say \"hi\"",  "<b>x</b>",   "back`tick",
-                                         "a|b",         "`edge`",     "#35;",
-                                         "caf\xC3\xA9", "two\nlines", "bad\xFF"};
+    const std::vector<std::string> names{"say \"hi\"", "<b>x</b>", "back`tick",   "a|b",
+                                         "`edge`",     "#35;",     "caf\xC3\xA9", "two\nlines",
+                                         "bad\xFF",    "a&b:%%c"};
     std::vector<FileId> files;
     for (const std::string& name : names) {
         const ModuleId module = value_of(store->add_module({.name = name}));
@@ -239,28 +239,30 @@ TEST(ModuleMap, AwkwardNamesAreEscaped) {
 
     const std::string map = map_of(*store);
     const std::string replacement = "\xEF\xBF\xBD";
-    // Byte order: # < ` a b c s t (and "bad" after "back").
+    // Byte order: # < ` a b c s t ("a&" before "a|", "bad" after "back").
     const std::string graph = "```mermaid\n"
                               "flowchart LR\n"
                               "    m0[\"#35;35#59;\"]\n"
                               "    m1[\"#60;b#62;x#60;/b#62;\"]\n"
                               "    m2[\"#96;edge#96;\"]\n"
-                              "    m3[\"a#124;b\"]\n"
-                              "    m4[\"back#96;tick\"]\n"
-                              "    m5[\"bad#65533;\"]\n"
-                              "    m6[\"caf#233;\"]\n"
-                              "    m7[\"say #34;hi#34;\"]\n"
-                              "    m8[\"two#65533;lines\"]\n"
-                              "    m3 -->|\"1 include\"| m7\n"
+                              "    m3[\"a#38;b#58;#37;#37;c\"]\n"
+                              "    m4[\"a#124;b\"]\n"
+                              "    m5[\"back#96;tick\"]\n"
+                              "    m6[\"bad#65533;\"]\n"
+                              "    m7[\"caf#233;\"]\n"
+                              "    m8[\"say #34;hi#34;\"]\n"
+                              "    m9[\"two#65533;lines\"]\n"
+                              "    m4 -->|\"1 include\"| m8\n"
                               "```\n";
     EXPECT_NE(map.find(graph), std::string::npos) << map;
     for (const std::string& line :
          {std::string{"- `#35;`: 1 file, 0 function definitions\n"},
           std::string{"- `<b>x</b>`: 1 file"}, std::string{"- ``back`tick``: 1 file"},
-          std::string{"- `a|b`: 1 file"}, std::string{"- `` `edge` ``: 1 file"},
-          std::string{"- `caf\xC3\xA9`: 1 file"}, std::string{"- `say \"hi\"`: 1 file"},
-          "- `two" + replacement + "lines`: 1 file", "- `bad" + replacement + "`: 1 file",
-          std::string{"### Module `` `edge` ``\n"}, std::string{"- ``dir/`edge`.c``: 0 function"},
+          std::string{"- `a|b`: 1 file"}, std::string{"- `a&b:%%c`: 1 file"},
+          std::string{"- `` `edge` ``: 1 file"}, std::string{"- `caf\xC3\xA9`: 1 file"},
+          std::string{"- `say \"hi\"`: 1 file"}, "- `two" + replacement + "lines`: 1 file",
+          "- `bad" + replacement + "`: 1 file", std::string{"### Module `` `edge` ``\n"},
+          std::string{"- ``dir/`edge`.c``: 0 function"},
           "- `dir/two" + replacement + "lines.c`: 0 function"}) {
         EXPECT_NE(map.find(line), std::string::npos) << line << "\n" << map;
     }
