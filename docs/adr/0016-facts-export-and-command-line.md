@@ -119,7 +119,13 @@ the order is total.
 the export, a file outside the analysis root is named by the spelling of
 the first directive that includes it (by includer path, then line, then
 spelling): `<stddef.h>` gives `stddef.h`. If an earlier external file
-already has that name, `#2`, `#3`, ... is appended in the same order.
+already has that name, `#2`, `#3`, ... is appended. "Earlier" orders the
+external files by their first directive, then by the sorted list of all
+directives naming them, then by content hash, never by row id: one
+directive can reach two files when translation units use different `-I`,
+and B-16 may record them in either order. Two such files with the same
+directives and the same content are ordered by absolute path, so only that
+case can name them differently on another machine.
 `"external": true` (and `target_external` on includes) keeps these names
 apart from root-relative paths, and their hash is left out. A diagnostic
 or translation unit path outside the root that is no recorded file is

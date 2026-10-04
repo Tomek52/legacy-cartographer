@@ -9,6 +9,7 @@
 #include <memory>
 #include <sstream>
 #include <string>
+#include <vector>
 
 namespace {
 
@@ -177,6 +178,46 @@ TEST(FactExport, WritesEveryRecordKindInTheDocumentedOrder) {
 {"record":"diagnostic","translation_unit":"src/b.c","file":"cfg.h#2","line":7,"severity":"error","message":"e"}
 )json";
     EXPECT_EQ(out.str(), expected);
+}
+
+/// One directive `src/a.c:1 "cfg.h"` that reached two different external
+/// files (translation units with different -I), recorded in either order;
+/// `src/b.c:1` reaches only the second.
+std::string export_of_same_directive_two_targets(bool first_one_first) {
+    auto store = value_of(SqliteFactStore::open(":memory:"));
+    const ModuleId src = value_of(store->add_module({.name = "src"}));
+    const FileId a_c = value_of(store->add_file({.path = "src/a.c", .module = src}));
+    const auto external = [&store](const char* path, const char* sha256) {
+        return value_of(store->add_file(
+            {.path = path, .content_sha256 = sha256, .is_header = true, .is_external = true}));
+    };
+    std::vector<FileId> targets;
+    if (first_one_first) {
+        targets = {external("/opt/one/cfg.h", "aaaa"), external("/opt/two/cfg.h", "bbbb")};
+    } else {
+        targets = {external("/opt/two/cfg.h", "bbbb"), external("/opt/one/cfg.h", "aaaa")};
+    }
+    for (const FileId target : targets) {
+        expect_ok(store->add_include(
+            {.includer = a_c, .included = target, .spelled = "cfg.h", .line = 1}));
+    }
+    // Only /opt/two/cfg.h is also reached from b.c, so which file got which
+    // name shows in the export.
+    const FileId b_c = value_of(store->add_file({.path = "src/b.c", .module = src}));
+    const FileId two = first_one_first ? targets[1] : targets[0];
+    expect_ok(
+        store->add_include({.includer = b_c, .included = two, .spelled = "cfg.h", .line = 1}));
+    std::ostringstream out;
+    expect_ok(write_jsonl_export(*store, out));
+    return out.str();
+}
+
+// ADR-0016: external names must not depend on insertion order, which B-16's
+// parallel analysis may change.
+TEST(FactExport, ExternalNamesDoNotDependOnInsertionOrder) {
+    const std::string one_first = export_of_same_directive_two_targets(true);
+    EXPECT_EQ(one_first, export_of_same_directive_two_targets(false));
+    EXPECT_NE(one_first.find(R"("path":"cfg.h#2")"), std::string::npos) << one_first;
 }
 
 TEST(FactExport, EmptyDatabaseHasOnlyTheHeader) {

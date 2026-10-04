@@ -218,8 +218,11 @@ std::map<FileId, ExportedFile> exported_files(const std::vector<FileFact>& files
         }
     }
 
-    using FirstDirective = std::tuple<std::string, std::uint32_t, std::string>;
-    std::map<FileId, FirstDirective> first_directive;
+    // Every directive naming each external file, sorted: the first one
+    // gives the name, the rest break ties between files that one directive
+    // reached in different translation units (different -I).
+    using Directive = std::tuple<std::string, std::uint32_t, std::string>;
+    std::map<FileId, std::vector<Directive>> directives;
     for (const IncludeFact& include : includes) {
         if (!include.included || !external.contains(*include.included)) {
             continue;
@@ -228,35 +231,51 @@ std::map<FileId, ExportedFile> exported_files(const std::vector<FileFact>& files
         if (includer == exported.end()) {
             continue; // directives in external files are not recorded
         }
-        FirstDirective directive{includer->second.key, include.line, include.spelled};
-        const auto [it, inserted] = first_directive.try_emplace(*include.included, directive);
-        if (!inserted && directive < it->second) {
-            it->second = std::move(directive);
-        }
+        directives[*include.included].emplace_back(includer->second.key, include.line,
+                                                   include.spelled);
     }
 
-    // Names are handed out in an order that does not depend on row ids or
-    // absolute paths: by first directive, then unnamed files by file name.
-    std::vector<std::tuple<bool, FirstDirective, std::string, FileId>> order;
+    // Names are handed out in an order that does not depend on row ids
+    // (insertion order): by first directive, then by all directives, then
+    // by content hash; only files equal in all of these fall back to their
+    // absolute path. Files no directive names come last, by file name.
+    struct Candidate {
+        bool unnamed{};
+        std::vector<Directive> directives;
+        std::string name;
+        std::string sha256;
+        std::string path;
+        FileId id{};
+    };
+    std::vector<Candidate> order;
     for (const auto& [id, file] : external) {
-        const auto directive = first_directive.find(id);
-        if (directive != first_directive.end()) {
-            order.emplace_back(false, directive->second, std::get<2>(directive->second), id);
-        } else {
-            std::string name = file->path.substr(file->path.find_last_of('/') + 1);
-            order.emplace_back(true, FirstDirective{}, std::move(name), id);
+        Candidate candidate{.unnamed = true,
+                            .directives = {},
+                            .name = file->path.substr(file->path.find_last_of('/') + 1),
+                            .sha256 = file->content_sha256,
+                            .path = file->path,
+                            .id = id};
+        if (auto found = directives.find(id); found != directives.end()) {
+            std::ranges::sort(found->second);
+            candidate.unnamed = false;
+            candidate.name = std::get<2>(found->second.front());
+            candidate.directives = std::move(found->second);
         }
+        order.push_back(std::move(candidate));
     }
-    std::ranges::sort(order);
+    std::ranges::sort(order, [](const Candidate& left, const Candidate& right) {
+        return std::tie(left.unnamed, left.directives, left.name, left.sha256, left.path) <
+               std::tie(right.unnamed, right.directives, right.name, right.sha256, right.path);
+    });
 
     std::set<std::string> taken;
-    for (const auto& [unnamed, directive, name, id] : order) {
-        std::string key = name;
+    for (const Candidate& candidate : order) {
+        std::string key = candidate.name;
         for (int suffix = 2; taken.contains(key); ++suffix) {
-            key = name + '#' + std::to_string(suffix);
+            key = candidate.name + '#' + std::to_string(suffix);
         }
         taken.insert(key);
-        exported.emplace(id, ExportedFile{.key = std::move(key), .is_external = true});
+        exported.emplace(candidate.id, ExportedFile{.key = std::move(key), .is_external = true});
     }
     return exported;
 }
