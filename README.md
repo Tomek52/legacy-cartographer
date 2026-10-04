@@ -23,9 +23,8 @@ Built-in providers and local models are planned for later (M6).
 
 ## Status
 
-**M0: foundations.** Specs, architecture, ADRs and an empty but building
-skeleton. No analysis yet. Next: M1, the fact database and module map for
-libmodbus without LLM. See the [roadmap](docs/plan/roadmap.md).
+**M1 in progress: fact database and module map, without LLM.** Done so
+far: Clang LibTooling driver (B-07) and the SQLite fact store (B-06). See the [roadmap](docs/plan/roadmap.md).
 
 ## Build
 
@@ -36,16 +35,18 @@ Ubuntu 24.04, GCC 14 or Clang 20 (C++23), CMake ≥ 3.25, Ninja, Conan 2.
 scripts/conan-install.sh debug
 cmake --workflow --preset debug
 
-# Without Conan, from Ubuntu packages (offline machines)
-sudo apt-get install ninja-build g++-14 llvm-20-dev libclang-20-dev libclang-cpp20-dev \
+# Without Conan, from Ubuntu packages (offline machines;
+# presets: debug-system, asan-ubsan-system)
+sudo apt-get install ninja-build g++-14 clang-20 libclang-rt-20-dev \
+    llvm-20-dev libclang-20-dev libclang-cpp20-dev \
     libsqlite3-dev nlohmann-json3-dev libgtest-dev
 cmake --workflow --preset debug-system
 
 build/debug-system/src/cli/lcart --help
 ```
 
-Quality gates: `scripts/check-format.sh`, `scripts/run-clang-tidy.sh <preset>`,
-`scripts/docs-check.sh`.
+Quality gates: `scripts/dod.sh` runs all local checks (format, clang-tidy,
+docs, both offline presets); `scripts/quick-check.sh` is the fast inner loop.
 
 ## Documentation
 

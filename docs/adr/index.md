@@ -25,3 +25,4 @@ Rules:
 | [0008](0008-configuration-file-format.md) | Project configuration in TOML | Accepted |
 | [0009](0009-linux-and-wsl2-only.md) | Linux and WSL2 only; MSVC code analysed in Clang's MSVC mode | Accepted |
 | [0010](0010-traceability-matrix.md) | Generated traceability matrix instead of a formal standard's structure | Accepted |
+| [0011](0011-pull-request-flow-with-agent-review.md) | Pull-request flow with agent review and merge on green CI | Accepted |
