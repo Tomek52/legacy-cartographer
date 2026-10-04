@@ -33,3 +33,4 @@ Rules:
 | [0016](0016-facts-export-and-command-line.md) | Facts export, command line and the git exposure warning | Accepted; option syntax amended by 0017 (a lone `-` value for `--output`), export output replacement by 0018 |
 | [0017](0017-module-map-format-and-command-line.md) | Module map: command line, content and escaping | Accepted |
 | [0018](0018-facts-export-replaces-only-exports.md) | Facts export replaces only exports | Accepted |
+| [0019](0019-parallel-resumable-analysis.md) | Parallel, resumable analysis with one writer | Proposed |
