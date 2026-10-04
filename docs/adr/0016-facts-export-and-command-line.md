@@ -171,9 +171,9 @@ or repeated option is an error):
 
 <a id="adr0016-exit-status-v1"></a>**Exit statuses:** 0 success; 1
 failure (no translation unit parsed, a file or database that cannot be
-read or written, an existing database without `--force`, an existing file
-that is not a fact database); 2 invalid
-command line or lcart.toml; 3 the function, file or module named is not in
+read or written, lcart.toml among them, an existing database without
+`--force`, an existing file that is not a fact database); 2 invalid
+command line or lcart.toml content; 3 the function, file or module named is not in
 the database; 4 ambiguous function name. A partial analysis exits 0
 ([FR-001](../specs/requirements.md#fr001-ingest-compilation-database-v1)).
 Values are never renumbered; B-16's "interrupted" gets a new one.

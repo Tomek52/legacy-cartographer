@@ -19,7 +19,8 @@ enum class ExitStatus : std::uint8_t {
     /// The command could not do its work: no translation unit parsed, or a
     /// file or the fact database could not be read or written.
     failure = 1,
-    /// Invalid command line or lcart.toml.
+    /// Invalid command line, or an lcart.toml whose content is invalid (one
+    /// that cannot be read is a failure).
     usage = 2,
     /// The function, file or module named on the command line is not in
     /// the fact database.

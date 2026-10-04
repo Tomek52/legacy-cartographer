@@ -44,8 +44,9 @@ lcart query <query> [--db FILE]
   <function> is a name or a stored USR; <file> a path relative to the
   analysis root.
 
-Exit status: 0 success, 1 failure, 2 invalid command line or lcart.toml,
-3 not found in the fact database, 4 ambiguous function name.
+Exit status: 0 success, 1 failure (including an unreadable file), 2 invalid
+command line or lcart.toml content, 3 not found in the fact database,
+4 ambiguous function name.
 
 Options:
   -h, --help   show this message

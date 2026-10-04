@@ -432,9 +432,11 @@ TEST_F(LcartCliTest, InvalidLcartTomlIsAUsageError) {
     EXPECT_FALSE(fs::exists(work_dir() / "lcart-out"));
 }
 
-TEST_F(LcartCliTest, MissingNamedConfigIsAnError) {
+// ADR-0016: a file that cannot be read is a failure (1); invalid content
+// is a usage error (2).
+TEST_F(LcartCliTest, MissingNamedConfigIsAFailure) {
     const Outcome run = lcart({"analyze", "--config", "nowhere.toml"});
-    EXPECT_EQ(run.status, exit_usage);
+    EXPECT_EQ(run.status, exit_failure);
     EXPECT_NE(run.err.find("nowhere.toml"), std::string::npos) << run.err;
 }
 

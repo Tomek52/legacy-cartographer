@@ -87,7 +87,10 @@ Outcome<AnalysisInput> resolve_input(const AnalyzeCommand& command) {
     if (config_file) {
         auto loaded = config::load_project_config(*config_file);
         if (!loaded) {
-            return fail(ExitStatus::usage, loaded.error().message);
+            // Unreadable is a failure; readable but invalid is a usage error.
+            return fail(loaded.error().code == common::ErrorCode::io_error ? ExitStatus::failure
+                                                                           : ExitStatus::usage,
+                        loaded.error().message);
         }
         input.config = std::move(*loaded);
         base = fs::absolute(*config_file, ec).parent_path();
