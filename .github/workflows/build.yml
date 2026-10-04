@@ -93,16 +93,19 @@ jobs:
       - name: Install tools
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y -qq $APT_PACKAGES libsqlite3-dev nlohmann-json3-dev libtomlplusplus-dev libgtest-dev autoconf automake libtool make bear
+          sudo apt-get install -y -qq $APT_PACKAGES libsqlite3-dev nlohmann-json3-dev libtomlplusplus-dev libgtest-dev autoconf automake libtool make bear iproute2
       - name: Build lcart (Release)
         run: |
           cmake --preset debug-system -B build/release-system -DCMAKE_BUILD_TYPE=Release
           cmake --build build/release-system --target lcart
       - name: Analyse libmodbus without network
+        # A new network namespace has only loopback, and it starts down; bear
+        # talks to its own collector over 127.0.0.1, so it is brought up.
         run: >
-          sudo unshare --net --
-          sudo -u "$(id -un)" env "PATH=$PATH" CC=clang-20
-          scripts/libmodbus-baseline.sh build/release-system/src/cli/lcart
+          sudo unshare --net -- sh -c
+          'ip link set lo up && exec sudo -u "$0" env "PATH=$1"
+          scripts/libmodbus-baseline.sh build/release-system/src/cli/lcart'
+          "$(id -un)" "$PATH"
       - name: The committed module map is up to date
         run: git diff --exit-code -- docs/targets/libmodbus-map.md
       - name: Keep the libmodbus build log

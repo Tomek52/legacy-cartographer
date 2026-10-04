@@ -343,17 +343,21 @@ indirect calls from `_modbus_receive_msg` through `backend.recv` and
 `backend.check_integrity`, and no direct call from `core` into `rtu` or
 `tcp` (each check was seen failing on a wrong expectation). The CI job
 `libmodbus baseline` (replacing B-05's job) builds `lcart` in Release from
-Ubuntu packages, runs the script under `sudo unshare --net` (closing the
-open question on cutting the network in GitHub Actions) and fails if the
-committed map changed. Baseline: 1.6 s for 14 translation units with a
+Ubuntu packages, runs the script in a new network namespace (`sudo unshare
+--net`, then `ip link set lo up`: bear talks to its collector over
+127.0.0.1, so loopback must be up; nothing else is reachable) and fails if
+the committed map changed. A local run in such a namespace passed and
+could not reach the internet. `CC` defaults to `clang-20`, as in CI, so a
+local run regenerates the same map. Baseline: 1.6 s for 14 translation units with a
 debug build on the development container, recorded in the
 [libmodbus plan](../targets/libmodbus.md); the 2× regression gate of
 NFR-005 criterion 1 is left until CI has a stable reference. The map
-renders: its Mermaid block, drawn with Mermaid 11.17.2 (the `mermaid@11`
-MkDocs Material loads) in Chromium, shows all five modules with `(root)`
-decoded from `#40;root#41;`, which closes the ADR-0017 escaping question
-and covers FR-007 criterion 1 together with the strict MkDocs build of the
-page.
+renders: its Mermaid block, drawn once by hand in Chromium with Mermaid
+11.17.2 (what `mermaid@11`, the tag MkDocs Material loads, resolved to on
+2026-10-04), shows all five modules with `(root)` decoded from
+`#40;root#41;`, which closes the ADR-0017 escaping question. FR-007
+criterion 1 asks for that check in CI; `mkdocs build` does not parse
+Mermaid, so it stays open (open questions).
 
 ### <a id="b15-requirement-test-traceability-v2"></a>**[B-15 v2]** Traceability gate and matrix
 

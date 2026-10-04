@@ -59,4 +59,5 @@ None open. New questions are added here as they come up.
 | MkDocs/Material settings that keep raw HTML in generated docs from executing | [security](security.md) | M2 |
 | Usable local model sizes for claim generation | [NFR-003](specs/requirements.md#nfr003-fully-local-mode-v1) | M6 |
 | Claude Code permission rule syntax for a bundle's `.claude/settings.json` | [handoff contract](specs/handoff-contract.md#claim-agent-permissions-v1) | M2 |
+| A CI check that the committed libmodbus map's Mermaid block parses and renders (FR-007 criterion 1; checked by hand once in B-14) | [FR-007](specs/requirements.md#fr007-module-map-without-llm-v1) | M1 end |
 | Parsing Mermaid without a browser to validate agent diagrams | [FR-008](specs/requirements.md#fr008-generate-documentation-v2) | M2 |

@@ -25,6 +25,8 @@ die() {
 }
 
 [[ -x $lcart ]] || die "no lcart at $lcart (build it first, or pass its path)"
+# The compiler CI uses, so a local run regenerates the same map.
+export CC=${CC:-clang-20}
 
 "$repo_root/scripts/libmodbus-compdb.sh"
 
@@ -42,9 +44,8 @@ echo "libmodbus-baseline: module map in ${map#"$repo_root"/}"
 export_file="$repo_root/build/targets/libmodbus/facts.jsonl"
 "$lcart" query export --db "$database" --output "$export_file"
 while read -r name file; do
-    grep -qF "\"name\":\"$name\",\"qualified_name\":\"$name\"" "$export_file" &&
-        grep -F "\"name\":\"$name\",\"qualified_name\":\"$name\"" "$export_file" |
-        grep -qF "\"file\":\"$file\"" ||
+    grep -F "\"name\":\"$name\",\"qualified_name\":\"$name\"" "$export_file" |
+        grep -F "\"file\":\"$file\"" >/dev/null ||
         die "$name is not defined in $file"
 done <<'FUNCTIONS'
 _modbus_receive_msg src/modbus.c
