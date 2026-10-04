@@ -14,7 +14,7 @@ expanded in place; its version is bumped if its meaning changes
 | [B-02](#b02-ci-green-all-presets-v1) | ✅ CI green on all presets with Conan | M0 | NFR-006, NFR-007 | – | 4 h |
 | [B-03](#b03-docs-ci-and-anchor-check-v1) | ✅ Docs CI and anchor checker | M0 | NFR-012 | – | 2 h |
 | [B-04](#b04-include-boundary-check-v1) | ✅ Include boundary check for the core | M0 | NFR-001 | B-02 | 2 h |
-| [B-05](#b05-libmodbus-compilation-database-v1) | Compilation database for libmodbus | M1 | FR-001 | B-01 | 3 h |
+| [B-05](#b05-libmodbus-compilation-database-v1) | ✅ Compilation database for libmodbus | M1 | FR-001 | B-01 | 3 h |
 | [B-06](#b06-sqlite-fact-store-v1) | ✅ SQLite fact store, schema v1 | M1 | FR-002–FR-004, NFR-004 | – | 6 h |
 | [B-07](#b07-clang-libtooling-spike-v2) | ✅ Clang LibTooling spike and analysis driver | M1 | FR-001 | B-02 | 6 h |
 | [B-08](#b08-file-and-include-facts-v1) | ✅ File and include facts | M1 | FR-002 | B-06, B-07 | 4 h |
@@ -108,6 +108,22 @@ Acceptance criteria:
    (out-of-tree build; see the TODO in the [libmodbus plan](../targets/libmodbus.md)).
 3. The script documents its tool requirements (autotools, `bear`) and fails
    with a clear message if one is missing.
+
+Result (2026-10-04): `scripts/libmodbus-compdb.sh` exports the pinned
+commit with `git archive` to `build/targets/libmodbus/source/` and builds
+it there under `bear` (`autogen.sh`, `./configure --enable-tests`, `make`),
+because `autogen.sh` writes into the source directory and a plain
+out-of-tree configure would still modify the submodule. The database has
+14 entries (`src/modbus.c`, `modbus-data.c`, `modbus-rtu.c`,
+`modbus-tcp.c` and 10 test programs) and names files under the copy, which
+becomes the analysis root for B-14. The script itself checks criteria 1
+and 2 (the four entries, an empty `git status --porcelain` of the
+submodule) and fails otherwise; before building it lists every missing
+tool with the Ubuntu install command (checked by hiding `bear`). CI runs
+it in the `libmodbus compilation database` job (about 25 s locally;
+`CC=clang-20`), keeping the build log on failure. `lcart analyze` on the
+result parsed 14/14 translation units without diagnostics in under 2 s;
+the map and timing are B-14.
 
 ### <a id="b06-sqlite-fact-store-v1"></a>**[B-06 v1]** SQLite fact store, schema v1
 
