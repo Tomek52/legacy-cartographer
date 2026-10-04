@@ -1,6 +1,6 @@
 # 0012. Function identity: Clang's USR, path-prefixed for internal linkage
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-10-04
 - **Requirements:** [FR-003](../specs/requirements.md#fr003-record-functions-v1)
 - **Supersedes / superseded by:** —
