@@ -39,10 +39,11 @@ lcart_add_module(config
 # Clang LibTooling stays private to analysis (ADR-0002): no other module
 # sees a Clang header or links Clang.
 lcart_add_module(analysis
-    SOURCES analysis/src/argument_filter.cpp analysis/src/clang_analyzer.cpp
-            analysis/src/call_fact_collector.cpp analysis/src/file_fact_collector.cpp
+    SOURCES analysis/src/argument_filter.cpp analysis/src/batch_writer.cpp
+            analysis/src/clang_analyzer.cpp analysis/src/call_fact_collector.cpp
+            analysis/src/fact_path.cpp analysis/src/file_fact_collector.cpp
             analysis/src/function_fact_collector.cpp
-            analysis/src/module_rules.cpp
+            analysis/src/module_rules.cpp analysis/src/translation_unit_recorder.cpp
     DEPS lcart::facts lcart::config
     PRIVATE_DEPS clang-cpp LLVM)
 # Clang's builtin headers (stddef.h, ...) live in its resource directory,

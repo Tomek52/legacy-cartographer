@@ -137,6 +137,18 @@ struct DiagnosticFact {
     bool operator==(const DiagnosticFact&) const = default;
 };
 
+/// Where a translation unit of an analysis stands (ADR-0019): `pending`
+/// until its facts are committed together with `parsed` or `failed`.
+enum class TranslationUnitStatus : std::uint8_t { pending, parsed, failed };
+
+/// A translation unit of an analysis, its path spelled like FileFact::path.
+struct TranslationUnitFact {
+    std::string path{};
+    TranslationUnitStatus status{TranslationUnitStatus::pending};
+
+    bool operator==(const TranslationUnitFact&) const = default;
+};
+
 /// How much of the compilation database was analysed. The verifier only
 /// reports `contradicted` for an absent fact when coverage is complete.
 struct AnalysisCoverage {

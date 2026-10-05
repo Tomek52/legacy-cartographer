@@ -183,6 +183,12 @@ public:
         }
     }
 
+    /// Makes the statement ready to be bound and run again.
+    void reset() {
+        sqlite3_reset(statement_);
+        sqlite3_clear_bindings(statement_);
+    }
+
     /// Steps a statement that returns no rows.
     Status run() {
         auto row = step();
@@ -593,11 +599,28 @@ Status initialise_schema(sqlite3* database) {
 
 } // namespace
 
-Result<std::unique_ptr<SqliteFactStore>> SqliteFactStore::open(const std::string& path) {
+namespace {
+
+/// SQLITE_OPEN_NOFOLLOW (sqlite3.h): opening fails if the file name is a
+/// symbolic link.
+int open_link_flags(LinkPolicy links) {
+    switch (links) {
+    case LinkPolicy::follow:
+        return 0;
+    case LinkPolicy::refuse:
+        return SQLITE_OPEN_NOFOLLOW;
+    }
+    std::unreachable();
+}
+
+} // namespace
+
+Result<std::unique_ptr<SqliteFactStore>> SqliteFactStore::open(const std::string& path,
+                                                               LinkPolicy links) {
     sqlite3* database = nullptr;
-    const int opened =
-        sqlite3_open_v2(path.c_str(), &database,
-                        SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | SQLITE_OPEN_URI, nullptr);
+    const int flags =
+        SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | SQLITE_OPEN_URI | open_link_flags(links);
+    const int opened = sqlite3_open_v2(path.c_str(), &database, flags, nullptr);
     // Owned from here on, also on failure (sqlite3_open_v2 may allocate).
     std::unique_ptr<SqliteFactStore> store{new SqliteFactStore{database}};
     if (opened != SQLITE_OK) {
@@ -936,6 +959,110 @@ Result<AnalysisCoverage> SqliteFactStore::coverage() const {
         return std::unexpected(parsed.error());
     }
     return AnalysisCoverage{.translation_units_total = *total, .translation_units_parsed = *parsed};
+}
+
+namespace {
+
+const char* to_text(TranslationUnitStatus status) {
+    switch (status) {
+    case TranslationUnitStatus::pending:
+        return "pending";
+    case TranslationUnitStatus::parsed:
+        return "parsed";
+    case TranslationUnitStatus::failed:
+        return "failed";
+    }
+    std::unreachable();
+}
+
+Result<TranslationUnitStatus> translation_unit_status_from(std::string_view text) {
+    if (text == "pending") {
+        return TranslationUnitStatus::pending;
+    }
+    if (text == "parsed") {
+        return TranslationUnitStatus::parsed;
+    }
+    if (text == "failed") {
+        return TranslationUnitStatus::failed;
+    }
+    return std::unexpected(corrupt_value("translation unit status", text));
+}
+
+} // namespace
+
+Result<std::optional<std::string>> SqliteFactStore::meta(std::string_view key) const {
+    return first(select_all<std::string>(
+        database_, "SELECT value FROM meta WHERE key = ?1",
+        [](const Statement& row) -> Result<std::string> { return row.text(0); }, key));
+}
+
+Status SqliteFactStore::set_meta(std::string_view key, std::string_view value) {
+    return execute(database_,
+                   "INSERT INTO meta (key, value) VALUES (?1, ?2)"
+                   " ON CONFLICT (key) DO UPDATE SET value = excluded.value",
+                   key, value);
+}
+
+Status SqliteFactStore::add_translation_units(std::span<const std::string> paths) {
+    auto statement = Statement::prepare(
+        database_, "INSERT INTO translation_unit (path) VALUES (?1) ON CONFLICT (path) DO NOTHING");
+    if (!statement) {
+        return std::unexpected(statement.error());
+    }
+    for (const std::string& path : paths) {
+        if (auto bound = statement->bind(path); !bound) {
+            return bound;
+        }
+        if (auto inserted = statement->run(); !inserted) {
+            return inserted;
+        }
+        statement->reset();
+    }
+    return {};
+}
+
+Result<std::vector<TranslationUnitFact>> SqliteFactStore::translation_units() const {
+    auto read_unit = [](const Statement& row) -> Result<TranslationUnitFact> {
+        auto status = translation_unit_status_from(row.text(1));
+        if (!status) {
+            return std::unexpected(status.error());
+        }
+        return TranslationUnitFact{.path = row.text(0), .status = *status};
+    };
+    return select_all<TranslationUnitFact>(
+        database_, "SELECT path, status FROM translation_unit ORDER BY id", read_unit);
+}
+
+Status SqliteFactStore::set_translation_unit_status(std::string_view path,
+                                                    TranslationUnitStatus status) {
+    // The path is spelled like FILE.path, so the main file finds its row.
+    if (auto updated = execute(database_,
+                               "UPDATE translation_unit SET status = ?2,"
+                               " file_id = (SELECT id FROM file WHERE path = ?1) WHERE path = ?1",
+                               path, to_text(status));
+        !updated) {
+        return updated;
+    }
+    if (sqlite3_changes(database_) != 1) {
+        return std::unexpected(
+            Error{.code = ErrorCode::invalid_argument,
+                  .message = "no translation unit " + std::string{path} + " in the fact database"});
+    }
+    return {};
+}
+
+Status SqliteFactStore::begin_transaction() {
+    return execute_constant(database_, "BEGIN");
+}
+
+Status SqliteFactStore::commit_transaction() {
+    return execute_constant(database_, "COMMIT");
+}
+
+void SqliteFactStore::rollback_transaction() {
+    if (sqlite3_get_autocommit(database_) == 0) {
+        rollback(database_);
+    }
 }
 
 } // namespace lcart::facts

@@ -2,15 +2,11 @@
 
 #include "analysis/module_rules.hpp"
 
-#include <clang/Basic/FileManager.h>
-#include <llvm/ADT/SmallString.h>
-#include <llvm/ADT/StringExtras.h>
-#include <llvm/Support/SHA256.h>
-
 #include <algorithm>
 #include <array>
-#include <system_error>
+#include <filesystem>
 #include <utility>
+#include <vector>
 
 namespace lcart::analysis {
 
@@ -24,64 +20,47 @@ namespace {
     return std::ranges::find(source_extensions, extension) != source_extensions.end();
 }
 
-[[nodiscard]] std::string sha256_hex(llvm::StringRef content) {
-    return llvm::toHex(llvm::SHA256::hash(llvm::arrayRefFromStringRef(content)),
-                       /*LowerCase=*/true);
-}
-
 } // namespace
 
-FileFactCollector::FileFactCollector(std::filesystem::path root, ModuleRules rules,
-                                     facts::FactWriter& out)
-    : root_(std::move(root)), rules_(std::move(rules)), out_(&out) {}
+FileFactCollector::FileFactCollector(ModuleRules rules, facts::FactWriter& out)
+    : rules_(std::move(rules)), out_(&out) {}
 
-const FileFactCollector::FactPath& FileFactCollector::fact_path(const clang::SourceManager& sources,
-                                                                clang::FileEntryRef file) {
-    llvm::SmallString<256> absolute{file.getName()};
-    sources.getFileManager().makeAbsolutePath(absolute);
-    return fact_path(absolute.str().str());
+common::Status FileFactCollector::restore(const facts::FactQuery& facts) {
+    auto files = facts.files();
+    if (!files) {
+        return std::unexpected(files.error());
+    }
+    for (const facts::FileFact& file : *files) {
+        file_ids_.insert_or_assign(file.path, file.id);
+    }
+    auto includes = facts.includes();
+    if (!includes) {
+        return std::unexpected(includes.error());
+    }
+    for (const facts::IncludeFact& include : *includes) {
+        includes_.emplace(include.includer.value, include.line, include.spelled,
+                          include.included ? include.included->value : -1);
+    }
+    return {};
 }
 
-const FileFactCollector::FactPath& FileFactCollector::fact_path(const std::string& absolute_name) {
-    const auto [it, inserted] = fact_paths_.try_emplace(absolute_name);
-    if (!inserted) {
-        return it->second;
-    }
-    // Canonical, so a file reached through a symlink or `..` compares
-    // equal to the canonical root.
-    std::error_code ec;
-    std::filesystem::path canonical = std::filesystem::weakly_canonical(it->first, ec);
-    if (ec) {
-        canonical = std::filesystem::path{it->first}.lexically_normal();
-    }
-    const std::filesystem::path relative = canonical.lexically_relative(root_);
-    const bool is_external =
-        relative.empty() || relative == "." || *relative.begin() == std::filesystem::path{".."};
-    it->second = {.path = (is_external ? canonical : relative).generic_string(),
-                  .is_external = is_external};
-    return it->second;
-}
-
-common::Result<facts::FileId> FileFactCollector::record_file(clang::SourceManager& sources,
-                                                             clang::FileEntryRef file,
-                                                             const FactPath& path) {
-    if (const auto known = file_ids_.find(path.path); known != file_ids_.end()) {
+common::Result<facts::FileId> FileFactCollector::record_file(const BatchFile& file) {
+    if (const auto known = file_ids_.find(file.path); known != file_ids_.end()) {
         return known->second;
     }
-    const std::optional<llvm::MemoryBufferRef> content = sources.getMemoryBufferForFileOrNone(file);
-    if (!content) {
+    if (!file.content_sha256) {
         return std::unexpected(common::Error{.code = common::ErrorCode::io_error,
-                                             .message = "cannot read " + path.path});
+                                             .message = "cannot read " + file.path});
     }
     facts::FileFact fact{.id = {},
-                         .path = path.path,
-                         .content_sha256 = sha256_hex(content->getBuffer()),
+                         .path = file.path,
+                         .content_sha256 = *file.content_sha256,
                          .is_header =
-                             !is_source_extension(std::filesystem::path{path.path}.extension()),
-                         .is_external = path.is_external,
+                             !is_source_extension(std::filesystem::path{file.path}.extension()),
+                         .is_external = file.is_external,
                          .module = std::nullopt};
-    if (!path.is_external) {
-        auto module = out_->add_module({.id = {}, .name = module_of(path.path, rules_)});
+    if (!file.is_external) {
+        auto module = out_->add_module({.id = {}, .name = module_of(file.path, rules_)});
         if (!module) {
             return std::unexpected(module.error());
         }
@@ -89,21 +68,16 @@ common::Result<facts::FileId> FileFactCollector::record_file(clang::SourceManage
     }
     auto id = out_->add_file(fact);
     if (id) {
-        file_ids_.emplace(path.path, *id);
+        file_ids_.emplace(file.path, *id);
     }
     return id;
 }
 
-std::optional<facts::FileId> FileFactCollector::internal_file(clang::SourceManager& sources,
-                                                              clang::FileEntryRef file) {
-    if (!status_) {
+std::optional<facts::FileId> FileFactCollector::internal_file(const BatchFile& file) {
+    if (!status_ || file.is_external) {
         return std::nullopt;
     }
-    const FactPath& path = fact_path(sources, file);
-    if (path.is_external) {
-        return std::nullopt;
-    }
-    auto id = record_file(sources, file, path);
+    auto id = record_file(file);
     if (!id) {
         status_ = std::unexpected(id.error());
         return std::nullopt;
@@ -111,59 +85,52 @@ std::optional<facts::FileId> FileFactCollector::internal_file(clang::SourceManag
     return *id;
 }
 
-void FileFactCollector::on_main_file(clang::SourceManager& sources) {
-    if (const clang::OptionalFileEntryRef main =
-            sources.getFileEntryRefForID(sources.getMainFileID())) {
-        static_cast<void>(internal_file(sources, *main));
-    }
+void FileFactCollector::on_main_file(const BatchFile& file) {
+    static_cast<void>(internal_file(file));
 }
 
-void FileFactCollector::on_include(clang::SourceManager& sources,
-                                   clang::SourceLocation hash_location, llvm::StringRef spelled,
-                                   bool is_angled, clang::OptionalFileEntryRef file) {
+void FileFactCollector::on_include(const IncludeEvent& include, std::span<const BatchFile> files) {
     if (!status_) {
         return;
     }
-    const clang::OptionalFileEntryRef includer_file =
-        sources.getFileEntryRefForID(sources.getFileID(hash_location));
-    if (!includer_file) {
+    if (!include.includer) {
         // A directive in Clang's predefines buffer, i.e. `-include file`:
         // no includer to record an edge for, but the file is still reached.
-        if (file) {
-            static_cast<void>(internal_file(sources, *file));
+        if (include.included) {
+            static_cast<void>(internal_file(files[*include.included]));
         }
         return;
     }
-    const FactPath& includer_path = fact_path(sources, *includer_file);
-    if (includer_path.is_external) {
+    const BatchFile& includer_file = files[*include.includer];
+    if (includer_file.is_external) {
         return;
     }
-    auto includer = record_file(sources, *includer_file, includer_path);
+    auto includer = record_file(includer_file);
     if (!includer) {
         status_ = std::unexpected(includer.error());
         return;
     }
 
-    facts::IncludeFact include{.includer = *includer,
-                               .included = std::nullopt,
-                               .spelled = spelled.str(),
-                               .line = sources.getSpellingLineNumber(hash_location),
-                               .is_system = is_angled};
-    if (file) {
-        auto included = record_file(sources, *file, fact_path(sources, *file));
+    facts::IncludeFact fact{.includer = *includer,
+                            .included = std::nullopt,
+                            .spelled = include.spelled,
+                            .line = include.line,
+                            .is_system = include.is_angled};
+    if (include.included) {
+        auto included = record_file(files[*include.included]);
         if (!included) {
             status_ = std::unexpected(included.error());
             return;
         }
-        include.included = *included;
+        fact.included = *included;
     }
 
-    const auto key = std::tuple{include.includer.value, include.line, include.spelled,
-                                include.included ? include.included->value : -1};
+    const auto key = std::tuple{fact.includer.value, fact.line, fact.spelled,
+                                fact.included ? fact.included->value : -1};
     if (!includes_.insert(key).second) {
         return;
     }
-    status_ = out_->add_include(include);
+    status_ = out_->add_include(fact);
 }
 
 } // namespace lcart::analysis

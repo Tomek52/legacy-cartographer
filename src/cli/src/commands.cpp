@@ -8,6 +8,12 @@
 #include "facts/sqlite_fact_store.hpp"
 #include "report/report_writer.hpp"
 
+#include <algorithm>
+#include <atomic>
+#include <cerrno>
+#include <chrono>
+#include <csignal>
+#include <cstdio>
 #include <expected>
 #include <filesystem>
 #include <fstream>
@@ -17,11 +23,22 @@
 #include <ostream>
 #include <string>
 #include <string_view>
+#include <sys/file.h>
+#include <sys/stat.h>
 #include <system_error>
+#include <thread>
 #include <unistd.h>
 #include <utility>
 #include <variant>
 #include <vector>
+
+// The ownership annotation that cppcoreguidelines-owning-memory checks for,
+// defined as the Guidelines Support Library defines it; lcart does not
+// depend on the GSL.
+namespace gsl {
+template <typename T>
+using owner = T;
+} // namespace gsl
 
 namespace lcart::cli {
 
@@ -118,14 +135,94 @@ Outcome<AnalysisInput> resolve_input(const AnalyzeCommand& command) {
     return input;
 }
 
-/// A new fact database, written to a file next to `target` and moved over
-/// it only by commit(), so a failed run leaves an existing database as it
-/// was. Removes its file if it is never committed.
-class PendingDatabase {
+/// The fact database of a run of `lcart analyze` (ADR-0019): written to
+/// `.<name>.partial` next to `target`, locked with `flock` for the whole
+/// run, and moved over the target only by commit(). An interrupted or
+/// failed run leaves it in place for `--resume`.
+class PartialDatabase {
 public:
     /// Fails if `target` exists and is not a fact database (lcart replaces
-    /// only its own files), or exists and `replace` is not set.
-    static Outcome<PendingDatabase> create(const fs::path& target, bool replace) {
+    /// only its own files), or exists and `replace` is not set; if another
+    /// run holds the partial database; and, for `resume`, if there is no
+    /// partial database or it is not a fact database. Without `resume`, an
+    /// existing partial database (lcart's own file) is replaced, together
+    /// with a `-journal` file that SQLite would otherwise roll back into the
+    /// new database.
+    static Outcome<PartialDatabase> open(const fs::path& target, bool replace, bool resume) {
+        if (auto checked = check_target(target, replace); !checked) {
+            return std::unexpected(std::move(checked.error()));
+        }
+        // The directory resolved (it exists now): SQLITE_OPEN_NOFOLLOW
+        // refuses a link in any component of the name, and only the
+        // partial database's own name must not be one. The lock, the
+        // store and the final rename all use these paths.
+        std::error_code ec;
+        const fs::path directory = fs::canonical(target.parent_path(), ec);
+        if (ec) {
+            return fail(ExitStatus::failure,
+                        "cannot resolve " + target.parent_path().string() + ": " + ec.message());
+        }
+        PartialDatabase partial;
+        partial.target_ = directory / target.filename();
+        partial.file_ = directory / ("." + target.filename().string() + ".partial");
+        if (auto locked = partial.lock(resume); !locked) {
+            return std::unexpected(std::move(locked.error()));
+        }
+        if (auto prepared = partial.prepare(resume); !prepared) {
+            return std::unexpected(std::move(prepared.error()));
+        }
+        auto store =
+            facts::SqliteFactStore::open(partial.file_.string(), facts::LinkPolicy::refuse);
+        if (!store) {
+            return fail(ExitStatus::failure, partial.file_.string() + ": " + store.error().message);
+        }
+        partial.store_ = std::move(*store);
+        return partial;
+    }
+
+    PartialDatabase(const PartialDatabase&) = delete;
+    PartialDatabase& operator=(const PartialDatabase&) = delete;
+    PartialDatabase(PartialDatabase&& other) noexcept = default;
+    PartialDatabase& operator=(PartialDatabase&&) = delete;
+    /// Keeps the file: an interrupted or failed run is resumed from it.
+    ~PartialDatabase() {
+        // SQLite first: closing any descriptor of the file drops SQLite's
+        // POSIX locks on it.
+        store_.reset();
+        lock_.reset();
+    }
+
+    [[nodiscard]] facts::AnalysisStore& store() const { return *store_; }
+    [[nodiscard]] const fs::path& file() const { return file_; }
+
+    /// Closes the database and moves it to the target, replacing any file
+    /// there in one step.
+    Outcome<void> commit() {
+        store_.reset();
+        std::error_code ec;
+        fs::rename(file_, target_, ec);
+        if (ec) {
+            return fail(ExitStatus::failure, "cannot move the new database to " + target_.string() +
+                                                 ": " + ec.message());
+        }
+        return {};
+    }
+
+    /// Closes and removes the database: a completed run with nothing worth
+    /// keeping.
+    void discard() {
+        store_.reset();
+        std::error_code ec;
+        fs::remove(file_, ec);                       // best effort; the run has failed already
+        fs::remove(file_.string() + "-journal", ec); // none after a clean close
+    }
+
+private:
+    PartialDatabase() = default;
+
+    /// Fails if `target` exists and is not a fact database, or exists and
+    /// `replace` is not set; creates its directory.
+    static Outcome<void> check_target(const fs::path& target, bool replace) {
         std::error_code ec;
         const fs::file_status status = fs::symlink_status(target, ec);
         if (fs::exists(status)) {
@@ -145,56 +242,191 @@ public:
             return fail(ExitStatus::failure,
                         "cannot create " + target.parent_path().string() + ": " + ec.message());
         }
-        PendingDatabase pending;
-        pending.target_ = target;
-        pending.file_ = target.parent_path() /
-                        ("." + target.filename().string() + ".partial-" + std::to_string(getpid()));
-        fs::remove(pending.file_, ec); // a leftover of a crashed run with this pid
-        auto store = facts::SqliteFactStore::open(pending.file_.string());
-        if (!store) {
-            return fail(ExitStatus::failure, store.error().message);
-        }
-        pending.store_ = std::move(*store);
-        return pending;
-    }
-
-    PendingDatabase(const PendingDatabase&) = delete;
-    PendingDatabase& operator=(const PendingDatabase&) = delete;
-    PendingDatabase(PendingDatabase&& other) noexcept
-        : target_{std::move(other.target_)}, file_{std::exchange(other.file_, {})},
-          store_{std::move(other.store_)} {}
-    PendingDatabase& operator=(PendingDatabase&&) = delete;
-    ~PendingDatabase() {
-        store_.reset();
-        if (!file_.empty()) {
-            std::error_code ec;
-            fs::remove(file_, ec); // best effort; the run has failed already
-        }
-    }
-
-    [[nodiscard]] facts::FactWriter& writer() const { return *store_; }
-
-    /// Closes the database and moves it to the target, replacing any file
-    /// there in one step.
-    Outcome<void> commit() {
-        store_.reset();
-        std::error_code ec;
-        fs::rename(file_, target_, ec);
-        if (ec) {
-            return fail(ExitStatus::failure, "cannot move the new database to " + target_.string() +
-                                                 ": " + ec.message());
-        }
-        file_.clear();
         return {};
     }
 
-private:
-    PendingDatabase() = default;
+    /// Opens the partial database file and takes the `flock` on it; for a
+    /// new analysis, creates it if missing. Nothing is created or written
+    /// through a symbolic link: a new file is created with O_EXCL; an
+    /// existing name is opened as it is (a link is followed, since open()
+    /// with O_NOFOLLOW is out of reach without a vararg call), then refused
+    /// unless it is the regular file at that name, before anything is
+    /// written. The store reopens it with SQLITE_OPEN_NOFOLLOW.
+    Outcome<void> lock(bool resume) {
+        std::error_code ec;
+        const bool exists = fs::exists(fs::symlink_status(file_, ec));
+        if (resume && !exists) {
+            return fail(ExitStatus::failure,
+                        "no interrupted analysis to resume: " + file_.string() + " does not exist");
+        }
+        // "x" (O_EXCL) creates the file and fails on any existing name, a
+        // symbolic link included. An existing name is opened without
+        // creating ("r+"; this follows a link) and checked below.
+        // "e": closed on exec (glibc).
+        lock_ = std::make_unique<OpenFile>(file_, exists ? "r+e" : "w+xe");
+        if (!lock_->is_open()) {
+            return fail(ExitStatus::failure,
+                        "cannot open " + file_.string() + ": " +
+                            std::error_code{errno, std::generic_category()}.message());
+        }
+        const int descriptor = lock_->descriptor();
+        if (::flock(descriptor, LOCK_EX | LOCK_NB) != 0) {
+            return fail(ExitStatus::failure, "another lcart analyze is writing " + file_.string() +
+                                                 "; wait for it to end");
+        }
+        // lstat after the open: a symbolic link, or another file put at the
+        // name after the open, is refused (lcart writes only its own file).
+        struct stat opened{};
+        struct stat named{};
+        if (::fstat(descriptor, &opened) != 0 || ::lstat(file_.c_str(), &named) != 0 ||
+            !S_ISREG(named.st_mode) || opened.st_dev != named.st_dev ||
+            opened.st_ino != named.st_ino) {
+            return fail(ExitStatus::failure, file_.string() + " is not a regular file");
+        }
+        return {};
+    }
+
+    /// For `resume`, checks the file is a fact database; otherwise empties
+    /// it (keeping the locked file) and removes a leftover `-journal` file.
+    [[nodiscard]] Outcome<void> prepare(bool resume) const {
+        std::error_code ec;
+        const fs::path journal = file_.string() + "-journal";
+        if (resume) {
+            // With a -journal file left by a crash, SQLite first rolls the
+            // unfinished translation unit back, which a read-only check
+            // cannot do; opening the store checks it then.
+            if (!fs::exists(journal, ec) &&
+                !facts::SqliteFactStore::is_fact_database(file_.string())) {
+                return fail(ExitStatus::failure,
+                            file_.string() + " is not an lcart fact database; start a new analysis"
+                                             " without --resume");
+            }
+            return {};
+        }
+        // Truncated rather than removed: the lock stays on this file.
+        if (::ftruncate(lock_->descriptor(), 0) != 0) {
+            return fail(ExitStatus::failure,
+                        "cannot replace " + file_.string() + ": " +
+                            std::error_code{errno, std::generic_category()}.message());
+        }
+        fs::remove(journal, ec);
+        if (ec) {
+            return fail(ExitStatus::failure,
+                        "cannot remove " + journal.string() + ": " + ec.message());
+        }
+        return {};
+    }
+
+    /// A file opened with std::fopen, closed with the object.
+    class OpenFile {
+    public:
+        OpenFile(const fs::path& path, const char* mode) : file_{std::fopen(path.c_str(), mode)} {}
+        OpenFile(const OpenFile&) = delete;
+        OpenFile& operator=(const OpenFile&) = delete;
+        OpenFile(OpenFile&&) = delete;
+        OpenFile& operator=(OpenFile&&) = delete;
+        ~OpenFile() {
+            if (file_ != nullptr) {
+                static_cast<void>(std::fclose(file_));
+            }
+        }
+
+        [[nodiscard]] bool is_open() const { return file_ != nullptr; }
+        /// Precondition: is_open().
+        [[nodiscard]] int descriptor() const { return ::fileno(file_); }
+
+    private:
+        gsl::owner<std::FILE*> file_;
+    };
 
     fs::path target_;
     fs::path file_;
+    /// Holds the `flock` for the whole run (ADR-0019).
+    std::unique_ptr<OpenFile> lock_;
     std::unique_ptr<facts::SqliteFactStore> store_;
 };
+
+/// Set by the SIGINT and SIGTERM handler, read by the analysis (ADR-0019).
+/// Lock-free, so storing to it is async-signal-safe; constant-initialised,
+/// so the handler never runs an initialisation.
+std::atomic<bool>& interrupt_requested() {
+    static constinit std::atomic<bool> requested{false};
+    return requested;
+}
+static_assert(std::atomic<bool>::is_always_lock_free);
+
+void request_interrupt(int /*signal*/) {
+    interrupt_requested().store(true);
+}
+
+/// Installs the SIGINT and SIGTERM handler for one analysis, and restores
+/// the earlier handlers afterwards. SA_RESETHAND resets only the signal
+/// delivered: the next signal of the same kind has the default action and
+/// ends the process at once; one of the other kind is another stop request
+/// (ADR-0019; open questions).
+class InterruptHandlers {
+public:
+    InterruptHandlers() {
+        interrupt_requested().store(false);
+        struct sigaction action{};
+        action.sa_handler = &request_interrupt;
+        sigemptyset(&action.sa_mask);
+        // SA_RESTART: system calls in Clang and SQLite go on after the signal.
+        action.sa_flags = static_cast<int>(SA_RESETHAND | SA_RESTART);
+        ::sigaction(SIGINT, &action, &previous_interrupt_);
+        ::sigaction(SIGTERM, &action, &previous_terminate_);
+    }
+    InterruptHandlers(const InterruptHandlers&) = delete;
+    InterruptHandlers& operator=(const InterruptHandlers&) = delete;
+    InterruptHandlers(InterruptHandlers&&) = delete;
+    InterruptHandlers& operator=(InterruptHandlers&&) = delete;
+    ~InterruptHandlers() {
+        ::sigaction(SIGINT, &previous_interrupt_, nullptr);
+        ::sigaction(SIGTERM, &previous_terminate_, nullptr);
+    }
+
+    [[nodiscard]] static const std::atomic<bool>& flag() { return interrupt_requested(); }
+
+private:
+    struct sigaction previous_interrupt_{};
+    struct sigaction previous_terminate_{};
+};
+
+/// `3 min 20 s`, rounded up to whole seconds.
+std::string duration_text(std::chrono::milliseconds duration) {
+    const auto seconds = std::chrono::ceil<std::chrono::seconds>(duration).count();
+    constexpr long long minute = 60;
+    constexpr long long hour = 60 * minute;
+    if (seconds >= hour) {
+        return std::to_string(seconds / hour) + " h " + std::to_string(seconds % hour / minute) +
+               " min";
+    }
+    if (seconds >= minute) {
+        return std::to_string(seconds / minute) + " min " + std::to_string(seconds % minute) + " s";
+    }
+    return std::to_string(seconds) + " s";
+}
+
+/// One progress line on standard error (ADR-0019).
+void print_progress(const analysis::AnalysisProgress& progress, std::ostream& err) {
+    err << "lcart: progress: " << progress.parsed << " parsed and " << progress.failed
+        << " failed in this run, " << progress.already_done << " already done, " << progress.total
+        << " total";
+    if (!progress.finished) {
+        if (progress.remaining) {
+            err << "; about " << duration_text(*progress.remaining) << " left";
+        } else {
+            err << "; time left not known yet";
+        }
+    }
+    err << '\n' << std::flush;
+}
+
+/// The number of worker threads when `--jobs` is not given (ADR-0019).
+unsigned default_jobs() {
+    const unsigned hardware = std::thread::hardware_concurrency();
+    return std::clamp(hardware, 1U, analysis::max_jobs);
+}
 
 ExitStatus run_analyze(const AnalyzeCommand& command, std::ostream& out, std::ostream& err) {
     auto input = resolve_input(command);
@@ -204,35 +436,61 @@ ExitStatus run_analyze(const AnalyzeCommand& command, std::ostream& out, std::os
     std::error_code ec;
     const fs::path database = fs::absolute(command.database, ec);
     warn_if_exposed(database, "the fact database", err);
-    auto pending = PendingDatabase::create(database, command.replace_database);
-    if (!pending) {
-        return report(pending.error(), err);
+    auto partial = PartialDatabase::open(database, command.replace_database, command.resume);
+    if (!partial) {
+        return report(partial.error(), err);
     }
 
+    const InterruptHandlers handlers;
+    analysis::AnalysisRequest request{.compilation_database = input->compilation_database,
+                                      .root = input->root,
+                                      .exclude_globs = std::move(input->config.exclude),
+                                      .module_rules = std::move(input->config.modules)};
+    request.jobs = command.jobs.value_or(default_jobs());
+    request.resume = command.resume;
+    request.stop = &InterruptHandlers::flag();
+    request.on_progress = [&err](const analysis::AnalysisProgress& progress) {
+        print_progress(progress, err);
+    };
+    // Printed as each unit is committed, so a later failure or a second
+    // signal does not lose them; --resume does not repeat them (ADR-0019).
+    request.on_warning = [&err](const std::string& warning) {
+        err << "lcart: warning: " << warning << '\n' << std::flush;
+    };
     analysis::ClangAnalyzer analyzer;
-    auto summary = analyzer.analyze({.compilation_database = input->compilation_database,
-                                     .root = input->root,
-                                     .exclude_globs = std::move(input->config.exclude),
-                                     .module_rules = std::move(input->config.modules)},
-                                    pending->writer());
+    auto summary = analyzer.analyze(request, partial->store());
     if (!summary) {
         return report({.status = ExitStatus::failure, .message = summary.error().message}, err);
     }
-    for (const std::string& warning : summary->warnings) {
-        err << "lcart: warning: " << warning << '\n';
+    if (summary->interrupted) {
+        // Counts of the whole analysis, unlike the progress line, which
+        // counts this run apart from the units already done.
+        out << "interrupted: "
+            << summary->translation_units_parsed + summary->translation_units_failed << '/'
+            << summary->translation_units_total << " translation units done ("
+            << summary->translation_units_parsed << " parsed, " << summary->translation_units_failed
+            << " failed, of which " << summary->translation_units_already_done
+            << " by an earlier run), " << summary->diagnostics << " diagnostics in this run\n";
+        err << "lcart: interrupted; the translation units done are kept in "
+            << partial->file().string() << "; continue with the same options and --resume\n";
+        return ExitStatus::interrupted;
     }
     out << "analysed " << summary->translation_units_parsed << '/'
-        << summary->translation_units_total << " translation units, " << summary->diagnostics
-        << " diagnostics\n";
+        << summary->translation_units_total << " translation units";
+    if (summary->translation_units_already_done > 0) {
+        out << " (" << summary->translation_units_already_done << " already done)";
+    }
+    out << ", " << summary->diagnostics << " diagnostics\n";
     // FR-001 criterion 3: a partial analysis is still a result; none is a
     // failure, and an earlier database stays in place.
     if (summary->translation_units_parsed == 0) {
+        partial->discard();
         return report({.status = ExitStatus::failure,
                        .message = "no translation unit could be parsed; " + database.string() +
                                   " was not written"},
                       err);
     }
-    if (auto committed = pending->commit(); !committed) {
+    if (auto committed = partial->commit(); !committed) {
         return report(committed.error(), err);
     }
     out << "facts in " << database.string() << '\n';

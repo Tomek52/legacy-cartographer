@@ -4,6 +4,8 @@
 #include "facts/fact_model.hpp"
 
 #include <optional>
+#include <span>
+#include <string>
 #include <string_view>
 #include <vector>
 
@@ -122,6 +124,39 @@ public:
 
     /// Zero counts when no analysis has recorded coverage yet.
     [[nodiscard]] virtual common::Result<AnalysisCoverage> coverage() const = 0;
+};
+
+/// The fact database of an analysis that commits each translation unit on
+/// its own, so that an interrupted analysis can be resumed (ADR-0019).
+///
+/// Writes between begin_transaction() and commit_transaction() become
+/// durable together or not at all; outside a transaction each write is its
+/// own. derive_module_dependencies() runs its own transaction and must be
+/// called outside one. Not thread-safe: one writer per database.
+class AnalysisStore : public FactWriter, public FactQuery {
+public:
+    /// The META value of `key`; empty if there is none.
+    [[nodiscard]] virtual common::Result<std::optional<std::string>>
+    meta(std::string_view key) const = 0;
+    /// Sets the META value of `key`, replacing an earlier one.
+    virtual common::Status set_meta(std::string_view key, std::string_view value) = 0;
+
+    /// Records `paths` (spelled like FileFact::path) as `pending`
+    /// translation units, in this order; a path already recorded keeps its
+    /// status.
+    virtual common::Status add_translation_units(std::span<const std::string> paths) = 0;
+    /// Every translation unit, in the order they were added.
+    [[nodiscard]] virtual common::Result<std::vector<TranslationUnitFact>>
+    translation_units() const = 0;
+    /// Sets the status of the translation unit at `path` (added before) and
+    /// links it to its main file if that is a recorded file.
+    virtual common::Status set_translation_unit_status(std::string_view path,
+                                                       TranslationUnitStatus status) = 0;
+
+    virtual common::Status begin_transaction() = 0;
+    virtual common::Status commit_transaction() = 0;
+    /// Discards the writes since begin_transaction(); nothing if none is open.
+    virtual void rollback_transaction() = 0;
 };
 
 } // namespace lcart::facts

@@ -190,4 +190,48 @@ TEST(CommandLine, UnknownCommandsAndQueries) {
     expect_usage_error({"handoff"}, "not available yet");
 }
 
+// Verifies: b16-resumable-analysis-v2 (the command line of ADR-0019:
+// `--jobs` from 1 to 256, command line only; `--resume`; exit status 5).
+TEST(CommandLine, AnalyzeJobsAndResume) {
+    const auto defaults = parsed_as<AnalyzeCommand>({"analyze"});
+    EXPECT_EQ(defaults.jobs, std::nullopt);
+    EXPECT_FALSE(defaults.resume);
+    EXPECT_FALSE(defaults.replace_database);
+
+    const auto resumed = parsed_as<AnalyzeCommand>({"analyze", "--jobs", "4", "--resume"});
+    EXPECT_EQ(resumed.jobs, 4U);
+    EXPECT_TRUE(resumed.resume);
+    EXPECT_FALSE(resumed.replace_database);
+    EXPECT_EQ(parsed_as<AnalyzeCommand>({"analyze", "--jobs=1"}).jobs, 1U);
+    EXPECT_EQ(parsed_as<AnalyzeCommand>({"analyze", "--jobs=256", "--force"}).jobs, 256U);
+    EXPECT_TRUE(parsed_as<AnalyzeCommand>({"analyze", "--jobs=256", "--force"}).replace_database);
+}
+
+// Verifies: b16-resumable-analysis-v2 (ADR-0019: `--jobs` takes a whole
+// number from 1 to 256, anything else is a usage error).
+TEST(CommandLine, AnalyzeRejectsBadJobsAndResume) {
+    for (const std::string_view bad :
+         {"--jobs=0", "--jobs=257", "--jobs=-1", "--jobs=x", "--jobs=4x", "--jobs=+4", "--jobs= 4",
+          "--jobs=99999999999999999999"}) {
+        expect_usage_error({"analyze", bad}, "--jobs");
+    }
+    expect_usage_error({"analyze", "--jobs"}, "--jobs needs a value");
+    expect_usage_error({"analyze", "--resume=yes"}, "--resume");
+    expect_usage_error({"analyze", "--resume", "--resume"}, "twice");
+    // Analysis options belong to analyze only.
+    expect_usage_error({"map", "--jobs", "2"}, "--jobs");
+    expect_usage_error({"query", "export", "--resume"}, "--resume");
+}
+
+// Verifies: b16-resumable-analysis-v2 (the help names `--jobs`, `--resume`
+// and the exit status for an interrupted analysis).
+TEST(CommandLine, HelpNamesJobsResumeAndInterrupted) {
+    EXPECT_NE(usage().find("--jobs N"), std::string_view::npos) << usage();
+    EXPECT_NE(usage().find("--resume"), std::string_view::npos) << usage();
+    EXPECT_NE(usage().find("5 interrupted"), std::string_view::npos) << usage();
+    // SA_RESETHAND resets only the signal delivered (ADR-0019).
+    EXPECT_NE(usage().find("a second signal of the same kind"), std::string_view::npos) << usage();
+    EXPECT_EQ(static_cast<int>(ExitStatus::interrupted), 5);
+}
+
 } // namespace

@@ -28,6 +28,9 @@ enum class ExitStatus : std::uint8_t {
     /// A function name matches several functions; the candidates are
     /// printed (FR-006 criterion 2).
     ambiguous = 4,
+    /// `lcart analyze` ended on SIGINT or SIGTERM; the completed translation
+    /// units are kept for `--resume` (ADR-0019).
+    interrupted = 5,
 };
 
 /// Where outputs go by default (docs/security.md T2): one directory that a
@@ -50,6 +53,10 @@ struct AnalyzeCommand {
     std::optional<std::filesystem::path> root;                 ///< `--root`
     std::filesystem::path database{default_database};          ///< `--db`
     bool replace_database{};                                   ///< `--force`
+    /// `--jobs`, 1 to analysis::max_jobs; empty: the number of hardware
+    /// threads, or 1 if unknown (ADR-0019).
+    std::optional<unsigned> jobs{};
+    bool resume{}; ///< `--resume`
 };
 
 enum class QueryKind : std::uint8_t {

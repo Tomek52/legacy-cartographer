@@ -27,7 +27,8 @@ add_executable(lcart_analysis_tests
     analysis/call_edges_test.cpp
     analysis/clang_analyzer_test.cpp
     analysis/function_facts_test.cpp
-    analysis/modules_test.cpp)
+    analysis/modules_test.cpp
+    analysis/parallel_analysis_test.cpp)
 target_link_libraries(lcart_analysis_tests PRIVATE lcart::analysis GTest::gtest_main)
 target_compile_definitions(lcart_analysis_tests PRIVATE
     LCART_FIXTURES_DIR="${CMAKE_CURRENT_SOURCE_DIR}/fixtures")
@@ -40,6 +41,7 @@ add_executable(lcart_cli_tests cli/lcart_cli_test.cpp)
 target_link_libraries(lcart_cli_tests PRIVATE SQLite::SQLite3 GTest::gtest_main)
 target_compile_definitions(lcart_cli_tests PRIVATE
     LCART_EXECUTABLE="$<TARGET_FILE:lcart>"
+    LCART_SOURCE_DIR="${PROJECT_SOURCE_DIR}"
     LCART_FIXTURES_DIR="${CMAKE_CURRENT_SOURCE_DIR}/fixtures"
     LCART_GOLDEN_DIR="${CMAKE_CURRENT_SOURCE_DIR}/golden")
 add_dependencies(lcart_cli_tests lcart)

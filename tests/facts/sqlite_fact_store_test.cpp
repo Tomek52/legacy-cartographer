@@ -11,6 +11,7 @@
 #include <filesystem>
 #include <fstream>
 #include <memory>
+#include <optional>
 #include <string>
 #include <unistd.h>
 #include <vector>
@@ -483,6 +484,30 @@ TEST(SqliteFactStore, DiagnosticInARecordedFileGetsItsFileId) {
               (std::vector<std::string>{"1", "NULL", "NULL"}));
 }
 
+// Verifies: b16-resumable-analysis-v2 (ADR-0019: lcart writes its own
+// partial database, never a file a symbolic link names): with
+// LinkPolicy::refuse a link is not opened and its target is untouched;
+// the default still follows links (a link to a database is that database).
+TEST(SqliteFactStore, RefusesASymbolicLinkWhenAsked) {
+    const std::filesystem::path dir =
+        std::filesystem::temp_directory_path() / ("lcart-no-follow-" + std::to_string(::getpid()));
+    std::filesystem::remove_all(dir);
+    std::filesystem::create_directories(dir);
+    const std::filesystem::path target = dir / "target.lcart.db";
+    ASSERT_TRUE(SqliteFactStore::open(target.string()).has_value());
+    const std::filesystem::path link = dir / "link.lcart.db";
+    std::filesystem::create_symlink(target, link);
+    const std::filesystem::path dangling = dir / "dangling.lcart.db";
+    std::filesystem::create_symlink(dir / "missing.lcart.db", dangling);
+
+    EXPECT_FALSE(SqliteFactStore::open(link.string(), LinkPolicy::refuse).has_value());
+    EXPECT_FALSE(SqliteFactStore::open(dangling.string(), LinkPolicy::refuse).has_value());
+    EXPECT_FALSE(std::filesystem::exists(dir / "missing.lcart.db"));
+    EXPECT_TRUE(SqliteFactStore::open(target.string(), LinkPolicy::refuse).has_value());
+    EXPECT_TRUE(SqliteFactStore::open(link.string()).has_value());
+    std::filesystem::remove_all(dir);
+}
+
 TEST(SqliteFactStore, RecognisesOnlyFactDatabases) {
     const std::filesystem::path dir = std::filesystem::temp_directory_path() /
                                       ("lcart-is-fact-database-" + std::to_string(::getpid()));
@@ -503,6 +528,72 @@ TEST(SqliteFactStore, RecognisesOnlyFactDatabases) {
     EXPECT_FALSE(SqliteFactStore::is_fact_database((dir / "absent.db").string()));
     EXPECT_FALSE(SqliteFactStore::is_fact_database(dir.string()));
     std::filesystem::remove_all(dir);
+}
+
+// Verifies: b16-resumable-analysis-v2 (ADR-0019, commit per TU: a
+// translation unit's facts are committed together with its status; an
+// uncommitted unit leaves nothing behind and stays `pending`).
+TEST(SqliteFactStore, CommitsEachTranslationUnitWithItsStatus) {
+    SharedMemoryDatabase database;
+    {
+        auto opened = SqliteFactStore::open(SharedMemoryDatabase::uri);
+        ASSERT_TRUE(opened.has_value()) << opened.error().message;
+        SqliteFactStore& store = **opened;
+        const std::vector<std::string> units{"src/b.c", "src/a.c", "src/c.c"};
+        expect_ok(store.add_translation_units(units));
+        expect_ok(store.add_translation_units(std::vector<std::string>{"src/a.c"})); // kept
+        EXPECT_EQ(value_of(store.translation_units()),
+                  (std::vector<TranslationUnitFact>{
+                      {.path = "src/b.c", .status = TranslationUnitStatus::pending},
+                      {.path = "src/a.c", .status = TranslationUnitStatus::pending},
+                      {.path = "src/c.c", .status = TranslationUnitStatus::pending}}));
+
+        expect_ok(store.begin_transaction());
+        const ModuleId module = value_of(store.add_module({.name = "src"}));
+        ASSERT_EQ(value_of(store.add_file({.path = "src/b.c", .module = module})).value, 1);
+        expect_ok(store.set_translation_unit_status("src/b.c", TranslationUnitStatus::parsed));
+        expect_ok(store.commit_transaction());
+
+        expect_ok(store.begin_transaction());
+        expect_ok(store.add_diagnostic({.translation_unit = "src/a.c",
+                                        .file = "src/a.c",
+                                        .line = 2,
+                                        .severity = DiagnosticSeverity::error,
+                                        .message = "x"}));
+        expect_ok(store.set_translation_unit_status("src/a.c", TranslationUnitStatus::failed));
+        expect_ok(store.commit_transaction());
+
+        // Interrupted in the middle of a unit: nothing of it stays.
+        expect_ok(store.begin_transaction());
+        ASSERT_TRUE(store.add_file({.path = "src/c.c", .module = module}).has_value());
+        expect_ok(store.set_translation_unit_status("src/c.c", TranslationUnitStatus::parsed));
+        store.rollback_transaction();
+        store.rollback_transaction(); // none open: nothing happens
+        EXPECT_FALSE(store.set_translation_unit_status("src/x.c", TranslationUnitStatus::parsed)
+                         .has_value());
+
+        EXPECT_EQ(value_of(store.translation_units()),
+                  (std::vector<TranslationUnitFact>{
+                      {.path = "src/b.c", .status = TranslationUnitStatus::parsed},
+                      {.path = "src/a.c", .status = TranslationUnitStatus::failed},
+                      {.path = "src/c.c", .status = TranslationUnitStatus::pending}}));
+        EXPECT_FALSE(value_of(store.find_file("src/c.c")).has_value());
+        EXPECT_EQ(value_of(store.diagnostics()).size(), 1U);
+    }
+    // The main file of a unit is linked once it is a recorded file.
+    EXPECT_EQ(database.column("SELECT file_id FROM translation_unit ORDER BY id"),
+              (std::vector<std::string>{"1", "NULL", "NULL"}));
+}
+
+// Verifies: b16-resumable-analysis-v2 (ADR-0019: META records what a
+// resumed run must find unchanged).
+TEST(SqliteFactStore, StoresMetaValues) {
+    const auto store = open_in_memory();
+    EXPECT_EQ(value_of(store->meta("tool_version")), std::nullopt);
+    EXPECT_EQ(value_of(store->meta("schema_version")), std::to_string(schema_version));
+    expect_ok(store->set_meta("tool_version", "1.2.3"));
+    expect_ok(store->set_meta("tool_version", "1.2.4"));
+    EXPECT_EQ(value_of(store->meta("tool_version")), "1.2.4");
 }
 
 } // namespace
