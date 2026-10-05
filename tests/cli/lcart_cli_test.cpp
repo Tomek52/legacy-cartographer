@@ -16,7 +16,10 @@
 
 #include <algorithm>
 #include <cerrno>
+#include <chrono>
+#include <csignal>
 #include <cstddef>
+#include <cstdio>
 #include <fcntl.h>
 #include <filesystem>
 #include <fstream>
@@ -24,10 +27,19 @@
 #include <sstream>
 #include <string>
 #include <string_view>
+#include <sys/file.h>
 #include <sys/wait.h>
+#include <thread>
 #include <unistd.h>
 #include <utility>
 #include <vector>
+
+// The ownership annotation that cppcoreguidelines-owning-memory checks for,
+// defined as the Guidelines Support Library defines it.
+namespace gsl {
+template <typename T>
+using owner = T;
+} // namespace gsl
 
 namespace {
 
@@ -58,6 +70,8 @@ constexpr int exit_failure = 1;
 constexpr int exit_usage = 2;
 constexpr int exit_not_found = 3;
 constexpr int exit_ambiguous = 4;
+/// ADR-0019.
+constexpr int exit_interrupted = 5;
 
 class LcartCliTest : public ::testing::Test {
 protected:
@@ -857,6 +871,449 @@ TEST_F(LcartCliTest, AnalysisWithoutAnyParsedUnitFails) {
                                "--db", (work_dir() / "broken.lcart.db").string()});
     EXPECT_EQ(run.status, exit_failure);
     EXPECT_NE(run.out.find("0/1"), std::string::npos) << run.out;
+}
+
+// ---- B-16: parallel, interruptible and resumable analysis (ADR-0019) -------
+
+/// A file held open with an exclusive `flock`, as a running `lcart analyze`
+/// holds its partial database; the lock ends with the object.
+class LockedFile {
+public:
+    explicit LockedFile(const fs::path& path)
+        : file_{std::fopen(path.c_str(), "a+e")},
+          locked_{file_ != nullptr && flock(fileno(file_), LOCK_EX | LOCK_NB) == 0} {}
+    LockedFile(const LockedFile&) = delete;
+    LockedFile& operator=(const LockedFile&) = delete;
+    LockedFile(LockedFile&&) = delete;
+    LockedFile& operator=(LockedFile&&) = delete;
+    ~LockedFile() {
+        if (file_ != nullptr) {
+            static_cast<void>(std::fclose(file_));
+        }
+    }
+
+    [[nodiscard]] bool locked() const { return locked_; }
+
+private:
+    gsl::owner<std::FILE*> file_;
+    bool locked_;
+};
+
+/// Starts `program arguments...` in `directory` without a shell, standard
+/// output and error going to `out` and `err`. Returns its pid, or -1.
+pid_t start(const std::string& program, std::vector<std::string> arguments,
+            const fs::path& directory, const fs::path& out, const fs::path& err) {
+    std::string name = program;
+    std::vector<char*> argv{name.data()};
+    for (std::string& argument : arguments) {
+        argv.push_back(argument.data());
+    }
+    argv.push_back(nullptr);
+    posix_spawn_file_actions_t actions{};
+    posix_spawn_file_actions_init(&actions);
+    posix_spawn_file_actions_addchdir_np(&actions, directory.c_str());
+    posix_spawn_file_actions_addopen(&actions, STDOUT_FILENO, out.c_str(),
+                                     O_WRONLY | O_CREAT | O_TRUNC, 0600);
+    posix_spawn_file_actions_addopen(&actions, STDERR_FILENO, err.c_str(),
+                                     O_WRONLY | O_CREAT | O_TRUNC, 0600);
+    pid_t pid = -1;
+    const int spawned = posix_spawnp(&pid, name.c_str(), &actions, nullptr, argv.data(), environ);
+    posix_spawn_file_actions_destroy(&actions);
+    if (spawned != 0) {
+        ADD_FAILURE() << "cannot start " << program << ": errno " << spawned;
+        return -1;
+    }
+    return pid;
+}
+
+/// Waits for `pid`; the status is -1 if it did not exit normally.
+Outcome finish(pid_t pid, const fs::path& out, const fs::path& err) {
+    Outcome run;
+    if (pid < 0) {
+        return run;
+    }
+    int wait_status = 0;
+    while (waitpid(pid, &wait_status, 0) < 0 && errno == EINTR) {
+    }
+    run.status = WIFEXITED(wait_status) ? WEXITSTATUS(wait_status) : -1;
+    run.out = read_file(out);
+    run.err = read_file(err);
+    return run;
+}
+
+/// The translation units of the fact database at `path` that are no longer
+/// pending.
+int done_units(const fs::path& path) {
+    sqlite3* database = nullptr;
+    int done = -1;
+    if (sqlite3_open_v2(path.c_str(), &database, SQLITE_OPEN_READONLY, nullptr) == SQLITE_OK) {
+        sqlite3_stmt* statement = nullptr;
+        if (sqlite3_prepare_v2(database,
+                               "SELECT count(*) FROM translation_unit WHERE status <> 'pending'",
+                               -1, &statement, nullptr) == SQLITE_OK &&
+            sqlite3_step(statement) == SQLITE_ROW) {
+            done = sqlite3_column_int(statement, 0);
+        }
+        sqlite3_finalize(statement);
+    }
+    sqlite3_close(database);
+    return done;
+}
+
+/// Changes one META value of the fact database at `path`.
+void set_meta(const fs::path& path, const std::string& key, const std::string& value) {
+    sqlite3* database = nullptr;
+    ASSERT_EQ(sqlite3_open(path.c_str(), &database), SQLITE_OK);
+    sqlite3_stmt* statement = nullptr;
+    ASSERT_EQ(sqlite3_prepare_v2(database, "UPDATE meta SET value = ?2 WHERE key = ?1", -1,
+                                 &statement, nullptr),
+              SQLITE_OK);
+    sqlite3_bind_text(statement, 1, key.c_str(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_text(statement, 2, value.c_str(), -1, SQLITE_TRANSIENT);
+    EXPECT_EQ(sqlite3_step(statement), SQLITE_DONE);
+    EXPECT_EQ(sqlite3_changes(database), 1) << key;
+    sqlite3_finalize(statement);
+    sqlite3_close(database);
+}
+
+class LcartAnalyzeRunTest : public LcartCliTest {
+protected:
+    /// Generates a project of `units` translation units with
+    /// scripts/gen-many-tus.py and returns its root (with its
+    /// compile_commands.json).
+    [[nodiscard]] fs::path generate(int units) const {
+        const fs::path root = work_dir() / "generated";
+        const fs::path log = work_dir() / "generate.txt";
+        const Outcome run =
+            finish(start("python3",
+                         {std::string{LCART_SOURCE_DIR} + "/scripts/gen-many-tus.py", root.string(),
+                          "--units", std::to_string(units)},
+                         work_dir(), log, log),
+                   log, log);
+        EXPECT_EQ(run.status, 0) << run.err;
+        return root;
+    }
+
+    /// `lcart analyze` of the generated project into `database`, plus
+    /// `options`; waits for it.
+    [[nodiscard]] Outcome analyze_generated(const fs::path& root, const fs::path& database,
+                                            const std::vector<std::string>& options) const {
+        return finish(start_analyze(root, database, options), work_dir() / "run.out",
+                      work_dir() / "run.err");
+    }
+
+    [[nodiscard]] pid_t start_analyze(const fs::path& root, const fs::path& database,
+                                      const std::vector<std::string>& options) const {
+        std::vector<std::string> arguments{"analyze", "--root", root.string(), "--db",
+                                           database.string()};
+        arguments.insert(arguments.end(), options.begin(), options.end());
+        return start(LCART_EXECUTABLE, arguments, work_dir(), work_dir() / "run.out",
+                     work_dir() / "run.err");
+    }
+
+    [[nodiscard]] static fs::path partial_of(const fs::path& database) {
+        return database.parent_path() / ("." + database.filename().string() + ".partial");
+    }
+
+    /// Arguments of `lcart analyze` for the two_modules fixture into `database`.
+    [[nodiscard]] std::vector<std::string> two_modules_arguments(const fs::path& database) const {
+        const fs::path root = fixture("two_modules");
+        return {"analyze",
+                "--root",
+                root.string(),
+                "--compilation-database",
+                write_compilation_database(root, {"app/legacy.c", "app/main.c", "core/core.c"})
+                    .string(),
+                "--db",
+                database.string()};
+    }
+
+    /// An analysis of a generated project of `units` translation units,
+    /// uninterrupted, and how long it took.
+    struct Reference {
+        fs::path root;
+        fs::path database;
+        std::chrono::steady_clock::duration duration;
+    };
+    [[nodiscard]] Reference reference(int units) const {
+        Reference result{
+            .root = generate(units), .database = work_dir() / "reference.lcart.db", .duration = {}};
+        const auto started = std::chrono::steady_clock::now();
+        const Outcome run = analyze_generated(result.root, result.database, {"--jobs", "1"});
+        result.duration = std::chrono::steady_clock::now() - started;
+        EXPECT_EQ(run.status, exit_success) << run.err;
+        return result;
+    }
+
+    /// Analyses the project of `reference` into `database`, sends `signal`
+    /// half-way and expects a clean end: exit status 5, the summary, the
+    /// partial database with the units done. Returns their number.
+    [[nodiscard]] int interrupt_half_way(const Reference& reference, const fs::path& database,
+                                         int signal) const {
+        const pid_t pid = start_analyze(reference.root, database, {"--jobs", "1"});
+        std::this_thread::sleep_for(reference.duration / 2);
+        EXPECT_EQ(kill(pid, signal), 0);
+        const Outcome run = finish(pid, work_dir() / "run.out", work_dir() / "run.err");
+        EXPECT_EQ(run.status, exit_interrupted) << run.out << run.err;
+        EXPECT_NE(run.err.find("--resume"), std::string::npos) << run.err;
+        EXPECT_NE(run.err.find("lcart: progress:"), std::string::npos) << run.err;
+        EXPECT_FALSE(fs::exists(database));
+        const int done = done_units(partial_of(database));
+        EXPECT_NE(
+            run.out.find("interrupted: " + std::to_string(done) + "/40 translation units done"),
+            std::string::npos)
+            << run.out;
+        return done;
+    }
+
+    /// Interrupts an analysis of a generated project with `signal` half-way,
+    /// resumes it with `resume_jobs` workers and checks that the result
+    /// equals an uninterrupted analysis.
+    void interrupt_and_resume(int signal, const std::string& resume_jobs) const {
+        const Reference uninterrupted = reference(40);
+        const fs::path database = work_dir() / "facts.lcart.db";
+        const int done = interrupt_half_way(uninterrupted, database, signal);
+        EXPECT_GT(done, 0) << "interrupted before the first unit; the test needs a slower run";
+        EXPECT_LT(done, 40) << "interrupted after the last unit; the test needs a faster signal";
+        expect_resume_finishes(uninterrupted, database, done, resume_jobs);
+    }
+
+    /// Resumes the interrupted analysis in `database`, of which `done` units
+    /// were committed, with `resume_jobs` workers: the summary and progress
+    /// count them as already done, and the export equals `uninterrupted`'s.
+    void expect_resume_finishes(const Reference& uninterrupted, const fs::path& database, int done,
+                                const std::string& resume_jobs) const {
+        const Outcome resumed =
+            analyze_generated(uninterrupted.root, database, {"--resume", "--jobs", resume_jobs});
+        ASSERT_EQ(resumed.status, exit_success) << resumed.err;
+        const std::string already_done = std::to_string(done) + " already done";
+        EXPECT_NE(resumed.out.find(already_done), std::string::npos) << resumed.out;
+        EXPECT_NE(resumed.err.find(already_done + ", 40 total"), std::string::npos) << resumed.err;
+        EXPECT_FALSE(fs::exists(partial_of(database)));
+        EXPECT_EQ(query(database, {"export"}).out, query(uninterrupted.database, {"export"}).out);
+    }
+};
+
+// Verifies: b16-resumable-analysis-v2 (criterion 3: SIGINT ends the run
+// cleanly, completed units are committed, the summary is printed, exit
+// status 5) and nfr005-performance-budget-v2 (criteria 3 and 4: progress
+// and summary; the resumed export equals an uninterrupted one and units
+// done before are not parsed again, counted in the summary).
+TEST_F(LcartAnalyzeRunTest, SigintEndsTheRunCleanlyAndResumeFinishesIt) {
+    interrupt_and_resume(SIGINT, "4");
+}
+
+// Verifies: b16-resumable-analysis-v2 (criterion 3, for SIGTERM) and
+// nfr005-performance-budget-v2 (criterion 4).
+TEST_F(LcartAnalyzeRunTest, SigtermEndsTheRunCleanlyAndResumeFinishesIt) {
+    interrupt_and_resume(SIGTERM, "1");
+}
+
+// Verifies: b16-resumable-analysis-v2 (criteria 1 and 4: the generated
+// project analysed with 1 and with 4 workers gives the same export) and
+// nfr004-deterministic-output-v1 (criterion 2, and the module map).
+TEST_F(LcartAnalyzeRunTest, OneAndFourWorkersExportAndMapTheSameBytes) {
+    const fs::path root = generate(40);
+    const fs::path one = work_dir() / "one.lcart.db";
+    const fs::path four = work_dir() / "four.lcart.db";
+    const Outcome first = analyze_generated(root, one, {"--jobs", "1"});
+    ASSERT_EQ(first.status, exit_success) << first.err;
+    const Outcome second = analyze_generated(root, four, {"--jobs=4"});
+    ASSERT_EQ(second.status, exit_success) << second.err;
+    EXPECT_EQ(second.out.substr(0, second.out.find("facts in")),
+              first.out.substr(0, first.out.find("facts in")));
+    EXPECT_NE(second.err.find("lcart: progress: 39 parsed, 1 failed, 0 already done, 40 total"),
+              std::string::npos)
+        << second.err;
+
+    const Outcome exported = query(one, {"export"});
+    ASSERT_EQ(exported.status, exit_success) << exported.err;
+    EXPECT_NE(exported.out.find("#c:@F@main"), std::string::npos); // ADR-0013 renames
+    EXPECT_EQ(query(four, {"export"}).out, exported.out);
+    EXPECT_EQ(lcart({"map", "--db", four.string(), "--output", "-"}).out,
+              lcart({"map", "--db", one.string(), "--output", "-"}).out);
+}
+
+// Verifies: b16-resumable-analysis-v2 (ADR-0019: `--jobs` outside 1..256
+// is a usage error).
+TEST_F(LcartAnalyzeRunTest, JobsOutOfRangeIsAUsageError) {
+    for (const char* jobs : {"0", "257", "many"}) {
+        const Outcome run = lcart({"analyze", "--jobs", jobs});
+        EXPECT_EQ(run.status, exit_usage) << jobs;
+        EXPECT_NE(run.err.find("--jobs"), std::string::npos) << run.err;
+    }
+}
+
+// Verifies: b16-resumable-analysis-v2 (ADR-0019: one run per target; the
+// partial database is locked for the whole run).
+TEST_F(LcartAnalyzeRunTest, SecondRunOnTheSameTargetIsRefused) {
+    const fs::path database = work_dir() / "facts.lcart.db";
+    const fs::path partial = partial_of(database);
+    const std::vector<std::string> arguments = two_modules_arguments(database);
+    std::vector<std::string> resume = arguments;
+    resume.emplace_back("--resume");
+    {
+        const LockedFile running{partial};
+        ASSERT_TRUE(running.locked());
+        const Outcome refused = lcart(arguments);
+        EXPECT_EQ(refused.status, exit_failure);
+        EXPECT_NE(refused.err.find("another lcart analyze"), std::string::npos) << refused.err;
+        EXPECT_EQ(lcart(resume).status, exit_failure);
+    }
+    // The lock ended with the file.
+    const Outcome analysed = lcart(arguments);
+    EXPECT_EQ(analysed.status, exit_success) << analysed.err;
+    EXPECT_FALSE(fs::exists(partial));
+}
+
+// Verifies: b16-resumable-analysis-v2 (ADR-0019: without --resume, an
+// unlocked partial database is replaced together with its -journal file).
+TEST_F(LcartAnalyzeRunTest, NewRunReplacesAnUnlockedPartialDatabaseAndItsJournal) {
+    const fs::path database = work_dir() / "facts.lcart.db";
+    const fs::path partial = partial_of(database);
+    const fs::path journal = partial.string() + "-journal";
+    std::ofstream{partial} << "left behind by a crash";
+    std::ofstream{journal} << "left behind by a crash";
+
+    const fs::path root = fixture("two_modules");
+    const Outcome run = lcart(
+        {"analyze", "--root", root.string(), "--compilation-database",
+         write_compilation_database(root, {"app/legacy.c", "app/main.c", "core/core.c"}).string(),
+         "--db", database.string()});
+    ASSERT_EQ(run.status, exit_success) << run.err;
+    EXPECT_FALSE(fs::exists(partial));
+    EXPECT_FALSE(fs::exists(journal));
+    EXPECT_EQ(query(database, {"export"}).out,
+              read_file(fs::path{LCART_GOLDEN_DIR} / "two_modules.facts.jsonl"));
+}
+
+// Verifies: b16-resumable-analysis-v2 (ADR-0019: the partial database is
+// lcart's own file; a symbolic link in its place is refused, with and
+// without --resume, and the file it names is left alone).
+TEST_F(LcartAnalyzeRunTest, SymbolicLinkInPlaceOfThePartialDatabaseIsRefused) {
+    const fs::path database = work_dir() / "facts.lcart.db";
+    const fs::path partial = partial_of(database);
+    const fs::path victim = work_dir() / "victim.txt";
+    std::ofstream{victim} << "not lcart's";
+    fs::create_symlink(victim, partial);
+
+    std::vector<std::string> arguments = two_modules_arguments(database);
+    const Outcome refused = lcart(arguments);
+    EXPECT_EQ(refused.status, exit_failure);
+    EXPECT_NE(refused.err.find("not a regular file"), std::string::npos) << refused.err;
+    arguments.emplace_back("--resume");
+    const Outcome resume_refused = lcart(arguments);
+    EXPECT_EQ(resume_refused.status, exit_failure);
+    EXPECT_NE(resume_refused.err.find("not a regular file"), std::string::npos)
+        << resume_refused.err;
+
+    EXPECT_TRUE(fs::is_symlink(fs::symlink_status(partial)));
+    EXPECT_EQ(read_file(victim), "not lcart's");
+    EXPECT_FALSE(fs::exists(database));
+}
+
+/// Arguments of `lcart analyze --resume` for the two_modules fixture, and
+/// the files involved.
+struct ResumeCase {
+    fs::path compilation_database;
+    fs::path database;
+    fs::path partial;
+    std::vector<std::string> arguments;
+};
+
+class LcartResumeTest : public LcartAnalyzeRunTest {
+protected:
+    void SetUp() override {
+        LcartAnalyzeRunTest::SetUp();
+        const fs::path root = fixture("two_modules");
+        case_.compilation_database = write_compilation_database(root, units_);
+        case_.database = work_dir() / "facts.lcart.db";
+        case_.partial = partial_of(case_.database);
+        case_.arguments = {"analyze",
+                           "--root",
+                           root.string(),
+                           "--compilation-database",
+                           case_.compilation_database.string(),
+                           "--db",
+                           case_.database.string(),
+                           "--resume"};
+    }
+
+    /// Puts a completed analysis in the place of the partial database:
+    /// resuming it has nothing left to parse.
+    void put_completed_analysis() const {
+        const fs::path completed = work_dir() / "completed.lcart.db";
+        if (!fs::exists(completed)) {
+            analyze("two_modules", units_, completed);
+        }
+        fs::copy_file(completed, case_.partial, fs::copy_options::overwrite_existing);
+    }
+
+    /// Expects `lcart analyze --resume` to refuse, naming `reason`, and to
+    /// leave the partial database for another try.
+    void expect_refused_because(std::string_view reason) const {
+        const Outcome run = lcart(case_.arguments);
+        EXPECT_EQ(run.status, exit_failure) << reason;
+        EXPECT_NE(run.err.find(reason), std::string::npos) << run.err;
+        EXPECT_TRUE(fs::exists(case_.partial)) << reason;
+        EXPECT_FALSE(fs::exists(case_.database)) << reason;
+    }
+
+    [[nodiscard]] const ResumeCase& resume_case() const { return case_; }
+    [[nodiscard]] const std::vector<std::string>& units() const { return units_; }
+
+private:
+    std::vector<std::string> units_{"app/legacy.c", "app/main.c", "core/core.c"};
+    ResumeCase case_;
+};
+
+// Verifies: b16-resumable-analysis-v2 (criterion 2: resume refuses, and
+// says why, when there is nothing to resume or the partial database is not
+// a fact database).
+TEST_F(LcartResumeTest, ResumeRefusesWithoutAnInterruptedAnalysis) {
+    const Outcome nothing = lcart(resume_case().arguments);
+    EXPECT_EQ(nothing.status, exit_failure);
+    EXPECT_NE(nothing.err.find("no interrupted analysis"), std::string::npos) << nothing.err;
+    EXPECT_FALSE(fs::exists(resume_case().partial));
+
+    std::ofstream{resume_case().partial} << "not a database";
+    expect_refused_because("not an lcart fact database");
+}
+
+// Verifies: b16-resumable-analysis-v2 (criterion 2: resume refuses, and
+// says why, when the schema version or the lcart version changed).
+TEST_F(LcartResumeTest, ResumeRefusesAnotherSchemaOrLcartVersion) {
+    put_completed_analysis();
+    set_meta(resume_case().partial, "schema_version", "1");
+    expect_refused_because("schema version 1");
+
+    put_completed_analysis();
+    set_meta(resume_case().partial, "tool_version", "0.0.0-other");
+    expect_refused_because("lcart version");
+}
+
+// Verifies: b16-resumable-analysis-v2 (criterion 2: resume refuses, and
+// says why, when the compilation database or the configuration changed).
+TEST_F(LcartResumeTest, ResumeRefusesAChangedCompilationDatabaseOrConfiguration) {
+    put_completed_analysis();
+    std::ofstream{resume_case().compilation_database, std::ios::app} << "\n";
+    expect_refused_because("compilation database");
+    static_cast<void>(write_compilation_database(fixture("two_modules"), units()));
+
+    std::ofstream{work_dir() / "lcart.toml"} << "[project]\nexclude = [\"app/legacy.c\"]\n";
+    expect_refused_because("configuration");
+}
+
+// Verifies: b16-resumable-analysis-v2 (resume of an analysis whose units
+// are all done writes the database; ADR-0019: the summary counts them).
+TEST_F(LcartResumeTest, ResumeOfACompletedAnalysisWritesTheDatabase) {
+    put_completed_analysis();
+    const Outcome resumed = lcart(resume_case().arguments);
+    ASSERT_EQ(resumed.status, exit_success) << resumed.err;
+    EXPECT_NE(resumed.out.find("3 already done"), std::string::npos) << resumed.out;
+    EXPECT_FALSE(fs::exists(resume_case().partial));
+    EXPECT_EQ(query(resume_case().database, {"export"}).out,
+              read_file(fs::path{LCART_GOLDEN_DIR} / "two_modules.facts.jsonl"));
 }
 
 } // namespace

@@ -1,7 +1,10 @@
 #include "cli/command_line.hpp"
 
+#include "analysis/analyzer.hpp"
+
 #include <algorithm>
 #include <array>
+#include <charconv>
 #include <map>
 #include <string>
 #include <utility>
@@ -27,12 +30,20 @@ Commands:
   testgen    generate a characterization test skeleton           (planned, M3)
 
 lcart analyze [--config FILE] [--compilation-database FILE|DIR] [--root DIR]
-              [--db FILE] [--force]
+              [--db FILE] [--force] [--jobs N] [--resume]
   Reads lcart.toml (--config, else ./lcart.toml if it exists). Paths in it
   are relative to its directory. Defaults: root = the directory of lcart.toml
   (else the working directory), compilation database = <root>/
   compile_commands.json, database = lcart-out/facts.lcart.db. An existing
   database is replaced only with --force.
+  --jobs N    parse with N threads, 1 to 256 (default: one per hardware
+              thread); the facts are the same for any N
+  --resume    continue an interrupted analysis of the same database with the
+              same options; it refuses if the compilation database, lcart or
+              the configuration changed
+  Progress goes to standard error at least every 30 s. On SIGINT or SIGTERM
+  the translation units done so far are kept in .<db name>.partial next to
+  the database, for --resume; a second signal ends lcart at once.
 
 lcart query <query> [--db FILE]
   callers <function>      direct calls of the function, by file and line
@@ -56,7 +67,7 @@ lcart map [--db FILE] [--output FILE]
 
 Exit status: 0 success, 1 failure (including an unreadable file), 2 invalid
 command line or lcart.toml content, 3 not found in the fact database,
-4 ambiguous function name.
+4 ambiguous function name, 5 interrupted (lcart analyze).
 
 Options:
   -h, --help   show this message
@@ -174,10 +185,26 @@ std::optional<std::filesystem::path> output_option(const ParsedArguments& parsed
     return output;
 }
 
+/// `--jobs`: a whole number from 1 to analysis::max_jobs, digits only
+/// (ADR-0019).
+Result<unsigned> jobs_option(std::string_view value) {
+    const std::string text{value};
+    unsigned jobs = 0;
+    const char* const end = text.c_str() + text.size();
+    const auto [last, error] = std::from_chars(text.c_str(), end, jobs);
+    if (text.empty() || text.front() < '0' || text.front() > '9' || error != std::errc{} ||
+        last != end || jobs < 1 || jobs > analysis::max_jobs) {
+        return std::unexpected(usage_error("--jobs needs a whole number from 1 to " +
+                                           std::to_string(analysis::max_jobs) + ", not '" +
+                                           std::string{value} + "'"));
+    }
+    return jobs;
+}
+
 Result<Command> parse_analyze(std::span<const std::string_view> arguments) {
-    static constexpr std::array<std::string_view, 4> value_options{
-        "--config", "--compilation-database", "--root", "--db"};
-    static constexpr std::array<std::string_view, 1> flag_options{"--force"};
+    static constexpr std::array<std::string_view, 5> value_options{
+        "--config", "--compilation-database", "--root", "--db", "--jobs"};
+    static constexpr std::array<std::string_view, 2> flag_options{"--force", "--resume"};
     auto parsed = split_arguments(arguments, value_options, flag_options);
     if (!parsed) {
         return std::unexpected(parsed.error());
@@ -194,7 +221,15 @@ Result<Command> parse_analyze(std::span<const std::string_view> arguments) {
     analyze.compilation_database = path_option(*parsed, "--compilation-database");
     analyze.root = path_option(*parsed, "--root");
     analyze.database = path_option(*parsed, "--db").value_or(analyze.database);
-    analyze.replace_database = !parsed->flags.empty();
+    analyze.replace_database = std::ranges::contains(parsed->flags, "--force");
+    analyze.resume = std::ranges::contains(parsed->flags, "--resume");
+    if (const auto jobs = parsed->values.find("--jobs"); jobs != parsed->values.end()) {
+        auto value = jobs_option(jobs->second);
+        if (!value) {
+            return std::unexpected(value.error());
+        }
+        analyze.jobs = *value;
+    }
     return analyze;
 }
 
