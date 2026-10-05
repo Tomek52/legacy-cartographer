@@ -360,8 +360,10 @@ void request_interrupt(int /*signal*/) {
 }
 
 /// Installs the SIGINT and SIGTERM handler for one analysis, and restores
-/// the earlier handlers afterwards. SA_RESETHAND: the next signal has the
-/// default action and ends the process at once (ADR-0019).
+/// the earlier handlers afterwards. SA_RESETHAND resets only the signal
+/// delivered: the next signal of the same kind has the default action and
+/// ends the process at once; one of the other kind is another stop request
+/// (ADR-0019; open questions).
 class InterruptHandlers {
 public:
     InterruptHandlers() {
