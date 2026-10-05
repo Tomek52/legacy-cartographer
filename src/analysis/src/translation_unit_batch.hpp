@@ -98,7 +98,7 @@ struct TranslationUnitBatch {
     std::size_t index{}; ///< Position in the sorted list of translation units.
     std::vector<BatchFile> files;
     std::vector<BatchEvent> events;
-    /// Diagnostics, written after the events, as today's sequential run did.
+    /// Diagnostics, written after the unit's events.
     std::vector<facts::DiagnosticFact> diagnostics;
     /// Compiler arguments removed for security reasons (docs/security.md,
     /// T5), reported before the warnings of the events.

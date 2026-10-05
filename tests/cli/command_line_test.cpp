@@ -229,6 +229,8 @@ TEST(CommandLine, HelpNamesJobsResumeAndInterrupted) {
     EXPECT_NE(usage().find("--jobs N"), std::string_view::npos) << usage();
     EXPECT_NE(usage().find("--resume"), std::string_view::npos) << usage();
     EXPECT_NE(usage().find("5 interrupted"), std::string_view::npos) << usage();
+    // SA_RESETHAND resets only the signal delivered (ADR-0019).
+    EXPECT_NE(usage().find("a second signal of the same kind"), std::string_view::npos) << usage();
     EXPECT_EQ(static_cast<int>(ExitStatus::interrupted), 5);
 }
 
