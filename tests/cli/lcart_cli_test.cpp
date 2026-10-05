@@ -941,6 +941,16 @@ Outcome finish(pid_t pid, const fs::path& out, const fs::path& err) {
     return run;
 }
 
+/// How often `needle` occurs in `text`.
+int count_of(std::string_view text, std::string_view needle) {
+    int count = 0;
+    for (std::size_t at = text.find(needle); at != std::string_view::npos;
+         at = text.find(needle, at + needle.size())) {
+        ++count;
+    }
+    return count;
+}
+
 /// The translation units of the fact database at `path` that are no longer
 /// pending.
 int done_units(const fs::path& path) {
@@ -981,15 +991,18 @@ protected:
     /// Generates a project of `units` translation units with
     /// scripts/gen-many-tus.py and returns its root (with its
     /// compile_commands.json).
-    [[nodiscard]] fs::path generate(int units) const {
+    [[nodiscard]] fs::path generate(int units,
+                                    const std::vector<std::string>& extra_arguments = {}) const {
         const fs::path root = work_dir() / "generated";
         const fs::path log = work_dir() / "generate.txt";
+        std::vector<std::string> arguments{std::string{LCART_SOURCE_DIR} +
+                                               "/scripts/gen-many-tus.py",
+                                           root.string(), "--units", std::to_string(units)};
+        for (const std::string& extra : extra_arguments) {
+            arguments.push_back("--extra-argument=" + extra);
+        }
         const Outcome run =
-            finish(start("python3",
-                         {std::string{LCART_SOURCE_DIR} + "/scripts/gen-many-tus.py", root.string(),
-                          "--units", std::to_string(units)},
-                         work_dir(), log, log),
-                   log, log);
+            finish(start("python3", std::move(arguments), work_dir(), log, log), log, log);
         EXPECT_EQ(run.status, 0) << run.err;
         return root;
     }
@@ -1028,53 +1041,85 @@ protected:
                 database.string()};
     }
 
-    /// An analysis of a generated project of `units` translation units,
-    /// uninterrupted, and how long it took.
+    /// Translation units of the project that the signal tests interrupt:
+    /// enough that, with one worker, the run is far from its end when the
+    /// first unit is committed.
+    static constexpr int interrupted_units = 120;
+    /// A stripped argument (security T5): each unit then prints one warning
+    /// when it is committed, which tells the test that the run is under way.
+    static constexpr std::string_view warning_argument = "-fplugin=/nonexistent/evil.so";
+
+    /// An uninterrupted analysis of a generated project.
     struct Reference {
         fs::path root;
         fs::path database;
-        std::chrono::steady_clock::duration duration;
     };
     [[nodiscard]] Reference reference(int units) const {
-        Reference result{
-            .root = generate(units), .database = work_dir() / "reference.lcart.db", .duration = {}};
-        const auto started = std::chrono::steady_clock::now();
+        Reference result{.root = generate(units, {std::string{warning_argument}}),
+                         .database = work_dir() / "reference.lcart.db"};
         const Outcome run = analyze_generated(result.root, result.database, {"--jobs", "1"});
-        result.duration = std::chrono::steady_clock::now() - started;
         EXPECT_EQ(run.status, exit_success) << run.err;
         return result;
     }
 
+    /// Waits until the analysis `pid` has committed its first unit (its
+    /// warning is on standard error, so the signal handlers are installed),
+    /// or has ended, or a minute has passed. True in the first case.
+    [[nodiscard]] bool wait_for_first_commit(pid_t pid) const {
+        const auto deadline = std::chrono::steady_clock::now() + std::chrono::minutes{1};
+        while (std::chrono::steady_clock::now() < deadline) {
+            if (read_file(work_dir() / "run.err").find("lcart: warning:") != std::string::npos) {
+                return true;
+            }
+            // WNOWAIT: an ended run stays waitable for finish().
+            siginfo_t info{};
+            if (waitid(P_PID, static_cast<id_t>(pid), &info, WEXITED | WNOHANG | WNOWAIT) != 0 ||
+                info.si_pid != 0) {
+                return false; // ended, or not our child
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds{1});
+        }
+        return false;
+    }
+
     /// Analyses the project of `reference` into `database`, sends `signal`
-    /// half-way and expects a clean end: exit status 5, the summary, the
-    /// partial database with the units done. Returns their number.
-    [[nodiscard]] int interrupt_half_way(const Reference& reference, const fs::path& database,
-                                         int signal) const {
+    /// once the first unit is committed and expects a clean end: exit
+    /// status 5, the summary, the partial database with the units done and
+    /// a warning printed for each of them. Returns their number.
+    [[nodiscard]] int interrupt_after_first_commit(const Reference& reference,
+                                                   const fs::path& database, int signal) const {
         const pid_t pid = start_analyze(reference.root, database, {"--jobs", "1"});
-        std::this_thread::sleep_for(reference.duration / 2);
+        EXPECT_TRUE(wait_for_first_commit(pid)) << "no unit committed";
         EXPECT_EQ(kill(pid, signal), 0);
         const Outcome run = finish(pid, work_dir() / "run.out", work_dir() / "run.err");
         EXPECT_EQ(run.status, exit_interrupted) << run.out << run.err;
-        EXPECT_NE(run.err.find("--resume"), std::string::npos) << run.err;
-        EXPECT_NE(run.err.find("lcart: progress:"), std::string::npos) << run.err;
         EXPECT_FALSE(fs::exists(database));
         const int done = done_units(partial_of(database));
-        EXPECT_NE(
-            run.out.find("interrupted: " + std::to_string(done) + "/40 translation units done"),
-            std::string::npos)
-            << run.out;
+        expect_interrupted_output(run, done);
         return done;
     }
 
-    /// Interrupts an analysis of a generated project with `signal` half-way,
-    /// resumes it with `resume_jobs` workers and checks that the result
-    /// equals an uninterrupted analysis.
+    /// The output of a run interrupted after `done` units: the summary, the
+    /// hint to resume, progress, and one warning per unit done.
+    static void expect_interrupted_output(const Outcome& run, int done) {
+        EXPECT_NE(run.err.find("--resume"), std::string::npos) << run.err;
+        EXPECT_NE(run.err.find("lcart: progress:"), std::string::npos) << run.err;
+        EXPECT_EQ(count_of(run.err, warning_argument), done) << run.err;
+        EXPECT_NE(run.out.find("interrupted: " + std::to_string(done) + "/" +
+                               std::to_string(interrupted_units) + " translation units done"),
+                  std::string::npos)
+            << run.out;
+    }
+
+    /// Interrupts an analysis of a generated project with `signal` once a
+    /// unit is committed, resumes it with `resume_jobs` workers and checks
+    /// that the result equals an uninterrupted analysis.
     void interrupt_and_resume(int signal, const std::string& resume_jobs) const {
-        const Reference uninterrupted = reference(40);
+        const Reference uninterrupted = reference(interrupted_units);
         const fs::path database = work_dir() / "facts.lcart.db";
-        const int done = interrupt_half_way(uninterrupted, database, signal);
-        EXPECT_GT(done, 0) << "interrupted before the first unit; the test needs a slower run";
-        EXPECT_LT(done, 40) << "interrupted after the last unit; the test needs a faster signal";
+        const int done = interrupt_after_first_commit(uninterrupted, database, signal);
+        EXPECT_GT(done, 0) << "interrupted before the first unit";
+        EXPECT_LT(done, interrupted_units) << "interrupted after the last unit";
         expect_resume_finishes(uninterrupted, database, done, resume_jobs);
     }
 
@@ -1088,7 +1133,12 @@ protected:
         ASSERT_EQ(resumed.status, exit_success) << resumed.err;
         const std::string already_done = std::to_string(done) + " already done";
         EXPECT_NE(resumed.out.find(already_done), std::string::npos) << resumed.out;
-        EXPECT_NE(resumed.err.find(already_done + ", 40 total"), std::string::npos) << resumed.err;
+        EXPECT_NE(
+            resumed.err.find(already_done + ", " + std::to_string(interrupted_units) + " total"),
+            std::string::npos)
+            << resumed.err;
+        // The warnings of the units done before were printed by that run.
+        EXPECT_EQ(count_of(resumed.err, warning_argument), interrupted_units - done) << resumed.err;
         EXPECT_FALSE(fs::exists(partial_of(database)));
         EXPECT_EQ(query(database, {"export"}).out, query(uninterrupted.database, {"export"}).out);
     }
@@ -1122,7 +1172,8 @@ TEST_F(LcartAnalyzeRunTest, OneAndFourWorkersExportAndMapTheSameBytes) {
     ASSERT_EQ(second.status, exit_success) << second.err;
     EXPECT_EQ(second.out.substr(0, second.out.find("facts in")),
               first.out.substr(0, first.out.find("facts in")));
-    EXPECT_NE(second.err.find("lcart: progress: 39 parsed, 1 failed, 0 already done, 40 total"),
+    EXPECT_NE(second.err.find(
+                  "lcart: progress: 39 parsed and 1 failed in this run, 0 already done, 40 total"),
               std::string::npos)
         << second.err;
 

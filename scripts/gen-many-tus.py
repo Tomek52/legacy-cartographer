@@ -12,6 +12,7 @@ modules, calls through a function pointer, several programs with their own
 `main`, and one unit that does not parse.
 
 Usage: scripts/gen-many-tus.py OUT_DIR [--units N] [--functions K]
+                               [--extra-argument ARG ...]
 """
 
 import argparse
@@ -115,7 +116,7 @@ def unit_source(unit: int, units: int, functions: int) -> str:
     return "\n".join(lines)
 
 
-def generate(out: pathlib.Path, units: int, functions: int) -> None:
+def generate(out: pathlib.Path, units: int, functions: int, extra: list[str]) -> None:
     out.mkdir(parents=True, exist_ok=True)
     (out / "common").mkdir(exist_ok=True)
     (out / "common" / "shared.h").write_text(shared_header())
@@ -127,7 +128,7 @@ def generate(out: pathlib.Path, units: int, functions: int) -> None:
         (out / unit_path(unit)).write_text(unit_source(unit, units, functions))
         commands.append({
             "directory": str(out),
-            "arguments": ["cc", "-c", "-I.", unit_path(unit)],
+            "arguments": ["cc", "-c", "-I.", *extra, unit_path(unit)],
             "file": unit_path(unit),
         })
     (out / "compile_commands.json").write_text(json.dumps(commands, indent=1) + "\n")
@@ -139,10 +140,12 @@ def main() -> int:
     parser.add_argument("--units", type=int, default=200)
     parser.add_argument("--functions", type=int, default=20,
                         help="functions per translation unit (default 20)")
+    parser.add_argument("--extra-argument", action="append", default=[], metavar="ARG",
+                        help="add ARG to every compile command (repeatable)")
     args = parser.parse_args()
     if args.units < 1 or args.functions < 1:
         parser.error("--units and --functions must be at least 1")
-    generate(args.out_dir.resolve(), args.units, args.functions)
+    generate(args.out_dir.resolve(), args.units, args.functions, args.extra_argument)
     return 0
 
 

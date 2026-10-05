@@ -501,6 +501,9 @@ common::Status AnalysisRun::start_or_resume() {
 common::Status AnalysisRun::commit(const TranslationUnitBatch& batch) {
     const facts::TranslationUnitStatus status =
         batch.parsed ? facts::TranslationUnitStatus::parsed : facts::TranslationUnitStatus::failed;
+    // Handed out only once the unit is committed: an uncommitted unit is
+    // parsed again, with its warnings, on resume.
+    std::vector<std::string> warnings;
     // One transaction per translation unit, with its status (ADR-0019).
     const auto applied = [&]() -> common::Status {
         if (store_ != nullptr) {
@@ -508,7 +511,7 @@ common::Status AnalysisRun::commit(const TranslationUnitBatch& batch) {
                 return begun;
             }
         }
-        auto diagnostics = writer_.apply(batch, summary_.warnings);
+        auto diagnostics = writer_.apply(batch, warnings);
         if (!diagnostics) {
             return std::unexpected(diagnostics.error());
         }
@@ -529,6 +532,12 @@ common::Status AnalysisRun::commit(const TranslationUnitBatch& batch) {
     }
     statuses_[batch.index] = status;
     progress_.count(status);
+    for (std::string& warning : warnings) {
+        if (request_->on_warning) {
+            request_->on_warning(warning);
+        }
+        summary_.warnings.push_back(std::move(warning));
+    }
     return {};
 }
 

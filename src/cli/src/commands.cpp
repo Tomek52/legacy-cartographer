@@ -391,8 +391,9 @@ std::string duration_text(std::chrono::milliseconds duration) {
 
 /// One progress line on standard error (ADR-0019).
 void print_progress(const analysis::AnalysisProgress& progress, std::ostream& err) {
-    err << "lcart: progress: " << progress.parsed << " parsed, " << progress.failed << " failed, "
-        << progress.already_done << " already done, " << progress.total << " total";
+    err << "lcart: progress: " << progress.parsed << " parsed and " << progress.failed
+        << " failed in this run, " << progress.already_done << " already done, " << progress.total
+        << " total";
     if (!progress.finished) {
         if (progress.remaining) {
             err << "; about " << duration_text(*progress.remaining) << " left";
@@ -433,21 +434,25 @@ ExitStatus run_analyze(const AnalyzeCommand& command, std::ostream& out, std::os
     request.on_progress = [&err](const analysis::AnalysisProgress& progress) {
         print_progress(progress, err);
     };
+    // Printed as each unit is committed, so a later failure or a second
+    // signal does not lose them; --resume does not repeat them (ADR-0019).
+    request.on_warning = [&err](const std::string& warning) {
+        err << "lcart: warning: " << warning << '\n' << std::flush;
+    };
     analysis::ClangAnalyzer analyzer;
     auto summary = analyzer.analyze(request, partial->store());
     if (!summary) {
         return report({.status = ExitStatus::failure, .message = summary.error().message}, err);
     }
-    for (const std::string& warning : summary->warnings) {
-        err << "lcart: warning: " << warning << '\n';
-    }
     if (summary->interrupted) {
+        // Counts of the whole analysis, unlike the progress line, which
+        // counts this run apart from the units already done.
         out << "interrupted: "
             << summary->translation_units_parsed + summary->translation_units_failed << '/'
             << summary->translation_units_total << " translation units done ("
             << summary->translation_units_parsed << " parsed, " << summary->translation_units_failed
-            << " failed, " << summary->translation_units_already_done << " already done), "
-            << summary->diagnostics << " diagnostics\n";
+            << " failed, of which " << summary->translation_units_already_done
+            << " by an earlier run), " << summary->diagnostics << " diagnostics in this run\n";
         err << "lcart: interrupted; the translation units done are kept in "
             << partial->file().string() << "; continue with the same options and --resume\n";
         return ExitStatus::interrupted;
