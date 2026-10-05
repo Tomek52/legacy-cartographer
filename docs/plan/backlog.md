@@ -428,7 +428,9 @@ target under an exclusive `flock` and keeps it when interrupted. Nothing is
 created or written through a symbolic link there: a new file is created
 with `O_EXCL`; an existing name is opened as it is (`fopen` follows a
 link), then refused unless it is the regular file at that name, before
-anything is written; SQLite reopens it with `SQLITE_OPEN_NOFOLLOW`.
+anything is written; SQLite reopens it with `SQLITE_OPEN_NOFOLLOW`, which
+refuses a link in any component, so the directory of the database is
+resolved first (a database in a directory reached through a link works).
 Compilation database entries that name one file (through a link, for
 example) are one TU, the first in sorted order. Resume compares `META`
 (`tool_version`, `analysis_root`, `compilation_database_sha256`,

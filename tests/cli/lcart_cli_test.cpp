@@ -1089,6 +1089,11 @@ protected:
     [[nodiscard]] int interrupt_after_first_commit(const Reference& reference,
                                                    const fs::path& database, int signal) const {
         const pid_t pid = start_analyze(reference.root, database, {"--jobs", "1"});
+        if (pid <= 0) {
+            // kill(-1, ...) would signal every process we may signal.
+            ADD_FAILURE() << "lcart did not start";
+            return -1;
+        }
         EXPECT_TRUE(wait_for_first_commit(pid)) << "no unit committed";
         EXPECT_EQ(kill(pid, signal), 0);
         const Outcome run = finish(pid, work_dir() / "run.out", work_dir() / "run.err");
@@ -1261,6 +1266,35 @@ TEST_F(LcartAnalyzeRunTest, SymbolicLinkInPlaceOfThePartialDatabaseIsRefused) {
     EXPECT_TRUE(fs::is_symlink(fs::symlink_status(partial)));
     EXPECT_EQ(read_file(victim), "not lcart's");
     EXPECT_FALSE(fs::exists(database));
+}
+
+// Verifies: b16-resumable-analysis-v2 (ADR-0019: only the partial database's
+// own name must not be a symbolic link; a database in a directory reached
+// through a link is analysed, replaced and resumed as usual).
+TEST_F(LcartAnalyzeRunTest, DatabaseInALinkedDirectoryIsAnalysedAndResumed) {
+    fs::create_directory(work_dir() / "out");
+    fs::create_directory_symlink(work_dir() / "out", work_dir() / "outlink");
+    const fs::path database = work_dir() / "outlink" / "facts.lcart.db";
+    const fs::path real_database = work_dir() / "out" / "facts.lcart.db";
+    std::vector<std::string> arguments = two_modules_arguments(database);
+
+    const Outcome analysed = lcart(arguments);
+    ASSERT_EQ(analysed.status, exit_success) << analysed.err;
+    EXPECT_TRUE(fs::is_regular_file(fs::symlink_status(real_database)));
+    EXPECT_FALSE(fs::exists(partial_of(real_database)));
+    const std::string golden = read_file(fs::path{LCART_GOLDEN_DIR} / "two_modules.facts.jsonl");
+    EXPECT_EQ(query(database, {"export"}).out, golden);
+
+    // A completed analysis in the place of the partial database: resume
+    // has nothing left to parse and moves it over the target.
+    fs::copy_file(real_database, partial_of(real_database));
+    arguments.emplace_back("--force");
+    arguments.emplace_back("--resume");
+    const Outcome resumed = lcart(arguments);
+    ASSERT_EQ(resumed.status, exit_success) << resumed.err;
+    EXPECT_NE(resumed.out.find("3 already done"), std::string::npos) << resumed.out;
+    EXPECT_FALSE(fs::exists(partial_of(real_database)));
+    EXPECT_EQ(query(database, {"export"}).out, golden);
 }
 
 /// Arguments of `lcart analyze --resume` for the two_modules fixture, and

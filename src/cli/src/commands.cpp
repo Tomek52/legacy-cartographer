@@ -152,9 +152,19 @@ public:
         if (auto checked = check_target(target, replace); !checked) {
             return std::unexpected(std::move(checked.error()));
         }
+        // The directory resolved (it exists now): SQLITE_OPEN_NOFOLLOW
+        // refuses a link in any component of the name, and only the
+        // partial database's own name must not be one. The lock, the
+        // store and the final rename all use these paths.
+        std::error_code ec;
+        const fs::path directory = fs::canonical(target.parent_path(), ec);
+        if (ec) {
+            return fail(ExitStatus::failure,
+                        "cannot resolve " + target.parent_path().string() + ": " + ec.message());
+        }
         PartialDatabase partial;
-        partial.target_ = target;
-        partial.file_ = target.parent_path() / ("." + target.filename().string() + ".partial");
+        partial.target_ = directory / target.filename();
+        partial.file_ = directory / ("." + target.filename().string() + ".partial");
         if (auto locked = partial.lock(resume); !locked) {
             return std::unexpected(std::move(locked.error()));
         }
