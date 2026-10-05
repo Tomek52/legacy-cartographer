@@ -21,6 +21,7 @@
 #include <map>
 #include <mutex>
 #include <optional>
+#include <set>
 #include <span>
 #include <sstream>
 #include <string>
@@ -415,13 +416,22 @@ common::Status AnalysisRun::prepare() {
     root_prefixes_ = message_root_prefixes(request_->root, root_);
     // Absolute before any worker starts: nothing below depends on the
     // working directory (ADR-0019).
-    for (std::string& file : files_) {
+    // Entries that name one file (through a symbolic link, or spelled
+    // differently) are one translation unit, the first in sorted order: the
+    // database records a unit once per fact path, so the total, the
+    // configuration hash and resume all use this list.
+    std::vector<std::string> unique_files;
+    std::set<std::string, std::less<>> seen;
+    for (const std::string& file : files_) {
         const std::filesystem::path absolute = std::filesystem::absolute(file, ec);
-        if (!ec) {
-            file = absolute.string();
+        std::string name = ec ? file : absolute.string();
+        std::string path = fact_path_of(name, root_).path;
+        if (seen.insert(path).second) {
+            unique_files.push_back(std::move(name));
+            paths_.push_back(std::move(path));
         }
-        paths_.push_back(fact_path_of(file, root_).path);
     }
+    files_ = std::move(unique_files);
     statuses_.assign(files_.size(), facts::TranslationUnitStatus::pending);
     return {};
 }

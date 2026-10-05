@@ -372,6 +372,37 @@ TEST_F(ParallelAnalysisTest, ResumedRunParsesOnlyTheUnitsLeft) {
     EXPECT_EQ(reports.back().parsed + reports.back().failed, project_units - done_before);
 }
 
+// Verifies: b16-resumable-analysis-v2 (criterion 2: resume continues an
+// unchanged analysis) and nfr005-performance-budget-v2 (criteria 3 and 4)
+// when two compilation database entries name one file, through a symbolic
+// link: the file is one translation unit, the first in sorted order, so
+// progress, summary and database agree on the total, and resume works.
+TEST_F(ParallelAnalysisTest, EntriesNamingOneFileThroughALinkAreOneUnit) {
+    const fs::path root = write_project();
+    fs::create_directory_symlink(root / "a", root / "link");
+    std::vector<std::string> files = project_files();
+    const AnalysisRequest unique = request(root, write_compilation_database(root, files), 2);
+    const Reference expected = reference(unique);
+    files.emplace_back("link/u00.c");
+    files.emplace_back("link/u02.c");
+    const AnalysisRequest base = request(root, write_compilation_database(root, files), 2);
+
+    const std::string database = (work_dir() / "facts.lcart.db").string();
+    const AnalysisSummary first = interrupted_run(base, database, 2);
+    ASSERT_TRUE(first.interrupted);
+    EXPECT_EQ(first.translation_units_total, project_units);
+    EXPECT_EQ(value_of(open_store(database)->translation_units()).size(), project_units);
+
+    std::vector<AnalysisProgress> reports;
+    const AnalysisSummary resumed = resumed_run(base, database, 3, reports);
+    EXPECT_FALSE(resumed.interrupted);
+    EXPECT_EQ(resumed.translation_units_total, project_units);
+    EXPECT_EQ(resumed.translation_units_parsed + resumed.translation_units_failed, project_units);
+    ASSERT_FALSE(reports.empty());
+    expect_consistent(reports, project_units);
+    EXPECT_EQ(export_of(*open_store(database)), expected.exported);
+}
+
 // Verifies: b16-resumable-analysis-v2 (criterion 2: resume refuses a changed
 // compilation database and says why).
 TEST_F(ParallelAnalysisTest, ResumeRefusesAChangedCompilationDatabase) {
