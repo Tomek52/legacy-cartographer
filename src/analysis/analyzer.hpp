@@ -6,6 +6,7 @@
 
 #include <atomic>
 #include <chrono>
+#include <cstddef>
 #include <cstdint>
 #include <filesystem>
 #include <functional>
@@ -73,6 +74,11 @@ struct AnalysisRequest {
     /// of every unit done reach the user even if the run fails or ends
     /// later (ADR-0019, resume). May be empty.
     std::function<void(const std::string&)> on_warning{};
+    /// Test hook: called on a worker thread with a translation unit's index
+    /// (its position in the sorted list) just before the unit is parsed;
+    /// an exception it throws is handled like one from the parse. Must be
+    /// thread-safe. Empty outside tests.
+    std::function<void(std::size_t)> before_parse{};
     /// The time source of the progress reports, and of nothing else;
     /// std::chrono::steady_clock when empty.
     std::function<std::chrono::steady_clock::time_point()> clock{};

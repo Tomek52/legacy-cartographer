@@ -18,6 +18,7 @@
 #include <expected>
 #include <filesystem>
 #include <fstream>
+#include <functional>
 #include <ios>
 #include <iterator>
 #include <map>
@@ -328,8 +329,11 @@ struct Pipeline {
     std::map<std::size_t, TranslationUnitBatch> finished;
     std::size_t busy{}; ///< Jobs taken by workers and not returned yet.
     bool closing{};
-    /// Set by a worker whose parse threw: the run ends with this error.
-    std::optional<common::Error> failure;
+    /// The lowest-indexed unit whose parse threw, with its error. The writer
+    /// ends the run with it only on reaching that unit, after committing
+    /// every earlier one, so which units are committed and which error is
+    /// reported do not depend on scheduling (NFR-004).
+    std::optional<std::pair<std::size_t, common::Error>> failure;
 };
 
 /// Closes the pipeline when it goes out of scope, before the worker
@@ -355,11 +359,17 @@ private:
     Pipeline* pipeline_;
 };
 
-/// Parses `job`; an exception (from Clang or the allocator) becomes an
-/// error instead of ending the process from a worker thread.
-std::expected<TranslationUnitBatch, common::Error> record_safely(TranslationUnitRecorder& recorder,
-                                                                 const ParseJob& job) {
+/// Parses `job`. An exception (std::bad_alloc, or one from lcart's own
+/// code; Clang and LLVM are built without exceptions) becomes an error
+/// instead of ending the process from a worker thread; the run then ends,
+/// so cleanups it skipped do not matter.
+std::expected<TranslationUnitBatch, common::Error>
+record_safely(TranslationUnitRecorder& recorder, const ParseJob& job,
+              const std::function<void(std::size_t)>& before_parse) {
     try {
+        if (before_parse) {
+            before_parse(job.index);
+        }
         return recorder.record(job);
     } catch (const std::exception& error) {
         return std::unexpected(
@@ -370,7 +380,8 @@ std::expected<TranslationUnitBatch, common::Error> record_safely(TranslationUnit
 
 /// A worker: takes jobs in order until the pipeline closes, and takes none
 /// once a stop is requested. It never blocks while holding a batch.
-void work(Pipeline& pipeline, TranslationUnitRecorder& recorder, const std::atomic<bool>* stop) {
+void work(Pipeline& pipeline, TranslationUnitRecorder& recorder, const AnalysisRequest& request) {
+    const std::atomic<bool>* stop = request.stop;
     while (true) {
         ParseJob job;
         {
@@ -385,14 +396,14 @@ void work(Pipeline& pipeline, TranslationUnitRecorder& recorder, const std::atom
             pipeline.queue.pop_front();
             ++pipeline.busy;
         }
-        auto batch = record_safely(recorder, job);
+        auto batch = record_safely(recorder, job, request.before_parse);
         {
             const std::lock_guard lock{pipeline.mutex};
             --pipeline.busy;
             if (batch) {
                 pipeline.finished.emplace(job.index, std::move(*batch));
-            } else if (!pipeline.failure) {
-                pipeline.failure = std::move(batch.error());
+            } else if (!pipeline.failure || job.index < pipeline.failure->first) {
+                pipeline.failure.emplace(job.index, std::move(batch.error()));
             }
         }
         pipeline.batch_ready.notify_one();
@@ -403,10 +414,11 @@ void work(Pipeline& pipeline, TranslationUnitRecorder& recorder, const std::atom
 /// threads (e.g. a low process limit), goes on with those that started:
 /// the facts do not depend on their number; fails only if none started.
 common::Status start_workers(Pipeline& pipeline, std::vector<TranslationUnitRecorder>& recorders,
-                             std::vector<std::jthread>& threads, const std::atomic<bool>* stop) {
+                             std::vector<std::jthread>& threads, const AnalysisRequest& request) {
     for (TranslationUnitRecorder& recorder : recorders) {
         try {
-            threads.emplace_back([&pipeline, &recorder, stop] { work(pipeline, recorder, stop); });
+            threads.emplace_back(
+                [&pipeline, &recorder, &request] { work(pipeline, recorder, request); });
         } catch (const std::system_error& error) {
             if (threads.empty()) {
                 return std::unexpected(common::Error{
@@ -422,22 +434,23 @@ common::Status start_workers(Pipeline& pipeline, std::vector<TranslationUnitReco
 /// What the writer found after waiting for the batch it needs next.
 struct Awaited {
     std::optional<TranslationUnitBatch> batch; ///< The batch of the unit needed next.
-    std::optional<common::Error> failure;      ///< A worker's parse threw.
+    std::optional<common::Error> failure;      ///< The parse of unit `next` threw.
     bool nothing_more{};                       ///< Stopping, and no worker is busy.
 };
 
-/// Waits up to poll_period for the batch of unit `next`, a worker failure,
-/// or, when `stopping`, for the workers to be idle.
+/// Waits up to poll_period for the batch of unit `next` or the failure of
+/// its parse, or, when `stopping`, for the workers to be idle.
 Awaited await_batch(Pipeline& pipeline, std::size_t next, bool stopping) {
     std::unique_lock lock{pipeline.mutex};
     const auto ready = [&pipeline, next, stopping] {
-        return pipeline.finished.contains(next) || pipeline.failure ||
+        return pipeline.finished.contains(next) ||
+               (pipeline.failure && pipeline.failure->first == next) ||
                (stopping && pipeline.busy == 0);
     };
     pipeline.batch_ready.wait_for(lock, poll_period, ready);
     Awaited awaited;
-    if (pipeline.failure) {
-        awaited.failure = pipeline.failure;
+    if (pipeline.failure && pipeline.failure->first == next) {
+        awaited.failure = pipeline.failure->second;
     } else if (const auto found = pipeline.finished.find(next); found != pipeline.finished.end()) {
         awaited.batch = std::move(found->second);
         pipeline.finished.erase(found);
@@ -654,7 +667,7 @@ common::Status AnalysisRun::analyse_pending() {
     // Declared after `threads`, so destroyed first: closes the pipeline
     // before the threads are joined, also when an exception leaves here.
     const PipelineCloser closer{pipeline};
-    if (auto started = start_workers(pipeline, recorders, threads, request_->stop); !started) {
+    if (auto started = start_workers(pipeline, recorders, threads, *request_); !started) {
         return started;
     }
 

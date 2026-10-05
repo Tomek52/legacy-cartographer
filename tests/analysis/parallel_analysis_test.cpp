@@ -20,6 +20,7 @@
 #include <memory>
 #include <optional>
 #include <sstream>
+#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <unistd.h>
@@ -455,6 +456,49 @@ TEST_F(ParallelAnalysisTest, WarningsOfCommittedUnitsSurviveALaterFailure) {
     EXPECT_EQ(warnings.size(), 2U);
     expect_each_names(warnings, "-fplugin=/nonexistent/evil.so");
     EXPECT_EQ(done_prefix(value_of(store->translation_units())), 2U);
+}
+
+/// Expects `failing` to end with an error naming `file` and `message`
+/// after committing exactly its first `unit` units, with their warnings
+/// (one per unit).
+void expect_ends_at_unit(AnalysisRequest failing, std::size_t unit, std::string_view file,
+                         std::string_view message) {
+    const auto store = open_store(":memory:");
+    std::vector<std::string> warnings;
+    failing.on_warning = [&warnings](const std::string& warning) {
+        warnings.push_back(warning);
+    };
+    ClangAnalyzer analyzer;
+    const auto result = analyzer.analyze(failing, *store);
+    ASSERT_FALSE(result.has_value());
+    EXPECT_NE(result.error().message.find(file), std::string::npos) << result.error().message;
+    EXPECT_NE(result.error().message.find(message), std::string::npos) << result.error().message;
+    EXPECT_EQ(done_prefix(value_of(store->translation_units())), unit);
+    EXPECT_EQ(warnings.size(), unit);
+}
+
+// Verifies: nfr004-deterministic-output-v1 (no thread scheduling affects
+// the facts) for a parse that throws: with 4 workers, exactly the units
+// before it are committed (with their warnings), and its error is the one
+// reported, on every run.
+TEST_F(ParallelAnalysisTest, ParseThatThrowsEndsTheRunAtItsUnit) {
+    constexpr std::size_t throwing_unit = 5;
+    const fs::path root = write_project();
+    AnalysisRequest failing = request(
+        root, write_compilation_database(root, project_files(), "-fplugin=/nonexistent/evil.so"),
+        4);
+    std::vector<std::string> sorted_files = project_files();
+    std::ranges::sort(sorted_files); // the order of the analysis
+    failing.before_parse = [](std::size_t index) {
+        // Units after it throw too, and may finish first.
+        if (index >= throwing_unit) {
+            throw std::runtime_error{"injected failure of unit " + std::to_string(index)};
+        }
+    };
+    for (int run = 0; run < 5; ++run) {
+        expect_ends_at_unit(failing, throwing_unit, sorted_files[throwing_unit],
+                            "injected failure of unit 5");
+    }
 }
 
 // Verifies: b16-resumable-analysis-v2 (criterion 2: resume refuses a changed
