@@ -484,6 +484,30 @@ TEST(SqliteFactStore, DiagnosticInARecordedFileGetsItsFileId) {
               (std::vector<std::string>{"1", "NULL", "NULL"}));
 }
 
+// Verifies: b16-resumable-analysis-v2 (ADR-0019: lcart writes its own
+// partial database, never a file a symbolic link names): with
+// LinkPolicy::refuse a link is not opened and its target is untouched;
+// the default still follows links (a link to a database is that database).
+TEST(SqliteFactStore, RefusesASymbolicLinkWhenAsked) {
+    const std::filesystem::path dir =
+        std::filesystem::temp_directory_path() / ("lcart-no-follow-" + std::to_string(::getpid()));
+    std::filesystem::remove_all(dir);
+    std::filesystem::create_directories(dir);
+    const std::filesystem::path target = dir / "target.lcart.db";
+    ASSERT_TRUE(SqliteFactStore::open(target.string()).has_value());
+    const std::filesystem::path link = dir / "link.lcart.db";
+    std::filesystem::create_symlink(target, link);
+    const std::filesystem::path dangling = dir / "dangling.lcart.db";
+    std::filesystem::create_symlink(dir / "missing.lcart.db", dangling);
+
+    EXPECT_FALSE(SqliteFactStore::open(link.string(), LinkPolicy::refuse).has_value());
+    EXPECT_FALSE(SqliteFactStore::open(dangling.string(), LinkPolicy::refuse).has_value());
+    EXPECT_FALSE(std::filesystem::exists(dir / "missing.lcart.db"));
+    EXPECT_TRUE(SqliteFactStore::open(target.string(), LinkPolicy::refuse).has_value());
+    EXPECT_TRUE(SqliteFactStore::open(link.string()).has_value());
+    std::filesystem::remove_all(dir);
+}
+
 TEST(SqliteFactStore, RecognisesOnlyFactDatabases) {
     const std::filesystem::path dir = std::filesystem::temp_directory_path() /
                                       ("lcart-is-fact-database-" + std::to_string(::getpid()));

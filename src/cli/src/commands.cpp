@@ -161,7 +161,8 @@ public:
         if (auto prepared = partial.prepare(resume); !prepared) {
             return std::unexpected(std::move(prepared.error()));
         }
-        auto store = facts::SqliteFactStore::open(partial.file_.string());
+        auto store =
+            facts::SqliteFactStore::open(partial.file_.string(), facts::LinkPolicy::refuse);
         if (!store) {
             return fail(ExitStatus::failure, partial.file_.string() + ": " + store.error().message);
         }
@@ -234,8 +235,13 @@ private:
         return {};
     }
 
-    /// Opens the partial database file, never through a symbolic link, and
-    /// takes the `flock` on it; for a new analysis, creates it if missing.
+    /// Opens the partial database file and takes the `flock` on it; for a
+    /// new analysis, creates it if missing. Nothing is created or written
+    /// through a symbolic link: a new file is created with O_EXCL; an
+    /// existing name is opened as it is (a link is followed, since open()
+    /// with O_NOFOLLOW is out of reach without a vararg call), then refused
+    /// unless it is the regular file at that name, before anything is
+    /// written. The store reopens it with SQLITE_OPEN_NOFOLLOW.
     Outcome<void> lock(bool resume) {
         std::error_code ec;
         const bool exists = fs::exists(fs::symlink_status(file_, ec));
@@ -244,9 +250,9 @@ private:
                         "no interrupted analysis to resume: " + file_.string() + " does not exist");
         }
         // "x" (O_EXCL) creates the file and fails on any existing name, a
-        // symbolic link included, so nothing is created through a link. An
-        // existing file is opened without creating ("r+") and checked below
-        // to be the regular file at that name. "e": closed on exec (glibc).
+        // symbolic link included. An existing name is opened without
+        // creating ("r+"; this follows a link) and checked below.
+        // "e": closed on exec (glibc).
         lock_ = std::make_unique<OpenFile>(file_, exists ? "r+e" : "w+xe");
         if (!lock_->is_open()) {
             return fail(ExitStatus::failure,

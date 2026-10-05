@@ -4,6 +4,7 @@
 #include "facts/fact_model.hpp"
 #include "facts/fact_store.hpp"
 
+#include <cstdint>
 #include <memory>
 #include <optional>
 #include <span>
@@ -15,6 +16,15 @@ struct sqlite3;
 
 namespace lcart::facts {
 
+/// Whether SqliteFactStore::open opens a database file through a symbolic
+/// link.
+enum class LinkPolicy : std::uint8_t {
+    follow, ///< A link to a database is that database.
+    /// The file name must not be a symbolic link, or opening fails (for a
+    /// file lcart writes as its own, ADR-0019).
+    refuse,
+};
+
 /// The fact database as one SQLite file (docs/architecture/data-model.md).
 ///
 /// All SQL uses bound parameters: names from analysed code are never part of
@@ -25,9 +35,9 @@ public:
     /// empty. `path` is a file name, `:memory:` or a SQLite `file:` URI.
     /// Fails with ErrorCode::incompatible_database if the database has another
     /// schema_version or is not a fact database, and with io_error if it
-    /// cannot be opened.
+    /// cannot be opened, including a symbolic link with LinkPolicy::refuse.
     [[nodiscard]] static common::Result<std::unique_ptr<SqliteFactStore>>
-    open(const std::string& path);
+    open(const std::string& path, LinkPolicy links = LinkPolicy::follow);
 
     /// Whether the file at `path` is a fact database of any schema version:
     /// a SQLite file with lcart's `meta` table and a `schema_version`. Opens

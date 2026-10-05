@@ -599,11 +599,28 @@ Status initialise_schema(sqlite3* database) {
 
 } // namespace
 
-Result<std::unique_ptr<SqliteFactStore>> SqliteFactStore::open(const std::string& path) {
+namespace {
+
+/// SQLITE_OPEN_NOFOLLOW (sqlite3.h): opening fails if the file name is a
+/// symbolic link.
+int open_link_flags(LinkPolicy links) {
+    switch (links) {
+    case LinkPolicy::follow:
+        return 0;
+    case LinkPolicy::refuse:
+        return SQLITE_OPEN_NOFOLLOW;
+    }
+    std::unreachable();
+}
+
+} // namespace
+
+Result<std::unique_ptr<SqliteFactStore>> SqliteFactStore::open(const std::string& path,
+                                                               LinkPolicy links) {
     sqlite3* database = nullptr;
-    const int opened =
-        sqlite3_open_v2(path.c_str(), &database,
-                        SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | SQLITE_OPEN_URI, nullptr);
+    const int flags =
+        SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | SQLITE_OPEN_URI | open_link_flags(links);
+    const int opened = sqlite3_open_v2(path.c_str(), &database, flags, nullptr);
     // Owned from here on, also on failure (sqlite3_open_v2 may allocate).
     std::unique_ptr<SqliteFactStore> store{new SqliteFactStore{database}};
     if (opened != SQLITE_OK) {
