@@ -25,7 +25,7 @@ expanded in place; its version is bumped if its meaning changes
 | [B-13](#b13-module-map-v1) | ✅ `lcart map` | M1 | FR-007 | B-12 | 3 h |
 | [B-14](#b14-libmodbus-baseline-v1) | ✅ libmodbus baseline map and timing | M1 | NFR-001, NFR-005 | B-05, B-13 | 3 h |
 | [B-15](#b15-requirement-test-traceability-v2) | ✅ Traceability gate and matrix | M1 | NFR-012 | B-03 | 4 h |
-| [B-16](#b16-resumable-analysis-v2) | Resumable analysis with progress | M1 | NFR-005, NFR-004 | B-12 | 5 h |
+| [B-16](#b16-resumable-analysis-v2) | ✅ Resumable analysis with progress | M1 | NFR-005, NFR-004 | B-12 | 5 h |
 | [B-17](#b17-msvc-code-spike-v1) | MSVC code under Clang: spike and docs | M1 | NFR-013 | B-10 | 4 h |
 
 ## M0
@@ -414,6 +414,53 @@ parts 2–5, plus:
    threads is identical
    ([NFR-004](../specs/requirements.md#nfr004-deterministic-output-v1);
    moved here from B-12, which had no parallel analysis).
+
+Result (2026-10-04): implemented as
+[ADR-0019](../adr/0019-parallel-resumable-analysis.md) decides. Workers
+(`TranslationUnitRecorder`, `src/analysis/src/translation_unit_recorder.hpp`)
+turn each TU into a batch of events without database ids; the calling
+thread is the only writer and replays the batches in TU order through the
+collectors (`BatchWriter`), one transaction per TU together with its
+`status` and its main file (`TRANSLATION_UNIT.file_id`, which closes that
+open question). `lcart analyze` gained `--jobs N` (1 to 256, default one per
+hardware thread) and `--resume`; it writes `.<name>.partial` next to the
+target under an exclusive `flock`, opens it without following a symbolic
+link (a new file with `O_EXCL`, an existing one checked to be the regular
+file at that name) and keeps it when interrupted. Resume compares `META`
+(`tool_version`, `analysis_root`, `compilation_database_sha256`,
+`configuration_sha256`; the schema version is checked on open) and names
+each difference. SIGINT and SIGTERM end the run with exit status 5 and the
+summary; progress goes to standard error at least every 30 s. Tests:
+`tests/analysis/parallel_analysis_test.cpp` (1 and 4 workers on every
+fixture and on a project whose facts depend on unit order, interrupt,
+resume, refusals, progress), the `LcartAnalyzeRun` and `LcartResume`
+suites of `tests/cli/lcart_cli_test.cpp` (SIGINT and SIGTERM on the
+running binary, then `--resume`; the 200-TU generated project with 1 and
+4 workers, export and map compared byte for byte; lock, symbolic link,
+leftover journal) and the command-line and fact-store tests.
+`scripts/gen-many-tus.py` generates the fixture (criterion 1);
+`scripts/measure-analysis.py` measures it. Measured with a Release build
+(`cmake --preset debug-system -B build/release-system
+-DCMAKE_BUILD_TYPE=Release`, as the CI baseline job) on the 4-core
+development container, fastest of 3 runs:
+
+| Project | Workers | Wall time | TUs per minute | Peak RSS |
+|---|---|---|---|---|
+| 200 TUs | 1 | 2.01 s | 5957 | 91 MiB |
+| 200 TUs | 4 | 0.87 s | 13718 | 98 MiB |
+| 400 TUs | 4 | | | 101 MiB |
+| 800 TUs | 1 | 9.46 s | 5074 | 97 MiB |
+| 800 TUs | 4 | 3.67 s | 13071 | 105 MiB |
+| 1600 TUs | 4 | | | 112 MiB |
+
+Throughput with 4 workers is 2.30× that of one on 200 TUs and 2.58× on
+800 TUs; on 200 TUs the run lasts under a second, and earlier runs of the
+same build gave 2.30× to 2.49×. The exports of 1 and 4 workers were
+identical in every run. Peak memory grows by 3 % (200 to 400 TUs) and 6 %
+(800 to 1600 TUs) with twice the TUs, far from in proportion (NFR-005
+criterion 5); the source of that small growth was not investigated. Whether
+NFR-005's ≥ 2.5× target stands for the 200-TU fixture is an
+[open question](../open-questions.md#open-technical-questions).
 
 ### <a id="b17-msvc-code-spike-v1"></a>**[B-17 v1]** MSVC code under Clang: spike and docs
 

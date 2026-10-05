@@ -27,7 +27,7 @@ Built-in providers and local models are planned for later (M6).
 far: the SQLite fact store (B-06); analysis of files, includes, functions,
 call edges and modules with Clang LibTooling (B-07–B-11); `lcart analyze`,
 `lcart query` and the JSON Lines export (B-12); the module map, `lcart map`
-(B-13). See the
+(B-13); parallel analysis that can be interrupted and resumed (B-16). See the
 [roadmap](docs/plan/roadmap.md).
 
 ## Build
@@ -57,6 +57,12 @@ lcart analyze --compilation-database build/compile_commands.json
 lcart query callers main
 lcart query export --output lcart-out/facts.jsonl
 ```
+
+`lcart analyze` parses with one thread per core (`--jobs N` to choose) and
+prints progress to standard error at least every 30 s. Ctrl-C (SIGINT) or
+SIGTERM stops it with exit status 5, keeping the translation units done in
+`lcart-out/.facts.lcart.db.partial`; the same command with `--resume`
+continues from there. `lcart --help` lists all options and exit statuses.
 
 Quality gates: `scripts/dod.sh` runs all local checks (format, clang-tidy,
 docs, both offline presets); `scripts/quick-check.sh` is the fast inner loop.

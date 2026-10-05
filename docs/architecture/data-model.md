@@ -19,7 +19,7 @@ erDiagram
     TRANSLATION_UNIT {
         int id PK
         text path UK "main file, spelled like FILE.path"
-        int file_id FK "not set yet (B-16)"
+        int file_id FK "main file, set with status"
         text status "pending | parsed | failed"
         text command_sha256 "compile command"
         text inputs_sha256 "main file + headers read"
@@ -105,10 +105,14 @@ erDiagram
     CLAIM ||--o| VERDICT : "verified as"
 ```
 
-## <a id="arch-data-model-rules-v2"></a>Rules
+## <a id="arch-data-model-rules-v3"></a>Rules
 
 - `META` holds `schema_version`, `tool_version`, `analysis_root`, the
-  SHA-256 of `compile_commands.json` and the coverage counts
+  SHA-256 of `compile_commands.json` (`compilation_database_sha256`), the
+  `configuration_sha256` of ADR-0019 (analysis root, module rules and
+  exclusions, sorted TU list), which `lcart analyze --resume` compares
+  ([ADR-0019](../adr/0019-parallel-resumable-analysis.md#adr0019-resume-v1)),
+  and the coverage counts
   (`translation_units_total`, `translation_units_parsed`). No timestamps in
   fact tables
   ([NFR-004](../specs/requirements.md#nfr004-deterministic-output-v1)).
