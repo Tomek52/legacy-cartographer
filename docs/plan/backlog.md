@@ -424,22 +424,31 @@ collectors (`BatchWriter`), one transaction per TU together with its
 `status` and its main file (`TRANSLATION_UNIT.file_id`, which closes that
 open question). `lcart analyze` gained `--jobs N` (1 to 256, default one per
 hardware thread) and `--resume`; it writes `.<name>.partial` next to the
-target under an exclusive `flock`, opens it without following a symbolic
-link (a new file with `O_EXCL`, an existing one checked to be the regular
-file at that name) and keeps it when interrupted. Resume compares `META`
+target under an exclusive `flock` and keeps it when interrupted. Nothing is
+created or written through a symbolic link there: a new file is created
+with `O_EXCL`; an existing name is opened as it is (`fopen` follows a
+link), then refused unless it is the regular file at that name, before
+anything is written; SQLite reopens it with `SQLITE_OPEN_NOFOLLOW`.
+Compilation database entries that name one file (through a link, for
+example) are one TU, the first in sorted order. Resume compares `META`
 (`tool_version`, `analysis_root`, `compilation_database_sha256`,
 `configuration_sha256`; the schema version is checked on open) and names
 each difference. SIGINT and SIGTERM end the run with exit status 5 and the
-summary; progress goes to standard error at least every 30 s. Tests:
+summary; a second signal of the same kind ends lcart at once. Progress
+goes to standard error at least every 30 s, and each TU's warnings are
+printed when it is committed, so a later failure does not lose them.
+Tests:
 `tests/analysis/parallel_analysis_test.cpp` (1 and 4 workers on every
 fixture and on a project whose facts depend on unit order, interrupt,
 resume, refusals, progress), the `LcartAnalyzeRun` and `LcartResume`
 suites of `tests/cli/lcart_cli_test.cpp` (SIGINT and SIGTERM on the
-running binary, then `--resume`; the 200-TU generated project with 1 and
-4 workers, export and map compared byte for byte; lock, symbolic link,
+running binary once its first TU is committed, on a generated project of
+120 TUs, then `--resume`; a generated project of 40 TUs with 1 and 4
+workers, export and map compared byte for byte; lock, symbolic link,
 leftover journal) and the command-line and fact-store tests.
-`scripts/gen-many-tus.py` generates the fixture (criterion 1);
-`scripts/measure-analysis.py` measures it. Measured with a Release build
+`scripts/gen-many-tus.py` generates the fixture (criterion 1); the
+200-TU fixture of NFR-005 is exercised by `scripts/measure-analysis.py`,
+outside CTest, which also compares the exports of 1 and 4 workers. Measured with a Release build
 (`cmake --preset debug-system -B build/release-system
 -DCMAKE_BUILD_TYPE=Release`, as the CI baseline job) on the 4-core
 development container, fastest of 3 runs:
@@ -453,14 +462,16 @@ development container, fastest of 3 runs:
 | 800 TUs | 4 | 3.67 s | 13071 | 105 MiB |
 | 1600 TUs | 4 | | | 112 MiB |
 
-Throughput with 4 workers is 2.30× that of one on 200 TUs and 2.58× on
-800 TUs; on 200 TUs the run lasts under a second, and earlier runs of the
-same build gave 2.30× to 2.49×. The exports of 1 and 4 workers were
-identical in every run. Peak memory grows by 3 % (200 to 400 TUs) and 6 %
-(800 to 1600 TUs) with twice the TUs, far from in proportion (NFR-005
-criterion 5); the source of that small growth was not investigated. Whether
-NFR-005's ≥ 2.5× target stands for the 200-TU fixture is an
-[open question](../open-questions.md#open-technical-questions).
+NFR-005 criterion 2 (≥ 2.5× with 4 workers) is met on 800 TUs (2.58×) but
+not on 200 TUs (2.30×; that run lasts under a second, and earlier runs of
+the same build gave 2.30× to 2.49×). The target is left for the owner to
+confirm or revise ([open question](../open-questions.md#open-technical-questions)).
+The exports of 1 and 4 workers were identical in every run. Peak memory
+grows by 3.1 % (200 to 400 TUs) and 6.7 % (800 to 1600 TUs) with twice the
+TUs, far from in proportion (criterion 5). Two known causes of that growth:
+`gen-many-tus.py` puts 2 × units / 8 prototypes in each `mod.h`, and
+every TU includes two of them (its module's and its predecessor's), so
+each TU's AST grows with the number of TUs; and the writer's state grows with the total facts.
 
 ### <a id="b17-msvc-code-spike-v1"></a>**[B-17 v1]** MSVC code under Clang: spike and docs
 
