@@ -6,6 +6,7 @@
 
 #include <memory>
 #include <optional>
+#include <span>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -18,7 +19,7 @@ namespace lcart::facts {
 ///
 /// All SQL uses bound parameters: names from analysed code are never part of
 /// a statement's text (docs/security.md, T7). Not thread-safe.
-class SqliteFactStore final : public FactWriter, public FactQuery {
+class SqliteFactStore final : public AnalysisStore {
 public:
     /// Opens the database at `path`, creating the schema if the database is
     /// empty. `path` is a file name, `:memory:` or a SQLite `file:` URI.
@@ -78,6 +79,18 @@ public:
     module_dependency_edges(ModuleId module) const override;
     [[nodiscard]] common::Result<std::vector<DiagnosticFact>> diagnostics() const override;
     [[nodiscard]] common::Result<AnalysisCoverage> coverage() const override;
+
+    [[nodiscard]] common::Result<std::optional<std::string>>
+    meta(std::string_view key) const override;
+    common::Status set_meta(std::string_view key, std::string_view value) override;
+    common::Status add_translation_units(std::span<const std::string> paths) override;
+    [[nodiscard]] common::Result<std::vector<TranslationUnitFact>>
+    translation_units() const override;
+    common::Status set_translation_unit_status(std::string_view path,
+                                               TranslationUnitStatus status) override;
+    common::Status begin_transaction() override;
+    common::Status commit_transaction() override;
+    void rollback_transaction() override;
 
 private:
     explicit SqliteFactStore(sqlite3* database);
