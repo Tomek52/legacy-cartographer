@@ -14,6 +14,8 @@
 #include <condition_variable>
 #include <cstddef>
 #include <deque>
+#include <exception>
+#include <expected>
 #include <filesystem>
 #include <fstream>
 #include <ios>
@@ -25,6 +27,7 @@
 #include <span>
 #include <sstream>
 #include <string>
+#include <system_error>
 #include <thread>
 #include <utility>
 #include <vector>
@@ -325,7 +328,45 @@ struct Pipeline {
     std::map<std::size_t, TranslationUnitBatch> finished;
     std::size_t busy{}; ///< Jobs taken by workers and not returned yet.
     bool closing{};
+    /// Set by a worker whose parse threw: the run ends with this error.
+    std::optional<common::Error> failure;
 };
+
+/// Closes the pipeline when it goes out of scope, before the worker
+/// threads declared ahead of it are joined, however the writer leaves:
+/// workers waiting for a job would otherwise never wake up.
+class PipelineCloser {
+public:
+    explicit PipelineCloser(Pipeline& pipeline) : pipeline_(&pipeline) {}
+    PipelineCloser(const PipelineCloser&) = delete;
+    PipelineCloser& operator=(const PipelineCloser&) = delete;
+    PipelineCloser(PipelineCloser&&) = delete;
+    PipelineCloser& operator=(PipelineCloser&&) = delete;
+    ~PipelineCloser() {
+        {
+            const std::lock_guard lock{pipeline_->mutex};
+            pipeline_->closing = true;
+            pipeline_->queue.clear();
+        }
+        pipeline_->work_ready.notify_all();
+    }
+
+private:
+    Pipeline* pipeline_;
+};
+
+/// Parses `job`; an exception (from Clang or the allocator) becomes an
+/// error instead of ending the process from a worker thread.
+std::expected<TranslationUnitBatch, common::Error> record_safely(TranslationUnitRecorder& recorder,
+                                                                 const ParseJob& job) {
+    try {
+        return recorder.record(job);
+    } catch (const std::exception& error) {
+        return std::unexpected(
+            common::Error{.code = common::ErrorCode::io_error,
+                          .message = "parsing " + job.file + " failed: " + error.what()});
+    }
+}
 
 /// A worker: takes jobs in order until the pipeline closes, and takes none
 /// once a stop is requested. It never blocks while holding a batch.
@@ -344,14 +385,66 @@ void work(Pipeline& pipeline, TranslationUnitRecorder& recorder, const std::atom
             pipeline.queue.pop_front();
             ++pipeline.busy;
         }
-        TranslationUnitBatch batch = recorder.record(job);
+        auto batch = record_safely(recorder, job);
         {
             const std::lock_guard lock{pipeline.mutex};
             --pipeline.busy;
-            pipeline.finished.emplace(job.index, std::move(batch));
+            if (batch) {
+                pipeline.finished.emplace(job.index, std::move(*batch));
+            } else if (!pipeline.failure) {
+                pipeline.failure = std::move(batch.error());
+            }
         }
         pipeline.batch_ready.notify_one();
     }
+}
+
+/// Starts one worker thread per recorder. If the system runs out of
+/// threads (e.g. a low process limit), goes on with those that started:
+/// the facts do not depend on their number; fails only if none started.
+common::Status start_workers(Pipeline& pipeline, std::vector<TranslationUnitRecorder>& recorders,
+                             std::vector<std::jthread>& threads, const std::atomic<bool>* stop) {
+    for (TranslationUnitRecorder& recorder : recorders) {
+        try {
+            threads.emplace_back([&pipeline, &recorder, stop] { work(pipeline, recorder, stop); });
+        } catch (const std::system_error& error) {
+            if (threads.empty()) {
+                return std::unexpected(common::Error{
+                    .code = common::ErrorCode::io_error,
+                    .message = std::string{"cannot start a worker thread: "} + error.what()});
+            }
+            break;
+        }
+    }
+    return {};
+}
+
+/// What the writer found after waiting for the batch it needs next.
+struct Awaited {
+    std::optional<TranslationUnitBatch> batch; ///< The batch of the unit needed next.
+    std::optional<common::Error> failure;      ///< A worker's parse threw.
+    bool nothing_more{};                       ///< Stopping, and no worker is busy.
+};
+
+/// Waits up to poll_period for the batch of unit `next`, a worker failure,
+/// or, when `stopping`, for the workers to be idle.
+Awaited await_batch(Pipeline& pipeline, std::size_t next, bool stopping) {
+    std::unique_lock lock{pipeline.mutex};
+    const auto ready = [&pipeline, next, stopping] {
+        return pipeline.finished.contains(next) || pipeline.failure ||
+               (stopping && pipeline.busy == 0);
+    };
+    pipeline.batch_ready.wait_for(lock, poll_period, ready);
+    Awaited awaited;
+    if (pipeline.failure) {
+        awaited.failure = pipeline.failure;
+    } else if (const auto found = pipeline.finished.find(next); found != pipeline.finished.end()) {
+        awaited.batch = std::move(found->second);
+        pipeline.finished.erase(found);
+    } else {
+        awaited.nothing_more = stopping && pipeline.busy == 0;
+    }
+    return awaited;
 }
 
 /// One analysis: the translation units, the store and the writer.
@@ -558,18 +651,12 @@ common::Status AnalysisRun::analyse_pending() {
     }
     std::vector<std::jthread> threads;
     threads.reserve(workers);
-    for (TranslationUnitRecorder& recorder : recorders) {
-        threads.emplace_back(
-            [&pipeline, &recorder, this] { work(pipeline, recorder, request_->stop); });
+    // Declared after `threads`, so destroyed first: closes the pipeline
+    // before the threads are joined, also when an exception leaves here.
+    const PipelineCloser closer{pipeline};
+    if (auto started = start_workers(pipeline, recorders, threads, request_->stop); !started) {
+        return started;
     }
-    const auto close = [&pipeline] {
-        {
-            const std::lock_guard lock{pipeline.mutex};
-            pipeline.closing = true;
-            pipeline.queue.clear();
-        }
-        pipeline.work_ready.notify_all();
-    };
 
     common::Status status;
     std::size_t dispatched = next_;
@@ -598,37 +685,25 @@ common::Status AnalysisRun::analyse_pending() {
             pipeline.work_ready.notify_one();
         }
 
-        std::optional<TranslationUnitBatch> batch;
-        bool nothing_more = false;
-        {
-            std::unique_lock lock{pipeline.mutex};
-            const auto ready = [&] {
-                return pipeline.finished.contains(next_) || (stopping && pipeline.busy == 0);
-            };
-            pipeline.batch_ready.wait_for(lock, poll_period, ready);
-            if (const auto found = pipeline.finished.find(next_);
-                found != pipeline.finished.end()) {
-                batch = std::move(found->second);
-                pipeline.finished.erase(found);
-            } else {
-                nothing_more = stopping && pipeline.busy == 0;
-            }
+        Awaited awaited = await_batch(pipeline, next_, stopping);
+        if (awaited.failure) {
+            status = std::unexpected(std::move(*awaited.failure));
+            break;
         }
-        if (batch) {
-            status = commit(*batch);
+        if (awaited.batch) {
+            status = commit(*awaited.batch);
             if (!status) {
                 break;
             }
             ++next_;
-        } else if (nothing_more) {
+        } else if (awaited.nothing_more) {
             // Interrupted: later batches are discarded and parsed on resume.
             break;
         }
         progress_.report_if_due();
     }
-    close();
-    // The jthreads join here, after the workers' last parses.
-    threads.clear();
+    // The closer ends the workers; the jthreads join when this returns,
+    // after the workers' last parses.
     summary_.interrupted = status && next_ < total;
     return status;
 }
