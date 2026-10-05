@@ -21,6 +21,7 @@
 #include <optional>
 #include <sstream>
 #include <string>
+#include <string_view>
 #include <unistd.h>
 #include <utility>
 #include <vector>
@@ -401,6 +402,59 @@ TEST_F(ParallelAnalysisTest, EntriesNamingOneFileThroughALinkAreOneUnit) {
     ASSERT_FALSE(reports.empty());
     expect_consistent(reports, project_units);
     EXPECT_EQ(export_of(*open_store(database)), expected.exported);
+}
+
+/// A progress callback that, once `units` units are done, makes `other`
+/// take the database for writing (an open transaction with a write), so
+/// the next commit of the analysis fails; sets `blocked` then.
+std::function<void(const AnalysisProgress&)> block_after(std::uint32_t units,
+                                                         SqliteFactStore& other, bool& blocked) {
+    return [units, &other, &blocked](const AnalysisProgress& progress) {
+        if (progress.parsed + progress.failed != units || blocked) {
+            return;
+        }
+        blocked = true;
+        EXPECT_TRUE(other.begin_transaction().has_value());
+        EXPECT_TRUE(other.set_meta("blocking", "yes").has_value());
+    };
+}
+
+/// Expects every warning to name `text`.
+void expect_each_names(const std::vector<std::string>& warnings, std::string_view text) {
+    for (const std::string& warning : warnings) {
+        EXPECT_NE(warning.find(text), std::string::npos) << warning;
+    }
+}
+
+// Verifies: adr0019-resume-v1 (warnings of the units done are printed by the
+// run that did them): each unit's warnings are handed out when its
+// transaction commits, so a later failure does not lose them, and those of
+// a unit that was not committed are not handed out.
+TEST_F(ParallelAnalysisTest, WarningsOfCommittedUnitsSurviveALaterFailure) {
+    const fs::path root = write_project();
+    AnalysisRequest failing = request(
+        root, write_compilation_database(root, project_files(), "-fplugin=/nonexistent/evil.so"),
+        1);
+    const std::string database = (work_dir() / "facts.lcart.db").string();
+    const auto store = open_store(database);
+    // Another writer takes the database after the second unit, so the
+    // third unit's transaction fails.
+    const auto other = open_store(database);
+    std::vector<std::string> warnings;
+    failing.on_warning = [&warnings](const std::string& warning) {
+        warnings.push_back(warning);
+    };
+    failing.progress_interval = 0ms;
+    bool blocked = false;
+    failing.on_progress = block_after(2, *other, blocked);
+    ClangAnalyzer analyzer;
+    const auto result = analyzer.analyze(failing, *store);
+    other->rollback_transaction();
+    EXPECT_TRUE(blocked);
+    EXPECT_FALSE(result.has_value());
+    EXPECT_EQ(warnings.size(), 2U);
+    expect_each_names(warnings, "-fplugin=/nonexistent/evil.so");
+    EXPECT_EQ(done_prefix(value_of(store->translation_units())), 2U);
 }
 
 // Verifies: b16-resumable-analysis-v2 (criterion 2: resume refuses a changed

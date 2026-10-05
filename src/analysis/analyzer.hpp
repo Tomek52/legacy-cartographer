@@ -66,6 +66,13 @@ struct AnalysisRequest {
     /// progress_interval while it runs and once at the end. May be empty.
     std::function<void(const AnalysisProgress&)> on_progress{};
     std::chrono::milliseconds progress_interval{std::chrono::seconds{30}};
+    /// Called on the thread that called analyze() with each warning of a
+    /// translation unit (the same text as AnalysisSummary::warnings) right
+    /// after the unit's facts are committed, in translation unit order; a
+    /// unit whose facts are not committed hands out none. So the warnings
+    /// of every unit done reach the user even if the run fails or ends
+    /// later (ADR-0019, resume). May be empty.
+    std::function<void(const std::string&)> on_warning{};
     /// The time source of the progress reports, and of nothing else;
     /// std::chrono::steady_clock when empty.
     std::function<std::chrono::steady_clock::time_point()> clock{};
