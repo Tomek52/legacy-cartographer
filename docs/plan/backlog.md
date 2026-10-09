@@ -507,7 +507,15 @@ this item any more; it stays a criterion of NFR-013.
 
 Added 2026-10-09 from the open questions left by B-16 and the remaining
 M1 Definition of Done items that need no decision from the owner
-(publication and the ruleset on `main` do).
+(publication and the ruleset on `main` do). The two other questions left
+by B-16 (checking `inputs_sha256` on resume, a process per TU) need no
+answer for M1 and are moved to M2 in the open questions.
+
+M1 cannot be marked done after these items alone: NFR-013 criterion 3 (a
+tested way to get a compilation database from MSBuild) needs a Windows
+machine. Until it is tried there, or the owner moves the criterion to a
+later milestone, M1 stays open
+([question for the maintainer](../open-questions.md#questions-for-the-maintainer)).
 
 ### <a id="b18-second-signal-of-either-kind-v1"></a>**[B-18 v1]** ADR-0020: a second signal of either kind ends the analysis
 
@@ -541,7 +549,9 @@ Acceptance criteria:
    it on a generated project of at least 800 TUs (version bump, referrers
    updated).
 2. `scripts/measure-analysis.py` uses 800 TUs by default; the result table
-   of a run on the development container is recorded in this item.
+   of a run on the development container is recorded in this item, and its
+   ratio is ≥ 2.5×. If it is not, the item stops there and the target goes
+   to the owner as a question (revising it is the owner's decision).
 3. The open-questions row is removed.
 
 ### <a id="b20-threadsanitizer-preset-v1"></a>**[B-20 v1]** ThreadSanitizer preset and CI job
@@ -585,7 +595,10 @@ Acceptance criteria:
 1. A script parses every Mermaid block of the committed libmodbus map
    ([libmodbus map](../targets/libmodbus-map.md)) and of the module map
    golden files with Mermaid itself, pinned by version and lock file, with
-   no browser and no network beyond installing the pinned packages.
+   no browser and no network beyond installing the pinned packages. This
+   also answers the open question on parsing Mermaid without a browser
+   (FR-008); if that turns out to be impossible, the item records why and
+   stops, and the check stays manual.
 2. It fails, naming the file and Mermaid's error, on a deliberately broken
    diagram (a test of the script).
 3. CI runs it; the `TODO: verify` row for the CI Mermaid check is removed.
