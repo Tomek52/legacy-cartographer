@@ -40,7 +40,7 @@ scripts/conan-install.sh debug
 cmake --workflow --preset debug
 
 # Without Conan, from Ubuntu packages (offline machines;
-# presets: debug-system, asan-ubsan-system)
+# presets: debug-system, asan-ubsan-system, tsan-system)
 sudo apt-get install ninja-build g++-14 clang-20 libclang-rt-20-dev \
     llvm-20-dev libclang-20-dev libclang-cpp20-dev \
     libsqlite3-dev nlohmann-json3-dev libtomlplusplus-dev libgtest-dev
@@ -65,7 +65,8 @@ SIGTERM stops it with exit status 5, keeping the translation units done in
 continues from there. `lcart --help` lists all options and exit statuses.
 
 Quality gates: `scripts/dod.sh` runs all local checks (format, clang-tidy,
-docs, both offline presets); `scripts/quick-check.sh` is the fast inner loop.
+docs, the three offline presets, including ThreadSanitizer);
+`scripts/quick-check.sh` is the fast inner loop.
 
 ## Documentation
 

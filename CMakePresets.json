@@ -104,6 +104,18 @@
         "LCART_SANITIZERS": "address;undefined",
         "LCART_BUILD_FUZZERS": "ON"
       }
+    },
+    {
+      "name": "tsan-system",
+      "displayName": "Clang 20 Debug + ThreadSanitizer, Ubuntu packages, no Conan",
+      "inherits": [
+        "base",
+        "clang"
+      ],
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "LCART_SANITIZERS": "thread"
+      }
     }
   ],
   "buildPresets": [
@@ -130,6 +142,10 @@
     {
       "name": "asan-ubsan-system",
       "configurePreset": "asan-ubsan-system"
+    },
+    {
+      "name": "tsan-system",
+      "configurePreset": "tsan-system"
     }
   ],
   "testPresets": [
@@ -187,6 +203,19 @@
     {
       "name": "asan-ubsan-system",
       "configurePreset": "asan-ubsan-system",
+      "output": {
+        "outputOnFailure": true
+      },
+      "execution": {
+        "noTestsAction": "error"
+      }
+    },
+    {
+      "name": "tsan-system",
+      "configurePreset": "tsan-system",
+      "environment": {
+        "TSAN_OPTIONS": "halt_on_error=1 suppressions=${sourceDir}/tests/tsan.supp"
+      },
       "output": {
         "outputOnFailure": true
       },
@@ -295,6 +324,23 @@
         {
           "type": "test",
           "name": "asan-ubsan-system"
+        }
+      ]
+    },
+    {
+      "name": "tsan-system",
+      "steps": [
+        {
+          "type": "configure",
+          "name": "tsan-system"
+        },
+        {
+          "type": "build",
+          "name": "tsan-system"
+        },
+        {
+          "type": "test",
+          "name": "tsan-system"
         }
       ]
     }

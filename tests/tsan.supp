@@ -1,0 +1,15 @@
+# ThreadSanitizer suppressions for the tsan-system preset (B-20).
+#
+# Only frames inside libraries that are not built with -fsanitize=thread
+# (Ubuntu's libLLVM, libclang-cpp, libsqlite3) may be listed here, each with
+# the reason it is a false report. Never list a function of lcart: a race in
+# lcart's own code is fixed, with a test.
+
+# LLVM's statistic registry: TrackingStatistic::RegisterStatistic() takes a
+# lock that is an llvm::ManagedStatic, created on first use with
+# double-checked locking on a std::atomic<void*> (ManagedStatic.h). That
+# atomic publication happens inside the uninstrumented libLLVM, so TSan sees
+# the mutex allocated by one worker and locked by another with no ordering
+# between them. Reported when two workers register their first statistic
+# while parsing at the same time.
+race:llvm::TrackingStatistic::RegisterStatistic

@@ -49,19 +49,25 @@ jobs:
 
   cpp-system:
     # Same build from Ubuntu packages only: the offline / air-gapped path
-    # (NFR-006).
+    # (NFR-006). tsan-system runs the worker pool of ADR-0019 under
+    # ThreadSanitizer (B-20).
     name: C++ ${{ matrix.preset }} (no Conan)
     runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
-        preset: [debug-system, asan-ubsan-system]
+        preset: [debug-system, asan-ubsan-system, tsan-system]
     steps:
       - uses: actions/checkout@v4
       - name: Install toolchain and libraries
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq $APT_PACKAGES libsqlite3-dev nlohmann-json3-dev libtomlplusplus-dev libgtest-dev
+      - name: Address space layout TSan supports
+        # The runner randomises mmap with more bits than TSan's memory
+        # layout allows; TSan then aborts with "unexpected memory mapping".
+        if: matrix.preset == 'tsan-system'
+        run: sudo sysctl vm.mmap_rnd_bits=28
       - name: Configure, build, test
         run: cmake --workflow --preset ${{ matrix.preset }}
       - name: Fuzz (60 s per target, NFR-010)

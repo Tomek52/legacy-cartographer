@@ -5,14 +5,14 @@
 # release, asan-ubsan) and CodeQL. A pull request is done only when CI is
 # green as well.
 #
-# Usage: [PRESETS="debug-system asan-ubsan-system"] [BASE=origin/main]
-#        [DOD_NO_ADD=1] scripts/dod.sh
+# Usage: [PRESETS="debug-system asan-ubsan-system tsan-system"]
+#        [BASE=origin/main] [DOD_NO_ADD=1] scripts/dod.sh
 # DOD_NO_ADD=1 leaves the git index alone (for read-only reviewers); new
 # untracked files are then not format- or tidy-checked.
 set -uo pipefail
 cd "$(dirname "$0")/.."
 
-presets="${PRESETS:-debug-system asan-ubsan-system}"
+presets="${PRESETS:-debug-system asan-ubsan-system tsan-system}"
 base="${BASE:-origin/main}"
 log_dir="build/logs"
 mkdir -p "$log_dir"
