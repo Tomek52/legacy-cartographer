@@ -23,7 +23,12 @@ const MERMAID_VERSION = JSON.parse(
 
 const FENCE_OPEN = /^(`{3,}|~{3,})mermaid\s*$/;
 
-/** Each ```mermaid block of a Markdown text as { line, source }, line 1-based. */
+/**
+ * Each ```mermaid block of a Markdown text as { line, source, closed }, line
+ * 1-based. As in CommonMark, a block closes at a fence of the same character
+ * at least as long as the opening one; an unclosed block runs to the end of
+ * the file and is reported, since Markdown renders it as code, not a diagram.
+ */
 function mermaid_blocks(text) {
   const blocks = [];
   const lines = text.split("\n");
@@ -31,12 +36,13 @@ function mermaid_blocks(text) {
     const open = FENCE_OPEN.exec(lines[i]);
     if (!open) continue;
     const fence = open[1];
+    const closing = new RegExp(`^${fence[0] === "`" ? "`" : "~"}{${fence.length},}\\s*$`);
     const start = i;
     const body = [];
-    for (i++; i < lines.length && lines[i].trimEnd() !== fence; i++) {
+    for (i++; i < lines.length && !closing.test(lines[i]); i++) {
       body.push(lines[i]);
     }
-    blocks.push({ line: start + 1, source: body.join("\n") + "\n" });
+    blocks.push({ line: start + 1, source: body.join("\n") + "\n", closed: i < lines.length });
   }
   return blocks;
 }
@@ -66,6 +72,11 @@ for (const file of files) {
   }
   for (const block of blocks) {
     blocks_checked++;
+    if (!block.closed) {
+      console.error(`${file}:${block.line}: mermaid block has no closing fence`);
+      failures++;
+      continue;
+    }
     try {
       await mermaid.parse(block.source);
     } catch (error) {

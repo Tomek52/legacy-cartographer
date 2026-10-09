@@ -616,8 +616,8 @@ laid out or rendered, and a run in a network namespace without a network
 passes. The versions are pinned exactly in `package.json` and by
 `package-lock.json`: Mermaid 11.17.2 (2026-08-25), the newest 11.x and what
 `mermaid@11`, the tag MkDocs Material 9.7.7 loads from unpkg to draw the
-site, resolves to today; 12.0.0 is newer but is not what renders the
-docs. jsdom 29.1.1, because 30.x needs Node.js 22.22.2 or later. Material's
+site, resolves to today; 12.x (12.1.0, 2026-10-02) is newer but is not what
+renders the docs. jsdom 29.1.1, because 30.x needs Node.js 22.22.2 or later. Material's
 tag is not pinned, so the site can draw with a newer 11.x than the check
 parses with; the pin is moved by hand. `npm ci --ignore-scripts` is the only
 step that uses the network. The docs workflow sets up Node.js 22.22.0

@@ -15,7 +15,7 @@ cd "$(dirname "$0")/.."
 
 tool_dir="tools/mermaid-check"
 if ! command -v node >/dev/null; then
-    echo "check-mermaid: node not found (Node.js 22 or later is needed)" >&2
+    echo "check-mermaid: node not found (Node.js 22.13 or later is needed, as jsdom 29.1.1 requires)" >&2
     exit 2
 fi
 if [[ ! -d "$tool_dir/node_modules/mermaid" ]]; then

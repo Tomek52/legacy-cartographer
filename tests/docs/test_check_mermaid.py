@@ -57,6 +57,12 @@ class CheckMermaidTest(unittest.TestCase):
         self.assertIn("Parse error", result.stderr)  # Mermaid's own message
         self.assertNotIn("check-mermaid: OK", result.stdout)
 
+    def test_unterminated_block_fails(self) -> None:
+        unterminated = FIXTURES / "unterminated.md"
+        result = check_mermaid(unterminated)
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn(f"{unterminated}:6: mermaid block has no closing fence", result.stderr)
+
     def test_file_without_a_mermaid_block_fails(self) -> None:
         result = check_mermaid(REPO / "README.md")
         self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
