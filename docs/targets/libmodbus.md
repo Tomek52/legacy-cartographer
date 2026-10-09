@@ -90,6 +90,33 @@ on the 14 translation units: **1.12 s** with a Release build in the CI job
 development container. The job prints the time on every run. Budget: 60 s
 ([NFR-005](../specs/requirements.md#nfr005-performance-budget-v2)).
 
+**Hand check (B-23, 2026-10-09).** Each function of step 3 was compared
+with the source of the pinned tag (`a9b025d`), read by hand in the copy that
+`scripts/libmodbus-compdb.sh` builds: its definition (file and line range,
+from `lcart query export`) and every call written in its body (from `lcart
+query callees`). Calls of functions outside the root (`printf`, `memcpy`,
+`FD_SET`, ...) are not edges by design
+([data model](../architecture/data-model.md#arch-data-model-call-edges-v1)).
+
+| Function | Definition | Calls in the facts | Matches the source |
+|---|---|---|---|
+| `_modbus_receive_msg` | `src/modbus.c` 365–547 | `_error_print` ×3, `_sleep_response_timeout`, `modbus_flush`, `modbus_close` ×2, `modbus_connect` ×2, `compute_meta_length_after_function`, `compute_data_length_after_meta`; indirect `backend.is_connected`, `backend.select`, `backend.recv`, `backend.check_integrity` | yes |
+| `modbus_receive` | `src/modbus.c` 550–558 | indirect `backend.receive` | yes |
+| `compute_meta_length_after_function` | `src/modbus.c` 280–316 | none | yes |
+| `compute_data_length_after_meta` | `src/modbus.c` 319–351 | none | yes |
+| `check_confirmation` | `src/modbus.c` 578–735 | `_error_print` ×2, `_sleep_response_timeout` ×4, `modbus_flush` ×4, `compute_response_length_from_request`; indirect `backend.pre_check_confirmation` | yes |
+| `modbus_reply` | `src/modbus.c` 802–1265 | `response_exception` ×20, `compute_response_length_from_request` ×3, `compute_meta_length_after_function`, `compute_data_length_after_meta`, `modbus_set_bits_from_bytes`, `response_io_status`, `send_msg` ×2; indirect `backend.build_response_basis` ×6, `backend.get_response_tid` | yes |
+| `crc16` | `src/modbus-rtu.c` 119–133 | none (table lookups only) | yes |
+| `_modbus_rtu_check_integrity` | `src/modbus-rtu.c` 377–412 | `crc16`, `_modbus_rtu_flush` | yes |
+| `_modbus_tcp_check_integrity` | `src/modbus-tcp.c` 195–198 | none (returns its length argument) | yes |
+
+The source of `_modbus_receive_msg` spells `modbus_close` and
+`modbus_connect` four times each: two pairs are in `#ifdef _WIN32`
+branches, which the Linux build does not compile, so two calls each are
+right. Names in comments and string literals of `modbus_reply`
+(`modbus_receive`, `write_bits`, `write_registers`) are not calls. Which
+backend functions the indirect calls reach is FR-015 (M2).
+
 ### M2: generated documentation and verification report
 
 1. `lcart handoff` for libmodbus, then run a coding agent (Claude Code) on
