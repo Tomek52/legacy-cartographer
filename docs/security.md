@@ -138,8 +138,15 @@ to make it *do* something: delete files, run a command, send data to a URL.
   `-fplugin=`, `-fpass-plugin=`, `--hipspv-pass-plugin=`, `-fplugin-arg-*`;
   cc1 options `-load`, `-plugin`, `-add-plugin`, `-plugin-arg-*`,
   `-fpass-plugin=`, whether passed with `-Xclang`, `-Xclang=` or bare in a
-  `-cc1` command. Response files (`@file`) are expanded first, so they cannot
-  hide such options; any `@` argument left over is removed too.
+  `-cc1` command, and the same inside clang-cl's pass-through arguments
+  `/clang:` and `-clang:` (B-17,
+  [ADR-0021](adr/0021-clang-flags-and-clang-cl-databases-for-msvc-code.md#adr0021-pass-through-filtered-v1)).
+  Response files (`@file`) are expanded first, so they cannot
+  hide such options; any `@` argument left over is removed too. LibTooling
+  itself never loads `-load` plugins (only `clang`'s own cc1 entry point
+  does, ADR-0021), so the filter is defence in depth. Clang configuration
+  files read by the driver bypass it
+  ([open question](open-questions.md#open-technical-questions)).
 - Parsing hostile C/C++ can still crash or exhaust Clang. Analysis runs
   in-process, one TU at a time: a Clang crash ends the run. Mitigation: each
   TU's facts are committed as it completes, so `--resume` continues after the

@@ -26,7 +26,7 @@ expanded in place; its version is bumped if its meaning changes
 | [B-14](#b14-libmodbus-baseline-v1) | ✅ libmodbus baseline map and timing | M1 | NFR-001, NFR-005 | B-05, B-13 | 3 h |
 | [B-15](#b15-requirement-test-traceability-v2) | ✅ Traceability gate and matrix | M1 | NFR-012 | B-03 | 4 h |
 | [B-16](#b16-resumable-analysis-v2) | ✅ Resumable analysis with progress | M1 | NFR-005, NFR-004 | B-12 | 5 h |
-| [B-17](#b17-msvc-code-spike-v2) | MSVC code under Clang: spike and docs | M1 | NFR-013 | B-10 | 4 h |
+| [B-17](#b17-msvc-code-spike-v2) | ✅ MSVC code under Clang: spike and docs | M1 | NFR-013 | B-10 | 4 h |
 | [B-18](#b18-second-signal-of-either-kind-v1) | ADR-0020: a second signal of either kind ends the analysis | M1 | NFR-005 | B-16 | 2 h |
 | [B-19](#b19-throughput-on-800-units-v1) | NFR-005 throughput measured on 800 TUs | M1 | NFR-005 | B-16 | 1 h |
 | [B-20](#b20-threadsanitizer-preset-v1) | ThreadSanitizer preset and CI job | M1 | NFR-004, NFR-007 | B-16 | 3 h |
@@ -502,6 +502,28 @@ Acceptance criteria: criteria 1 and 2 of
 Version 2 (2026-10-09): the development container and CI have no Windows,
 MSBuild or Windows SDK, so the MSBuild part of v1 is not a criterion of
 this item any more; it stays a criterion of NFR-013.
+
+Result (2026-10-09): [ADR-0021](../adr/0021-clang-flags-and-clang-cl-databases-for-msvc-code.md)
+records the spike (clang 20.1.2, LLVM source at `llvmorg-20.1.2`). The
+target `x86_64-pc-windows-msvc` implies `-fms-extensions`,
+`-fms-compatibility` and `-fms-compatibility-version=19.33`; clang-cl
+commands (`clang-cl`, `cl`, `cl.exe`, `--driver-mode=cl`) parse as they
+are. The fixture `tests/fixtures/msvc_constructs` and
+`tests/analysis/msvc_code_test.cpp` verify NFR-013 criterion 1 with both
+database styles, and criterion 2 only as path relativity (a root at
+`<tmp>/mnt/c/...` on the Linux file system; a real drvfs mount is an open
+question). Two fixes: the database is wrapped in
+`inferTargetAndDriverMode()`, because LibTooling's dependency-file
+adjuster dropped cl's `-MD`/`-MT` from `cl.exe` commands; and the
+argument filter now also reads clang-cl's `/clang:` and `-clang:`
+pass-through arguments (security T5; the plugin was not loaded before
+either, since LibTooling never loads `-load` plugins). The how-to
+[Analysing an MSVC code base under WSL2](../how-to/msvc-under-wsl2.md)
+lists the steps tried. Left open: a database from MSBuild (NFR-013
+criterion 3, a Windows machine), real Windows SDK and MSVC headers,
+Windows paths in a database made on Windows, calls lost to delayed
+template parsing, and Clang configuration files bypassing the filter
+([open questions](../open-questions.md)).
 
 ## M1 closing items
 
