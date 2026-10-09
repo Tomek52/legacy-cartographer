@@ -32,7 +32,7 @@ expanded in place; its version is bumped if its meaning changes
 | [B-20](#b20-threadsanitizer-preset-v1) | ThreadSanitizer preset and CI job | M1 | NFR-004, NFR-007 | B-16 | 3 h |
 | [B-21](#b21-exposure-warning-for-partial-database-v1) | Exposure warning for the partial database | M1 | NFR-005 | B-16 | 1 h |
 | [B-22](#b22-mermaid-check-in-ci-v1) | CI check that committed module maps parse as Mermaid | M1 | FR-007 | B-14 | 2 h |
-| [B-23](#b23-libmodbus-hand-check-v1) | Hand check of the libmodbus functions | M1 | FR-003, FR-004 | B-14 | 2 h |
+| [B-23](#b23-libmodbus-hand-check-v1) | ✅ Hand check of the libmodbus functions | M1 | FR-003, FR-004 | B-14 | 2 h |
 
 ## M0
 
@@ -616,3 +616,8 @@ Acceptance criteria:
 2. The result is recorded on the libmodbus page: one row per function,
    matching or not; each mismatch is explained or becomes an open question
    (FR-015's function-pointer tables are out of scope).
+
+Result (2026-10-09): all nine functions match the source of the pinned
+tag: definitions, direct calls and indirect calls; the table is on the
+[libmodbus page](../targets/libmodbus.md#m1-fact-database-and-module-map-no-llm).
+No mismatch, so no new open question.
