@@ -546,7 +546,7 @@ the handler in `src/cli/src/commands.cpp` now also sets SIGINT and SIGTERM
 to `SIG_DFL` with `sigaction()`, and both are in its `sa_mask`. Tests:
 `SigintThenSigtermEndsLcartAtOnceAndResumeFinishesIt` and
 `SigtermThenSigintEndsLcartAtOnceAndResumeFinishesIt` in
-`tests/cli/lcart_cli_test.cpp` hold the run by filling the pipe of its
+`tests/cli/lcart_cli_test.cpp` hold the run by filling the socket of its
 standard error, send the first signal, wait until `/proc/<pid>/status`
 shows no handler for either signal, send the second, and expect lcart to
 end by it; `--resume` with 4 workers then gives the export of an

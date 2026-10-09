@@ -1344,14 +1344,16 @@ TEST_F(LcartAnalyzeRunTest, SigtermEndsTheRunCleanlyAndResumeFinishesIt) {
 
 // Verifies: b18-second-signal-of-either-kind-v1 (criterion 2: SIGINT and
 // then SIGTERM end lcart by SIGTERM; --resume then finishes the analysis
-// with the export of an uninterrupted run) and
-// adr0020-second-signal-of-either-kind-v1.
+// with the export of an uninterrupted run),
+// adr0020-second-signal-of-either-kind-v1 and nfr005-performance-budget-v2
+// (criterion 4: the resumed export equals an uninterrupted one).
 TEST_F(LcartAnalyzeRunTest, SigintThenSigtermEndsLcartAtOnceAndResumeFinishesIt) {
     stop_twice_and_resume(SIGINT, SIGTERM);
 }
 
 // Verifies: b18-second-signal-of-either-kind-v1 (criterion 2, SIGTERM and
-// then SIGINT) and adr0020-second-signal-of-either-kind-v1.
+// then SIGINT), adr0020-second-signal-of-either-kind-v1 and
+// nfr005-performance-budget-v2 (criterion 4).
 TEST_F(LcartAnalyzeRunTest, SigtermThenSigintEndsLcartAtOnceAndResumeFinishesIt) {
     stop_twice_and_resume(SIGTERM, SIGINT);
 }

@@ -69,8 +69,9 @@ once; the partial database stays consistent because each TU is one
 transaction (ADR-0019). The rest of ADR-0019's interruption rule (exit
 status 5, the summary, the units committed) is unchanged.
 
-A second signal sent while the first handler is still running on one
-thread can reach another thread before both actions are reset; it is then
+A signal of the other kind, delivered after the first one but before its
+handler's `sigaction()` calls (the kernel resets the first signal's own
+action on delivery), can reach another thread; it is then
 handled as another stop request, and a third signal ends lcart. The window
 is a few instructions long; closing it needs option 4.
 
