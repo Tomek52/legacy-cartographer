@@ -31,7 +31,7 @@ expanded in place; its version is bumped if its meaning changes
 | [B-19](#b19-throughput-on-800-units-v1) | NFR-005 throughput measured on 800 TUs | M1 | NFR-005 | B-16 | 1 h |
 | [B-20](#b20-threadsanitizer-preset-v1) | ThreadSanitizer preset and CI job | M1 | NFR-004, NFR-007 | B-16 | 3 h |
 | [B-21](#b21-exposure-warning-for-partial-database-v1) | Exposure warning for the partial database | M1 | NFR-005 | B-16 | 1 h |
-| [B-22](#b22-mermaid-check-in-ci-v1) | CI check that committed module maps parse as Mermaid | M1 | FR-007 | B-14 | 2 h |
+| [B-22](#b22-mermaid-check-in-ci-v1) | ✅ CI check that committed module maps parse as Mermaid | M1 | FR-007 | B-14 | 2 h |
 | [B-23](#b23-libmodbus-hand-check-v1) | Hand check of the libmodbus functions | M1 | FR-003, FR-004 | B-14 | 2 h |
 
 ## M0
@@ -602,6 +602,34 @@ Acceptance criteria:
 2. It fails, naming the file and Mermaid's error, on a deliberately broken
    diagram (a test of the script).
 3. CI runs it; the `TODO: verify` row for the CI Mermaid check is removed.
+
+Result (2026-10-09): `scripts/check-mermaid.sh` runs
+`tools/mermaid-check/check-mermaid.mjs`, which calls Mermaid's own
+`mermaid.parse` on every ` ```mermaid ` block of the libmodbus map and of
+`tests/golden/*.map.md`, and prints `file:line`, the Mermaid version and
+Mermaid's error for each block that does not parse (exit 1). Parsing
+without a browser works: Node.js 22 with jsdom as the only DOM. jsdom is
+needed, tried without it: Mermaid sanitises labels with DOMPurify, which
+binds to a `window` when Mermaid is loaded, and without one every flowchart
+with a label fails with `DOMPurify.addHook is not a function`. Nothing is
+laid out or rendered, and a run in a network namespace without a network
+passes. The versions are pinned exactly in `package.json` and by
+`package-lock.json`: Mermaid 11.17.2 (2026-08-25), the newest 11.x and what
+`mermaid@11`, the tag MkDocs Material 9.7.7 loads from unpkg to draw the
+site, resolves to today; 12.0.0 is newer but is not what renders the
+docs. jsdom 29.1.1, because 30.x needs Node.js 22.22.2 or later. Material's
+tag is not pinned, so the site can draw with a newer 11.x than the check
+parses with; the pin is moved by hand. `npm ci --ignore-scripts` is the only
+step that uses the network. The docs workflow sets up Node.js 22.22.0
+(npm cache on the lock file), installs, runs the check, and runs
+`tests/docs/test_check_mermaid.py` with `LCART_REQUIRE_MERMAID=1`; locally
+the test is skipped without Node.js or the installed packages. A fixture
+with a missing `|` after an edge label fails, naming the file and line and
+Mermaid's `Parse error`; a fixture with every entity code of ADR-0017
+passes. A parse is weaker than a render: a quoted label with an unescaped
+`"` inside it parsed (the FR-008 open question records this). `npm audit`
+reports two low-severity advisories in KaTeX, a Mermaid dependency for math
+labels, which the maps do not use.
 
 ### <a id="b23-libmodbus-hand-check-v1"></a>**[B-23 v1]** Hand check of the libmodbus functions
 
