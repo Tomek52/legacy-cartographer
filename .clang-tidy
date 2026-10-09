@@ -29,9 +29,10 @@ Checks: >
 #   non-private-member-variables: fact/claim records are plain aggregates by design.
 #   use-trailing-return-type: style preference, not adopted.
 #   identifier-length: `fn`, `id` are clear in this domain.
-#   redundant-member-init: the `{}` on members of aggregates is what keeps GCC's
-#     -Wmissing-field-initializers (-Wextra, -Werror) quiet for designated
-#     initializers that leave a member out.
+#   redundant-member-init: the `{}` on members of aggregates is what keeps
+#     GCC's -Wmissing-field-initializers and Clang's
+#     -Wmissing-designated-field-initializers (both in -Wextra, -Werror) quiet
+#     for designated initializers that leave a member out.
 WarningsAsErrors: '*'
 HeaderFilterRegex: '.*/(src|tests|fuzz)/.*'
 FormatStyle: file

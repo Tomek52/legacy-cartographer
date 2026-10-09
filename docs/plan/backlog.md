@@ -643,9 +643,10 @@ Acceptance criteria:
 Result (2026-10-09): the only findings in headers were 22 of
 `readability-redundant-member-init`, all `{}` initializers of aggregate
 members (`fact_model.hpp`, `analyzer.hpp`, `command_line.hpp`). They are
-needed: without them GCC 14 and Clang 20 warn with
-`-Wmissing-field-initializers` (part of `-Wextra`, an error here) for a
-designated initializer that leaves the member out (checked on a two-line
-example). The check is excluded with that reason. Why clang-tidy 20 ignored
-the configured filter in the main clone was not found; the explicit option
-makes it irrelevant.
+needed: without them GCC 14 (`-Wmissing-field-initializers`) and Clang 20
+(`-Wmissing-designated-field-initializers`), both part of `-Wextra` and
+errors here, warn for a designated initializer that leaves the member out
+(checked on a two-line example and on `parallel_analysis_test.cpp`). The check is excluded with that reason. Why clang-tidy 20 ignored
+the configured filter in the main clone was not found
+([open question](../open-questions.md#open-technical-questions)); the
+explicit option makes it irrelevant.
