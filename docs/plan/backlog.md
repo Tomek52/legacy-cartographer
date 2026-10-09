@@ -33,6 +33,7 @@ expanded in place; its version is bumped if its meaning changes
 | [B-21](#b21-exposure-warning-for-partial-database-v1) | Exposure warning for the partial database | M1 | NFR-005 | B-16 | 1 h |
 | [B-22](#b22-mermaid-check-in-ci-v1) | CI check that committed module maps parse as Mermaid | M1 | FR-007 | B-14 | 2 h |
 | [B-23](#b23-libmodbus-hand-check-v1) | ✅ Hand check of the libmodbus functions | M1 | FR-003, FR-004 | B-14 | 2 h |
+| [B-24](#b24-clang-tidy-checks-headers-v1) | ✅ clang-tidy checks the project's headers | M1 | NFR-007 | B-02 | 1 h |
 
 ## M0
 
@@ -621,3 +622,30 @@ Result (2026-10-09): all nine functions match the source of the pinned
 tag: definitions, direct calls and indirect calls; the table is on the
 [libmodbus page](../targets/libmodbus.md#m1-fact-database-and-module-map-no-llm).
 No mismatch, so no new open question.
+
+### <a id="b24-clang-tidy-checks-headers-v1"></a>**[B-24 v1]** clang-tidy checks the project's headers
+
+Found while reviewing B-22 (2026-10-09): in a git worktree,
+`scripts/run-clang-tidy.sh` failed on headers of `src/` that the same run
+in the main clone, and CI, passed. clang-tidy 20 applied `.clang-tidy`'s
+`HeaderFilterRegex` in the worktree but not in the main clone, where it
+dropped every finding in the project's headers as "non-user code".
+
+Acceptance criteria:
+
+1. `scripts/run-clang-tidy.sh` passes the header filter on the command line,
+   so findings in the project's headers are reported in every checkout; it
+   fails if the filter differs from `.clang-tidy`'s.
+2. Every finding that appears with it is fixed, or its check is excluded in
+   `.clang-tidy` with a reason.
+3. `scripts/run-clang-tidy.sh debug-system` passes locally and in CI.
+
+Result (2026-10-09): the only findings in headers were 22 of
+`readability-redundant-member-init`, all `{}` initializers of aggregate
+members (`fact_model.hpp`, `analyzer.hpp`, `command_line.hpp`). They are
+needed: without them GCC 14 and Clang 20 warn with
+`-Wmissing-field-initializers` (part of `-Wextra`, an error here) for a
+designated initializer that leaves the member out (checked on a two-line
+example). The check is excluded with that reason. Why clang-tidy 20 ignored
+the configured filter in the main clone was not found; the explicit option
+makes it irrelevant.

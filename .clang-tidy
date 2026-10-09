@@ -19,6 +19,7 @@ Checks: >
   portability-*,
   readability-*,
   -readability-magic-numbers,
+  -readability-redundant-member-init,
   -readability-identifier-length
 # Excluded with reason:
 #   easily-swappable-parameters: too noisy for (from, to) edge APIs; strong types cover it.
@@ -28,6 +29,9 @@ Checks: >
 #   non-private-member-variables: fact/claim records are plain aggregates by design.
 #   use-trailing-return-type: style preference, not adopted.
 #   identifier-length: `fn`, `id` are clear in this domain.
+#   redundant-member-init: the `{}` on members of aggregates is what keeps GCC's
+#     -Wmissing-field-initializers (-Wextra, -Werror) quiet for designated
+#     initializers that leave a member out.
 WarningsAsErrors: '*'
 HeaderFilterRegex: '.*/(src|tests|fuzz)/.*'
 FormatStyle: file
