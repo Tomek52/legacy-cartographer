@@ -26,7 +26,13 @@ expanded in place; its version is bumped if its meaning changes
 | [B-14](#b14-libmodbus-baseline-v1) | ✅ libmodbus baseline map and timing | M1 | NFR-001, NFR-005 | B-05, B-13 | 3 h |
 | [B-15](#b15-requirement-test-traceability-v2) | ✅ Traceability gate and matrix | M1 | NFR-012 | B-03 | 4 h |
 | [B-16](#b16-resumable-analysis-v2) | ✅ Resumable analysis with progress | M1 | NFR-005, NFR-004 | B-12 | 5 h |
-| [B-17](#b17-msvc-code-spike-v1) | MSVC code under Clang: spike and docs | M1 | NFR-013 | B-10 | 4 h |
+| [B-17](#b17-msvc-code-spike-v2) | MSVC code under Clang: spike and docs | M1 | NFR-013 | B-10 | 4 h |
+| [B-18](#b18-second-signal-of-either-kind-v1) | ADR-0020: a second signal of either kind ends the analysis | M1 | NFR-005 | B-16 | 2 h |
+| [B-19](#b19-throughput-on-800-units-v1) | NFR-005 throughput measured on 800 TUs | M1 | NFR-005 | B-16 | 1 h |
+| [B-20](#b20-threadsanitizer-preset-v1) | ThreadSanitizer preset and CI job | M1 | NFR-004, NFR-007 | B-16 | 3 h |
+| [B-21](#b21-exposure-warning-for-partial-database-v1) | Exposure warning for the partial database | M1 | NFR-005 | B-16 | 1 h |
+| [B-22](#b22-mermaid-check-in-ci-v1) | CI check that committed module maps parse as Mermaid | M1 | FR-007 | B-14 | 2 h |
+| [B-23](#b23-libmodbus-hand-check-v1) | Hand check of the libmodbus functions | M1 | FR-003, FR-004 | B-14 | 2 h |
 
 ## M0
 
@@ -475,14 +481,138 @@ TUs, far from in proportion (criterion 5). Two known causes of that growth:
 every TU includes two of them (its module's and its predecessor's), so
 each TU's AST grows with the number of TUs; and the writer's state grows with the total facts.
 
-### <a id="b17-msvc-code-spike-v1"></a>**[B-17 v1]** MSVC code under Clang: spike and docs
+### <a id="b17-msvc-code-spike-v2"></a>**[B-17 v2]** MSVC code under Clang: spike and docs
 
-Acceptance criteria: those of [NFR-013](../specs/requirements.md#nfr013-linux-and-wsl2-v1),
-plus:
+Acceptance criteria: criteria 1 and 2 of
+[NFR-013](../specs/requirements.md#nfr013-linux-and-wsl2-v1), plus:
 
-1. The exact Clang 20 flags for MSVC-targeted code and how LibTooling
-   handles `clang-cl`-style arguments are recorded in ADR-0009's TODO
-   (resolved) or a superseding ADR.
+1. The exact Clang 20 flags for MSVC-targeted code, and how LibTooling
+   handles `clang-cl`-style arguments in a compilation database, are
+   verified on Linux with synthetic compilation databases (a `clang`
+   driver entry with `--target=x86_64-pc-windows-msvc` and the MS flags,
+   and a `clang-cl` entry) and recorded in an ADR that supersedes
+   ADR-0009's TODO.
 2. A how-to page ("Analysing an MSVC code base under WSL2") lists the steps
-   tried, including getting a compilation database for an MSBuild solution,
-   with what worked and what did not.
+   tried, with what worked and what did not.
+3. What cannot be tried without Windows (a compilation database from an
+   MSBuild solution, real Windows SDK and MSVC headers) is marked
+   `TODO: verify` on that page and has a row in the open questions;
+   NFR-013 criterion 3 stays open until it is tried.
+
+Version 2 (2026-10-09): the development container and CI have no Windows,
+MSBuild or Windows SDK, so the MSBuild part of v1 is not a criterion of
+this item any more; it stays a criterion of NFR-013.
+
+## M1 closing items
+
+Added 2026-10-09 from the open questions left by B-16 and the remaining
+M1 Definition of Done items that need no decision from the owner
+(publication and the ruleset on `main` do). The two other questions left
+by B-16 (checking `inputs_sha256` on resume, a process per TU) need no
+answer for M1 and are moved to M2 in the open questions.
+
+M1 cannot be marked done after these items alone: NFR-013 criterion 3 (a
+tested way to get a compilation database from MSBuild) needs a Windows
+machine. Until it is tried there, or the owner moves the criterion to a
+later milestone, M1 stays open
+([question for the maintainer](../open-questions.md#questions-for-the-maintainer)).
+
+### <a id="b18-second-signal-of-either-kind-v1"></a>**[B-18 v1]** ADR-0020: a second signal of either kind ends the analysis
+
+ADR-0019 is accepted and lags the code in two places (open questions):
+the TU list is de-duplicated by fact path, and only a second signal of the
+same kind ends lcart at once.
+
+Acceptance criteria:
+
+1. ADR-0020 amends [ADR-0019](../adr/0019-parallel-resumable-analysis.md#adr0019-interrupt-v1):
+   the TU list behind the configuration hash, dispatch and totals is
+   de-duplicated by fact path (the first entry in sorted order wins); and
+   the first SIGINT or SIGTERM resets **both** to their default action, so
+   any second signal of either kind ends lcart at once. ADR-0019's status
+   line and the index say it is amended.
+2. A test sends SIGINT and then SIGTERM (and the reverse) to a running
+   `lcart analyze` and observes that the process ends by the second signal;
+   `--resume` then finishes the analysis with an export identical to an
+   uninterrupted run.
+3. `lcart --help` describes the second signal; the two open-questions rows
+   are removed.
+
+### <a id="b19-throughput-on-800-units-v1"></a>**[B-19 v1]** NFR-005 throughput measured on 800 TUs
+
+B-16 measured 2.30× with 4 workers on 200 generated TUs (a run of under a
+second, dominated by start-up) and 2.58× on 800 TUs.
+
+Acceptance criteria:
+
+1. NFR-005 criterion 2 keeps the ≥ 2.5× target for 4 workers and measures
+   it on a generated project of at least 800 TUs (version bump, referrers
+   updated).
+2. `scripts/measure-analysis.py` uses 800 TUs by default; the result table
+   of a run on the development container is recorded in this item, and its
+   ratio is ≥ 2.5×. If it is not, the item stops there and the target goes
+   to the owner as a question (revising it is the owner's decision).
+3. The open-questions row is removed.
+
+### <a id="b20-threadsanitizer-preset-v1"></a>**[B-20 v1]** ThreadSanitizer preset and CI job
+
+The worker pool of ADR-0019 (threads, condition variables, dispatch
+window) has never run under ThreadSanitizer.
+
+Acceptance criteria:
+
+1. A `tsan-system` configure, build and test preset (Clang 20,
+   `-fsanitize=thread`, Ubuntu packages, no Conan) builds lcart and the
+   tests.
+2. Under it `parallel_analysis_test` and the `lcart analyze` command-line
+   tests pass with no ThreadSanitizer report; any race found is fixed with
+   a test, not suppressed. Tests left out of the preset are listed with the
+   reason.
+3. CI runs the preset in the `build` workflow; `scripts/dod.sh` runs it
+   too, or documents why not.
+4. The open-questions row is removed; the testing strategy names the
+   preset.
+
+### <a id="b21-exposure-warning-for-partial-database-v1"></a>**[B-21 v1]** Exposure warning for the partial database
+
+Acceptance criteria:
+
+1. When `lcart analyze` writes `.<name>.partial` inside a git work tree and
+   that file is not ignored, it warns as for the database
+   ([security T2](../security.md)); likewise for its `-journal` file, which
+   SQLite creates next to it.
+2. A test with an ignore rule that covers the database but not the partial
+   database shows the warning; a rule covering both shows none.
+3. Security T2 names the partial database; the open-questions row is
+   removed.
+
+### <a id="b22-mermaid-check-in-ci-v1"></a>**[B-22 v1]** CI check that committed module maps parse as Mermaid
+
+FR-007 criterion 1 was checked by hand once in B-14.
+
+Acceptance criteria:
+
+1. A script parses every Mermaid block of the committed libmodbus map
+   ([libmodbus map](../targets/libmodbus-map.md)) and of the module map
+   golden files with Mermaid itself, pinned by version and lock file, with
+   no browser and no network beyond installing the pinned packages. This
+   also answers the open question on parsing Mermaid without a browser
+   (FR-008); if that turns out to be impossible, the item records why and
+   stops, and the check stays manual.
+2. It fails, naming the file and Mermaid's error, on a deliberately broken
+   diagram (a test of the script).
+3. CI runs it; the `TODO: verify` row for the CI Mermaid check is removed.
+
+### <a id="b23-libmodbus-hand-check-v1"></a>**[B-23 v1]** Hand check of the libmodbus functions
+
+The M1 Definition of Done asks for a hand check of the functions listed in
+the [libmodbus plan](../targets/libmodbus.md) (M1, step 3).
+
+Acceptance criteria:
+
+1. For each listed function, its definition (file, lines), direct callees
+   and indirect calls in the fact database are compared with the source of
+   the pinned tag, read by hand.
+2. The result is recorded on the libmodbus page: one row per function,
+   matching or not; each mismatch is explained or becomes an open question
+   (FR-015's function-pointer tables are out of scope).

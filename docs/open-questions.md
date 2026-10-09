@@ -37,14 +37,16 @@ moving the answer into the relevant spec or ADR and deleting it here.
 
 ## Questions for the maintainer
 
-None open. New questions are added here as they come up.
+| Question | Context | Decide by |
+|---|---|---|
+| NFR-013 criterion 3 (a tested way to get a compilation database from an MSBuild solution) needs a Windows machine, which neither the development container nor CI has. Try it on a Windows machine before M1 is marked done, or move the criterion to a later milestone? | [NFR-013](specs/requirements.md#nfr013-linux-and-wsl2-v1), [B-17](plan/backlog.md#b17-msvc-code-spike-v2) | M1 end |
 
 ## Open technical questions
 
 | Question | Context | Decide by |
 |---|---|---|
-| Detect source files edited between an interrupted analysis and `--resume` (check `translation_unit.inputs_sha256`)? Today a resumed run mixes old and new code. | [ADR-0019](adr/0019-parallel-resumable-analysis.md#adr0019-resume-v1) | after B-16 |
-| Run each translation unit in a child process so a Clang crash cannot end the run? Costs process start-up per TU. | [security T5](security.md), [ADR-0019](adr/0019-parallel-resumable-analysis.md#adr0019-interrupt-v1) | after B-16 (one process for now; a TU that always crashes Clang blocks `--resume`) |
+| Detect source files edited between an interrupted analysis and `--resume` (check `translation_unit.inputs_sha256`)? Today a resumed run mixes old and new code. | [ADR-0019](adr/0019-parallel-resumable-analysis.md#adr0019-resume-v1) | M2 |
+| Run each translation unit in a child process so a Clang crash cannot end the run? Costs process start-up per TU. | [security T5](security.md), [ADR-0019](adr/0019-parallel-resumable-analysis.md#adr0019-interrupt-v1) | M2 (one process for now; a TU that always crashes Clang blocks `--resume`) |
 | How to show paths of files outside the analysis root (stored absolute, e.g. Clang's resource directory or a home directory) in handoff bundles? The export's rule (spelling of the first directive, [ADR-0016](adr/0016-facts-export-and-command-line.md#adr0016-paths-outside-root-v1)) is the candidate. | [file facts](architecture/data-model.md#arch-data-model-file-facts-v1), [security](security.md) | M2 (bundles) |
 | NFR-005 criterion 2 asks for ≥ 2.5× throughput with 4 workers "confirmed or revised in B-16". Measured 2.30× on the 200-TU generated fixture (a run of under a second) and 2.58× on 800 TUs: keep the target, measure on a larger fixture, or revise it? | [B-16 result](plan/backlog.md#b16-resumable-analysis-v2), [NFR-005](specs/requirements.md#nfr005-performance-budget-v2) | M1 end |
 | A second signal ends lcart at once only if it is of the same kind: `SA_RESETHAND` resets only the signal delivered, so SIGINT then SIGTERM (or the reverse) is handled as a stop request again. Reset both on the first signal? That changes the handler ADR-0019 fixes, so it needs an amendment. | [ADR-0019](adr/0019-parallel-resumable-analysis.md#adr0019-interrupt-v1) | M1 end |
@@ -60,7 +62,8 @@ None open. New questions are added here as they come up.
 | `modbus_mapping_new` signature and per-iteration cost for fuzzing | [libmodbus plan](targets/libmodbus.md) | M4 |
 | `modbus_close` / `modbus_free` semantics for the RAII wrapper | [libmodbus plan](targets/libmodbus.md) | M5 |
 | Exact terms of `tests/LICENSE` in libmodbus | [ADR-0003](adr/0003-licensing.md) | before reusing any upstream test code |
-| Exact Clang 20 flags for MSVC-targeted code; LibTooling handling of `clang-cl` arguments; a tested way to get a compilation database from MSBuild | [ADR-0009](adr/0009-linux-and-wsl2-only.md) | B-17 |
+| Exact Clang 20 flags for MSVC-targeted code; LibTooling handling of `clang-cl` arguments | [ADR-0009](adr/0009-linux-and-wsl2-only.md) | B-17 |
+| A tested way to get a compilation database from an MSBuild solution | [ADR-0009](adr/0009-linux-and-wsl2-only.md), [NFR-013](specs/requirements.md#nfr013-linux-and-wsl2-v1) | a Windows machine (question for the maintainer) |
 | MkDocs/Material settings that keep raw HTML in generated docs from executing | [security](security.md) | M2 |
 | Usable local model sizes for claim generation | [NFR-003](specs/requirements.md#nfr003-fully-local-mode-v1) | M6 |
 | Claude Code permission rule syntax for a bundle's `.claude/settings.json` | [handoff contract](specs/handoff-contract.md#claim-agent-permissions-v1) | M2 |
