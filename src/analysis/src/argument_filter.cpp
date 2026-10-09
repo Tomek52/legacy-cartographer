@@ -32,6 +32,13 @@ constexpr std::string_view cc1_plugin_arg_prefix{"-plugin-arg-"};
 constexpr std::string_view cc1_pass_plugin_prefix{"-fpass-plugin="};
 
 constexpr std::string_view xclang{"-Xclang"};
+
+// clang-cl's pass-through option `/clang:<arg>`, which takes the prefixes
+// '/' and '-' (clang/Driver/Options.inc, LLVM 20).
+constexpr std::array clang_cl_pass_through_prefixes{
+    std::string_view{"/clang:"},
+    std::string_view{"-clang:"},
+};
 constexpr std::string_view xclang_equals{"-Xclang="};
 
 [[nodiscard]] bool starts_with_any(std::string_view argument, const auto& prefixes) {
@@ -72,18 +79,6 @@ struct Forwarded {
         return Forwarded{.option = argument.substr(xclang_equals.size()), .width = 1};
     }
     return std::nullopt;
-}
-
-[[nodiscard]] std::string join(const std::vector<std::string>& args, std::size_t first,
-                               std::size_t count) {
-    std::string joined;
-    for (std::size_t i = first; i < first + count && i < args.size(); ++i) {
-        if (!joined.empty()) {
-            joined += ' ';
-        }
-        joined += args[i];
-    }
-    return joined;
 }
 
 /// Number of arguments to remove for a `-Xclang` forwarded cc1 option.
@@ -127,22 +122,91 @@ struct Forwarded {
     std::unreachable();
 }
 
+/// Groups of indices into `args` to remove, one per removed option, when
+/// the driver reads `args` as one argument list.
+[[nodiscard]] std::vector<std::vector<std::size_t>> removals(const std::vector<std::string>& args) {
+    std::vector<std::vector<std::size_t>> groups;
+    std::size_t i = 0;
+    while (i < args.size()) {
+        const std::size_t width = removal_width(args, i);
+        if (width == 0) {
+            ++i;
+            continue;
+        }
+        std::vector<std::size_t>& group = groups.emplace_back();
+        for (std::size_t k = i; k < i + width && k < args.size(); ++k) {
+            group.push_back(k);
+        }
+        i += width;
+    }
+    return groups;
+}
+
+/// The removals in clang-cl's pass-through list: in CL mode the driver
+/// parses the values of all `/clang:` and `-clang:` arguments, in order, as
+/// a separate list of `clang` driver arguments (LLVM 20.1.2
+/// clang/lib/Driver/Driver.cpp, "In CL mode, look for any pass-through
+/// arguments"; ADR-0021). Checked in any mode: outside CL mode such an
+/// argument is an input file name or an error, so removing it loses nothing.
+[[nodiscard]] std::vector<std::vector<std::size_t>>
+pass_through_removals(const std::vector<std::string>& args) {
+    std::vector<std::string> values;
+    std::vector<std::size_t> positions;
+    for (std::size_t i = 0; i < args.size(); ++i) {
+        const std::string_view argument = args[i];
+        for (const std::string_view prefix : clang_cl_pass_through_prefixes) {
+            if (argument.starts_with(prefix)) {
+                values.emplace_back(argument.substr(prefix.size()));
+                positions.push_back(i);
+                break;
+            }
+        }
+    }
+    std::vector<std::vector<std::size_t>> groups = removals(values);
+    for (std::vector<std::size_t>& group : groups) {
+        for (std::size_t& index : group) {
+            index = positions[index];
+        }
+    }
+    return groups;
+}
+
 } // namespace
 
 FilteredArguments remove_code_loading_arguments(std::vector<std::string> arguments) {
     FilteredArguments result;
-    result.arguments.reserve(arguments.size());
-    std::size_t i = 0;
-    while (i < arguments.size()) {
-        const std::size_t remove = removal_width(arguments, i);
-        if (remove == 0) {
-            result.arguments.push_back(std::move(arguments[i]));
-            ++i;
-            continue;
+    // Repeated until nothing is removed: a removal can leave an -Xclang
+    // forwarding the argument that followed the removed one.
+    while (true) {
+        std::vector<std::vector<std::size_t>> groups = removals(arguments);
+        if (groups.empty()) {
+            groups = pass_through_removals(arguments);
         }
-        result.removed.push_back(join(arguments, i, remove));
-        i += remove;
+        if (groups.empty()) {
+            break;
+        }
+        std::vector<bool> removed(arguments.size(), false);
+        for (const std::vector<std::size_t>& group : groups) {
+            std::string joined;
+            for (const std::size_t index : group) {
+                if (!joined.empty()) {
+                    joined += ' ';
+                }
+                joined += arguments[index];
+                removed[index] = true;
+            }
+            result.removed.push_back(std::move(joined));
+        }
+        std::vector<std::string> kept;
+        kept.reserve(arguments.size());
+        for (std::size_t i = 0; i < arguments.size(); ++i) {
+            if (!removed[i]) {
+                kept.push_back(std::move(arguments[i]));
+            }
+        }
+        arguments = std::move(kept);
     }
+    result.arguments = std::move(arguments);
     return result;
 }
 

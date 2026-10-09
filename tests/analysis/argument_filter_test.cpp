@@ -76,4 +76,41 @@ TEST(ArgumentFilter, DanglingXclangAtEndIsRemoved) {
     EXPECT_EQ(result.removed.size(), 1U);
 }
 
+// clang-cl passes the value of each `/clang:` or `-clang:` argument to the
+// driver as a separate argument list (LLVM 20.1.2 clang/lib/Driver/Driver.cpp,
+// "In CL mode, look for any pass-through arguments"; ADR-0021).
+TEST(ArgumentFilter, RemovesClangClPassThroughPluginOptions) {
+    const auto result = remove_code_loading_arguments(
+        {"clang-cl", "/c", "/clang:-fplugin=/p/a.so", "/DX", "-clang:-fpass-plugin=/p/b.so",
+         "/clang:-fplugin-arg-a-verbose", "/clang:@flags.rsp", "a.cpp"});
+    EXPECT_EQ(result.arguments, (Args{"clang-cl", "/c", "/DX", "a.cpp"}));
+    EXPECT_EQ(result.removed, (Args{"/clang:-fplugin=/p/a.so", "-clang:-fpass-plugin=/p/b.so",
+                                    "/clang:-fplugin-arg-a-verbose", "/clang:@flags.rsp"}));
+}
+
+TEST(ArgumentFilter, RemovesXclangLoadPassedThroughClangCl) {
+    // The pass-through list is -Xclang -load -Xclang /p/a.so; /DX between
+    // its parts is not in it.
+    const auto result =
+        remove_code_loading_arguments({"clang-cl", "/clang:-Xclang", "/clang:-load", "/DX",
+                                       "/clang:-Xclang", "/clang:/p/a.so", "a.cpp"});
+    EXPECT_EQ(result.arguments, (Args{"clang-cl", "/DX", "a.cpp"}));
+    EXPECT_EQ(result.removed, (Args{"/clang:-Xclang /clang:-load /clang:-Xclang /clang:/p/a.so"}));
+}
+
+TEST(ArgumentFilter, KeepsHarmlessClangClPassThroughOptions) {
+    const Args args{"clang-cl", "/clang:-fno-delayed-template-parsing", "/clang:-Xclang",
+                    "/clang:-fno-validate-pch", "a.cpp"};
+    EXPECT_EQ(remove_code_loading_arguments(args).arguments, args);
+}
+
+TEST(ArgumentFilter, RemovesXclangLeftDanglingByARemoval) {
+    // -Xclang forwards the pass-through argument as it stands; once that is
+    // removed, the -Xclang would forward whatever an adjuster appends.
+    const auto result =
+        remove_code_loading_arguments({"clang-cl", "a.cpp", "-Xclang", "/clang:-fplugin=/p/a.so"});
+    EXPECT_EQ(result.arguments, (Args{"clang-cl", "a.cpp"}));
+    EXPECT_EQ(result.removed, (Args{"/clang:-fplugin=/p/a.so", "-Xclang"}));
+}
+
 } // namespace
