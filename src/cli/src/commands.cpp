@@ -355,15 +355,29 @@ std::atomic<bool>& interrupt_requested() {
 }
 static_assert(std::atomic<bool>::is_always_lock_free);
 
+/// Gives SIGINT and SIGTERM their default action again. Called from the
+/// signal handler: uses only sigemptyset() and sigaction(), which POSIX
+/// lists as async-signal-safe, and keeps errno for the code it interrupted.
+void reset_interrupt_handlers() {
+    const int saved_errno = errno;
+    struct sigaction default_action{};
+    default_action.sa_handler = SIG_DFL;
+    sigemptyset(&default_action.sa_mask);
+    ::sigaction(SIGINT, &default_action, nullptr);
+    ::sigaction(SIGTERM, &default_action, nullptr);
+    errno = saved_errno;
+}
+
 void request_interrupt(int /*signal*/) {
     interrupt_requested().store(true);
+    // Any second signal, of either kind, ends lcart at once (ADR-0020).
+    reset_interrupt_handlers();
 }
 
 /// Installs the SIGINT and SIGTERM handler for one analysis, and restores
-/// the earlier handlers afterwards. SA_RESETHAND resets only the signal
-/// delivered: the next signal of the same kind has the default action and
-/// ends the process at once; one of the other kind is another stop request
-/// (ADR-0019; open questions).
+/// the earlier handlers afterwards. The first signal of either kind is a
+/// stop request and resets both to their default action, so the next one
+/// ends the process at once (ADR-0019, ADR-0020).
 class InterruptHandlers {
 public:
     InterruptHandlers() {
@@ -371,6 +385,11 @@ public:
         struct sigaction action{};
         action.sa_handler = &request_interrupt;
         sigemptyset(&action.sa_mask);
+        // Blocked in the thread running the handler until it has reset
+        // both: a second signal then has the default action (ADR-0020).
+        sigaddset(&action.sa_mask, SIGINT);
+        sigaddset(&action.sa_mask, SIGTERM);
+        // SA_RESETHAND resets the signal delivered before the handler runs;
         // SA_RESTART: system calls in Clang and SQLite go on after the signal.
         action.sa_flags = static_cast<int>(SA_RESETHAND | SA_RESTART);
         ::sigaction(SIGINT, &action, &previous_interrupt_);
