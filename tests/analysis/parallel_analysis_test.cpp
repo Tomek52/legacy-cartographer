@@ -1,6 +1,6 @@
 // Parallel, interruptible and resumable analysis (ADR-0019), at the level of
 // the analyzer and the fact store.
-// Verifies: b16-resumable-analysis-v2 (criteria 2-4), nfr005-performance-budget-v2
+// Verifies: b16-resumable-analysis-v2 (criteria 2-4), nfr005-performance-budget-v3
 // (criteria 3 and 4) and nfr004-deterministic-output-v1 (criterion 2).
 #include "analysis/clang_analyzer.hpp"
 #include "config/path_glob.hpp"
@@ -320,7 +320,7 @@ TEST_F(ParallelAnalysisTest, InterruptedRunCommitsTheUnitsDoneInOrder) {
     EXPECT_EQ(value_of(store->coverage()), AnalysisCoverage{});
 }
 
-// Verifies: nfr005-performance-budget-v2 (criterion 4: the export of an
+// Verifies: nfr005-performance-budget-v3 (criterion 4: the export of an
 // interrupted and resumed analysis equals an uninterrupted one, and the
 // units done before are not parsed again, counted in the summary) and
 // b16-resumable-analysis-v2 (ADR-0019: warnings are not repeated).
@@ -353,7 +353,7 @@ TEST_F(ParallelAnalysisTest, ResumedRunExportsWhatAnUninterruptedRunExports) {
     EXPECT_EQ(done_prefix(value_of(store->translation_units())), project_units);
 }
 
-// Verifies: nfr005-performance-budget-v2 (criteria 3 and 4: the progress of
+// Verifies: nfr005-performance-budget-v3 (criteria 3 and 4: the progress of
 // a resumed run counts the units done before as already done, and parses
 // only the others).
 TEST_F(ParallelAnalysisTest, ResumedRunParsesOnlyTheUnitsLeft) {
@@ -375,7 +375,7 @@ TEST_F(ParallelAnalysisTest, ResumedRunParsesOnlyTheUnitsLeft) {
 }
 
 // Verifies: b16-resumable-analysis-v2 (criterion 2: resume continues an
-// unchanged analysis) and nfr005-performance-budget-v2 (criteria 3 and 4)
+// unchanged analysis) and nfr005-performance-budget-v3 (criteria 3 and 4)
 // when two compilation database entries name one file, through a symbolic
 // link: the file is one translation unit, the first in sorted order, so
 // progress, summary and database agree on the total, and resume works.
@@ -603,7 +603,7 @@ TEST_F(ParallelAnalysisTest, StopBeforeTheFirstUnitCommitsNothing) {
     EXPECT_EQ(done_prefix(value_of(store->translation_units())), 0U);
 }
 
-// Verifies: nfr005-performance-budget-v2 (criterion 3: parsed, failed and
+// Verifies: nfr005-performance-budget-v3 (criterion 3: parsed, failed and
 // total units and an estimate of the time left, with the formula of
 // ADR-0019; the clock is injected and reaches no fact).
 TEST_F(ParallelAnalysisTest, ProgressReportsCountsAndAnEstimate) {
@@ -633,7 +633,7 @@ TEST_F(ParallelAnalysisTest, ProgressReportsCountsAndAnEstimate) {
     EXPECT_EQ(reports.back().remaining, 0ms);
 }
 
-// Verifies: nfr005-performance-budget-v2 (criterion 3: reports come no more
+// Verifies: nfr005-performance-budget-v3 (criterion 3: reports come no more
 // often than the interval asks, except the last).
 TEST_F(ParallelAnalysisTest, ProgressWaitsForTheInterval) {
     const fs::path root = write_project();

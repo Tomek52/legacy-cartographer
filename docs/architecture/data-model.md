@@ -134,7 +134,7 @@ erDiagram
   without the LLM.
 - Each TU's facts are committed in one transaction together with its
   `status`, so an interrupted analysis resumes from the TUs still `pending`
-  ([NFR-005](../specs/requirements.md#nfr005-performance-budget-v2)). The
+  ([NFR-005](../specs/requirements.md#nfr005-performance-budget-v3)). The
   per-TU hashes allow incremental re-analysis later.
 - All SQL uses bound parameters; analysed names are never concatenated into
   SQL ([security](../security.md)).

@@ -2,7 +2,7 @@
 
 - **Status:** Accepted; the TU list (one TU per fact path) and the handler for a second signal (of either kind) amended by [ADR-0020](0020-unit-list-and-second-signal.md)
 - **Date:** 2026-10-04
-- **Requirements:** [NFR-005](../specs/requirements.md#nfr005-performance-budget-v2),
+- **Requirements:** [NFR-005](../specs/requirements.md#nfr005-performance-budget-v3),
   [NFR-004](../specs/requirements.md#nfr004-deterministic-output-v1),
   [B-16](../plan/backlog.md#b16-resumable-analysis-v2)
 - **Supersedes / superseded by:** — (confirms the

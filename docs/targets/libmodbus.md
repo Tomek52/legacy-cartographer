@@ -88,7 +88,7 @@ on the 14 translation units: **1.12 s** with a Release build in the CI job
 `libmodbus baseline` (GitHub-hosted `ubuntu-24.04` runner, first run
 2026-10-04), the reference; 1.6 s with a debug build on the 4-core
 development container. The job prints the time on every run. Budget: 60 s
-([NFR-005](../specs/requirements.md#nfr005-performance-budget-v2)).
+([NFR-005](../specs/requirements.md#nfr005-performance-budget-v3)).
 
 **Hand check (B-23, 2026-10-09).** Each function of step 3 was compared
 with the source of the pinned tag (`a9b025d`), read by hand in the copy that
