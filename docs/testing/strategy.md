@@ -23,6 +23,24 @@ and cite the requirement they verify
 
 All tests also run under ASan + UBSan (`asan-ubsan` preset).
 
+All tests also run under ThreadSanitizer (`tsan-system` preset, Clang 20,
+Ubuntu packages; CI job `C++ tsan-system (no Conan)` and `scripts/dod.sh`),
+for the worker pool of
+[ADR-0019](../adr/0019-parallel-resumable-analysis.md#adr0019-one-writer-in-tu-order-v1)
+(B-20). The test preset sets `TSAN_OPTIONS=halt_on_error=1`, so a report
+fails the test; the command-line tests start the `lcart` of the same build,
+which inherits the option. No test is left out.
+
+- Libraries from Ubuntu packages (libLLVM, libclang-cpp, SQLite) are not
+  instrumented: TSan does not see their atomics, so it can report races
+  that are none. There is no suppressions file: such a report is avoided
+  in lcart's code (e.g. LLVM's statistic registry is created on the main
+  thread before the workers start), and a race in lcart is fixed, with a
+  test.
+- If TSan aborts with "unexpected memory mapping", the kernel randomises
+  `mmap` with more bits than TSan's memory layout allows:
+  `sudo sysctl vm.mmap_rnd_bits=28` (the CI job does this).
+
 ### <a id="testing-fixture-rules-v1"></a>Fixture rules
 
 - Each fixture is a minimal project for one concern: `two_modules` (includes,

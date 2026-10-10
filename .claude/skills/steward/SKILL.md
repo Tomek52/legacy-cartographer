@@ -10,7 +10,7 @@ description: Conventions for driving a legacy-cartographer pull request to green
 | CI job | Local command |
 |---|---|
 | `C++ debug`, `clang-debug`, `release`, `asan-ubsan` | `scripts/conan-install.sh <p> && cmake --workflow --preset <p>` (needs Conan Center) |
-| `C++ <p> (no Conan)` | `cmake --workflow --preset <p>` with `<p>` = `debug-system` or `asan-ubsan-system` |
+| `C++ <p> (no Conan)` | `cmake --workflow --preset <p>` with `<p>` = `debug-system`, `asan-ubsan-system` or `tsan-system` |
 | `Targets pinned and clean` | `scripts/check-targets.sh` |
 | `Format + clang-tidy` | `scripts/check-format.sh`, `scripts/run-clang-tidy.sh debug-system` |
 | Fuzz step in `asan-ubsan` jobs | `scripts/fuzz-smoke.sh build/<preset>` (60 s per target) |

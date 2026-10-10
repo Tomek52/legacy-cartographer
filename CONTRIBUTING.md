@@ -35,10 +35,10 @@ LLM-assisted changes follow the same process; the review checklist is in
 ## Definition of Done
 
 - [ ] Acceptance criteria pass; tests cite requirement anchors.
-- [ ] `scripts/dod.sh` reports PASS on every line: `debug-system` and
-      `asan-ubsan-system` builds and tests, fuzz smoke, format, clang-tidy,
-      docs check and the checker's own tests, pinned targets, TODO/NOLINT
-      references.
+- [ ] `scripts/dod.sh` reports PASS on every line: `debug-system`,
+      `asan-ubsan-system` and `tsan-system` builds and tests, fuzz smoke,
+      format, clang-tidy, docs check and the checker's own tests, pinned
+      targets, TODO/NOLINT references.
 - [ ] CI is green on the pull request, including the Conan presets
       `debug`, `clang-debug`, `release` and `asan-ubsan`.
 - [ ] Changed requirements have their `vN` bumped

@@ -29,7 +29,7 @@ expanded in place; its version is bumped if its meaning changes
 | [B-17](#b17-msvc-code-spike-v2) | ✅ MSVC code under Clang: spike and docs | M1 | NFR-013 | B-10 | 4 h |
 | [B-18](#b18-second-signal-of-either-kind-v1) | ✅ ADR-0020: a second signal of either kind ends the analysis | M1 | NFR-005 | B-16 | 2 h |
 | [B-19](#b19-throughput-on-800-units-v1) | ✅ NFR-005 throughput measured on 800 TUs | M1 | NFR-005 | B-16 | 1 h |
-| [B-20](#b20-threadsanitizer-preset-v1) | ThreadSanitizer preset and CI job | M1 | NFR-004, NFR-007 | B-16 | 3 h |
+| [B-20](#b20-threadsanitizer-preset-v1) | ✅ ThreadSanitizer preset and CI job | M1 | NFR-004, NFR-007 | B-16 | 3 h |
 | [B-21](#b21-exposure-warning-for-partial-database-v1) | ✅ Exposure warning for the partial database | M1 | NFR-005 | B-16 | 1 h |
 | [B-22](#b22-mermaid-check-in-ci-v1) | ✅ CI check that committed module maps parse as Mermaid | M1 | FR-007 | B-14 | 2 h |
 | [B-23](#b23-libmodbus-hand-check-v1) | ✅ Hand check of the libmodbus functions | M1 | FR-003, FR-004 | B-14 | 2 h |
@@ -631,6 +631,25 @@ Acceptance criteria:
    too, or documents why not.
 4. The open-questions row is removed; the testing strategy names the
    preset.
+
+Result (2026-10-09): `tsan-system` (`LCART_SANITIZERS=thread`) builds lcart
+and all tests; its test preset sets `TSAN_OPTIONS=halt_on_error=1`, and the
+command-line tests start the `lcart` of the same build, which inherits it.
+The whole suite runs, no test is left out (234 tests, 50 to 70 s of test
+time on 4 cores), with no suppressions file. TSan found no race in lcart's
+worker pool, dispatch window or writer. It did report one race inside
+LLVM's statistic registry (`llvm::TrackingStatistic::RegisterStatistic`,
+reached from two workers parsing at once), which failed 8 command-line
+tests in the one run measured: the registry's lock is an
+`llvm::ManagedStatic` created by whichever worker comes first and published
+through a `std::atomic` inside Ubuntu's uninstrumented libLLVM
+(`llvm/Support/ManagedStatic.h`), which TSan cannot see. `ClangAnalyzer` now
+calls `llvm::GetStatistics()` (`llvm/ADT/Statistic.h`) on the main thread
+before starting the workers, so the registry exists before any worker does;
+the existing command-line tests under this preset are its test (they fail
+without the call). The CI job (matrix entry of `cpp-system`, same packages)
+sets `vm.mmap_rnd_bits=28` first; `scripts/dod.sh` runs the preset by
+default and stops early with that hint when the kernel uses more bits.
 
 ### <a id="b21-exposure-warning-for-partial-database-v1"></a>**[B-21 v1]** Exposure warning for the partial database
 
