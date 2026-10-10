@@ -28,6 +28,7 @@ add_executable(lcart_analysis_tests
     analysis/clang_analyzer_test.cpp
     analysis/function_facts_test.cpp
     analysis/modules_test.cpp
+    analysis/msvc_code_test.cpp
     analysis/parallel_analysis_test.cpp)
 target_link_libraries(lcart_analysis_tests PRIVATE lcart::analysis GTest::gtest_main)
 target_compile_definitions(lcart_analysis_tests PRIVATE

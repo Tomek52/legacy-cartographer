@@ -85,7 +85,12 @@ load_compilation_database(const std::filesystem::path& path) {
     // Expand @file arguments before filtering, so a response file cannot
     // smuggle plugin options past remove_code_loading_arguments(). Only the
     // main thread fetches commands, so the real file system is safe here.
-    return clang::tooling::expandResponseFiles(std::move(database), llvm::vfs::getRealFileSystem());
+    // Then add --driver-mode=cl to commands run as cl.exe or clang-cl, as
+    // Clang's own JSON database plugin does: ClangTool's dependency-file
+    // adjuster drops every -M... argument (cl's -MD, -MT) unless the
+    // command names --driver-mode=cl (ADR-0021).
+    return clang::tooling::inferTargetAndDriverMode(
+        clang::tooling::expandResponseFiles(std::move(database), llvm::vfs::getRealFileSystem()));
 }
 
 /// Whether the translation unit `file` (as the compilation database names
