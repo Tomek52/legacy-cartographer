@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Generate a C project with many translation units and its compile_commands.json.
 
-B-16 / NFR-005: the throughput, memory and 1-vs-4-worker determinism checks
-run on a fixture of at least 200 translation units, generated on the fly
-and never committed.
+B-16, B-19 / NFR-005: the throughput, memory and 1-vs-4-worker determinism
+checks run on a generated fixture (at least 800 translation units for
+throughput, NFR-005 v3), created on the fly and never committed.
 
 The project exercises the cross-TU decisions of the analysis (ADR-0012,
 ADR-0013, ADR-0019): `static` functions with one name in every unit, a

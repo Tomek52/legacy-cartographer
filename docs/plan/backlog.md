@@ -583,7 +583,11 @@ build (as in B-16) on the 4-core development container, fastest of 3 runs:
 The ratio is **2.67×** (target ≥ 2.5×); the exports of 1 and 4 workers are
 identical, and peak memory grows by 7 % with twice the TUs. Both runs are
 slower than B-16's on the same container (9.46 s and 3.67 s), so absolute
-times vary between sessions; the ratio is what the criterion compares.
+times vary between sessions; the ratio is what the criterion compares,
+and it needs an otherwise idle machine (a run beside four other
+compilers gave 1.1× to 2.25×). A repeat on the idle container (load
+average 0.4 at the start) gave 2.61× (13.05 s and 5.00 s). This also answers the B-16 open question
+and replaces the 200-TU fixture named in ADR-0019's consequences.
 
 ### <a id="b20-threadsanitizer-preset-v1"></a>**[B-20 v1]** ThreadSanitizer preset and CI job
 
