@@ -40,7 +40,8 @@ scripts/conan-install.sh debug
 cmake --workflow --preset debug
 
 # Without Conan, from Ubuntu packages (offline machines;
-# presets: debug-system, asan-ubsan-system, tsan-system)
+# presets: debug-system, asan-ubsan-system, tsan-system; tsan-system needs
+# `sudo sysctl vm.mmap_rnd_bits=28` where the kernel uses more bits)
 sudo apt-get install ninja-build g++-14 clang-20 libclang-rt-20-dev \
     llvm-20-dev libclang-20-dev libclang-cpp20-dev \
     libsqlite3-dev nlohmann-json3-dev libtomlplusplus-dev libgtest-dev

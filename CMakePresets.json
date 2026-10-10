@@ -214,7 +214,7 @@
       "name": "tsan-system",
       "configurePreset": "tsan-system",
       "environment": {
-        "TSAN_OPTIONS": "halt_on_error=1 suppressions=${sourceDir}/tests/tsan.supp"
+        "TSAN_OPTIONS": "halt_on_error=1"
       },
       "output": {
         "outputOnFailure": true

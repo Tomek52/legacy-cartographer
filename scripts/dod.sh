@@ -49,6 +49,15 @@ run() { # name, command...
 }
 
 for preset in $presets; do
+    # TSan aborts with "unexpected memory mapping" when mmap is randomised
+    # with more bits than its memory layout allows; say so instead of
+    # failing after the build.
+    if [[ "$preset" == tsan-system ]] &&
+        (($(cat /proc/sys/vm/mmap_rnd_bits 2>/dev/null || echo 0) > 28)); then
+        summary+=("FAIL  build+test $preset  (vm.mmap_rnd_bits > 28; run: sudo sysctl vm.mmap_rnd_bits=28)")
+        failed=1
+        continue
+    fi
     run "build+test $preset" cmake --workflow --preset "$preset"
 done
 if [[ " $presets " == *" asan-ubsan-system "* ]]; then

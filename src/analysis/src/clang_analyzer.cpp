@@ -6,7 +6,9 @@
 
 #include <clang/Tooling/CompilationDatabase.h>
 #include <clang/Tooling/JSONCompilationDatabase.h>
+#include <llvm/ADT/Statistic.h>
 #include <llvm/ADT/StringExtras.h>
+#include <llvm/ADT/StringRef.h>
 #include <llvm/Support/SHA256.h>
 #include <llvm/Support/VirtualFileSystem.h>
 
@@ -667,6 +669,11 @@ common::Status AnalysisRun::analyse_pending() {
     // Declared after `threads`, so destroyed first: closes the pipeline
     // before the threads are joined, also when an exception leaves here.
     const PipelineCloser closer{pipeline};
+    // Creates LLVM's statistic registry (lazily built llvm::ManagedStatic
+    // objects) on this thread before any worker exists. Otherwise the first
+    // workers race to create it inside the uninstrumented libLLVM, whose
+    // atomic publication ThreadSanitizer cannot see and reports (B-20).
+    (void)llvm::GetStatistics();
     if (auto started = start_workers(pipeline, recorders, threads, *request_); !started) {
         return started;
     }

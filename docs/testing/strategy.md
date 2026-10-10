@@ -32,10 +32,10 @@ which inherits the option. No test is left out.
 
 - Libraries from Ubuntu packages (libLLVM, libclang-cpp, SQLite) are not
   instrumented: TSan does not see their atomics, so it can report races
-  that are none. Such reports, and only those, are suppressed in
-  `tests/tsan.supp`, one entry per function of those libraries with the
-  reason. lcart's own functions are never listed there: a race in lcart
-  is fixed, with a test.
+  that are none. There is no suppressions file: such a report is avoided
+  in lcart's code (e.g. LLVM's statistic registry is created on the main
+  thread before the workers start), and a race in lcart is fixed, with a
+  test.
 - If TSan aborts with "unexpected memory mapping", the kernel randomises
   `mmap` with more bits than TSan's memory layout allows:
   `sudo sysctl vm.mmap_rnd_bits=28` (the CI job does this).
