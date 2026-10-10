@@ -58,17 +58,20 @@ counts as local, egress log and dry run
 ### T2. Leaks through output files
 
 - Outputs default to a dedicated directory (`lcart-out/`). The tool warns
-  when an output (the database of `lcart analyze`, the file of `lcart query
-  export --output`, the module map of `lcart map`,
+  when an output (the database of `lcart analyze`, the partial database
+  `.<name>.partial` it writes first and that file's `-journal` file,
+  [ADR-0019](adr/0019-parallel-resumable-analysis.md#adr0019-resume-v1);
+  the file of `lcart query export --output`; the module map of `lcart map`,
   [ADR-0017](adr/0017-module-map-format-and-command-line.md#adr0017-command-line-v1))
-  is inside a git work tree and not ignored. It
+  is inside a git work tree and not ignored, once for each such file: an
+  ignore rule for the database need not cover the other two. It
   reads the work tree's ignore files itself and runs no git command, since
   git can run programs named in the configuration of the (untrusted)
   analysed repository; in doubt it warns
   ([ADR-0016](adr/0016-facts-export-and-command-line.md#adr0016-git-exposure-check-v1)).
   This repository ignores `lcart-out/`, `*.lcart.db` and the partial
-  database an interrupted `lcart analyze` keeps (`*.lcart.db.partial`,
-  [ADR-0019](adr/0019-parallel-resumable-analysis.md#adr0019-resume-v1)).
+  database an interrupted `lcart analyze` keeps, with its journal
+  (`*.lcart.db.partial`, `*.lcart.db.partial-journal`).
 - Documentation states that the fact database and reports are as sensitive
   as the code.
 - Residual risk: users commit generated docs of private code to public
