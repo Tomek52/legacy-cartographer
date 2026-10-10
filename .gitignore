@@ -28,6 +28,9 @@ oom-*
 /.venv-docs/
 __pycache__/
 
+# Node packages of tools/ (installed with npm ci)
+node_modules/
+
 # Editors
 .vscode/
 .idea/
