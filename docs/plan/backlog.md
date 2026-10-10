@@ -30,7 +30,7 @@ expanded in place; its version is bumped if its meaning changes
 | [B-18](#b18-second-signal-of-either-kind-v1) | ✅ ADR-0020: a second signal of either kind ends the analysis | M1 | NFR-005 | B-16 | 2 h |
 | [B-19](#b19-throughput-on-800-units-v1) | NFR-005 throughput measured on 800 TUs | M1 | NFR-005 | B-16 | 1 h |
 | [B-20](#b20-threadsanitizer-preset-v1) | ✅ ThreadSanitizer preset and CI job | M1 | NFR-004, NFR-007 | B-16 | 3 h |
-| [B-21](#b21-exposure-warning-for-partial-database-v1) | Exposure warning for the partial database | M1 | NFR-005 | B-16 | 1 h |
+| [B-21](#b21-exposure-warning-for-partial-database-v1) | ✅ Exposure warning for the partial database | M1 | NFR-005 | B-16 | 1 h |
 | [B-22](#b22-mermaid-check-in-ci-v1) | ✅ CI check that committed module maps parse as Mermaid | M1 | FR-007 | B-14 | 2 h |
 | [B-23](#b23-libmodbus-hand-check-v1) | ✅ Hand check of the libmodbus functions | M1 | FR-003, FR-004 | B-14 | 2 h |
 | [B-24](#b24-clang-tidy-checks-headers-v1) | ✅ clang-tidy checks the project's headers | M1 | NFR-007 | B-02 | 1 h |
@@ -644,6 +644,14 @@ Acceptance criteria:
    database shows the warning; a rule covering both shows none.
 3. Security T2 names the partial database; the open-questions row is
    removed.
+
+Result (2026-10-09): once the partial database is open, before parsing,
+`lcart analyze` runs the T2 check on `.<name>.partial` and on its
+`-journal` file and warns once for each one not ignored, in the wording of
+the database warning; doubt still counts as not ignored. `LcartCliTest`
+shows two warnings with only `facts.lcart.db` in `.gitignore` and none
+with `*.lcart.db*`. [Security T2](../security.md) names both files; the
+open-questions row is removed.
 
 ### <a id="b22-mermaid-check-in-ci-v1"></a>**[B-22 v1]** CI check that committed module maps parse as Mermaid
 

@@ -459,6 +459,12 @@ ExitStatus run_analyze(const AnalyzeCommand& command, std::ostream& out, std::os
     if (!partial) {
         return report(partial.error(), err);
     }
+    // B-21: an ignore rule for the database need not cover the partial
+    // database an interrupted run keeps, nor the -journal file SQLite
+    // writes next to it.
+    warn_if_exposed(partial->file(), "the partial fact database", err);
+    warn_if_exposed(partial->file().string() + "-journal", "the partial fact database's journal",
+                    err);
 
     const InterruptHandlers handlers;
     analysis::AnalysisRequest request{.compilation_database = input->compilation_database,

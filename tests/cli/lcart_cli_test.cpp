@@ -410,6 +410,49 @@ TEST_F(LcartCliTest, WarnsWhenTheDatabaseIsInAWorkTreeAndNotIgnored) {
     EXPECT_EQ(ignored.err.find("not ignored"), std::string::npos) << ignored.err;
 }
 
+// Verifies: b21-exposure-warning-for-partial-database-v1 (criteria 1 and 2:
+// an ignore rule for the database alone leaves the partial database and its
+// -journal file exposed, and each gets the T2 warning).
+TEST_F(LcartCliTest, WarnsWhenThePartialDatabaseIsNotIgnored) {
+    const fs::path repo = work_dir() / "repo";
+    fs::create_directories(repo / ".git");
+    std::ofstream{repo / ".gitignore"} << "facts.lcart.db\n";
+    const fs::path root = fixture("two_modules");
+    const Outcome run =
+        lcart({"analyze", "--root", root.string(), "--compilation-database",
+               write_compilation_database(root, {"app/main.c", "core/core.c"}).string()},
+              repo);
+    EXPECT_EQ(run.status, exit_success) << run.err;
+    const fs::path database = repo / "lcart-out" / "facts.lcart.db";
+    EXPECT_TRUE(fs::is_regular_file(database));
+    const std::string partial = (repo / "lcart-out" / ".facts.lcart.db.partial").string();
+    for (const std::string& exposed : {partial, partial + "-journal"}) {
+        const std::string warning = "lcart: warning: " + exposed + " is inside the git work tree " +
+                                    repo.string() + " and not ignored";
+        const auto first = run.err.find(warning);
+        EXPECT_NE(first, std::string::npos) << exposed << '\n' << run.err;
+        EXPECT_EQ(run.err.find(warning, first + 1), std::string::npos) << run.err;
+    }
+    EXPECT_EQ(run.err.find(database.string() + " is inside"), std::string::npos) << run.err;
+}
+
+// Verifies: b21-exposure-warning-for-partial-database-v1 (criterion 2: a
+// rule covering the database, the partial database and its -journal file
+// leaves no warning).
+TEST_F(LcartCliTest, NoWarningWhenTheRuleCoversThePartialDatabase) {
+    const fs::path repo = work_dir() / "repo";
+    fs::create_directories(repo / ".git");
+    std::ofstream{repo / ".gitignore"} << "*.lcart.db*\n";
+    const fs::path root = fixture("two_modules");
+    const Outcome run =
+        lcart({"analyze", "--root", root.string(), "--compilation-database",
+               write_compilation_database(root, {"app/main.c", "core/core.c"}).string()},
+              repo);
+    EXPECT_EQ(run.status, exit_success) << run.err;
+    EXPECT_TRUE(fs::is_regular_file(repo / "lcart-out" / "facts.lcart.db"));
+    EXPECT_EQ(run.err.find("not ignored"), std::string::npos) << run.err;
+}
+
 // B-12 criterion 1 for the other output: `query export --output`.
 TEST_F(LcartCliTest, WarnsWhenTheExportIsInAWorkTreeAndNotIgnored) {
     const fs::path database = two_modules_database();
