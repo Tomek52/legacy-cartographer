@@ -27,12 +27,13 @@ expanded in place; its version is bumped if its meaning changes
 | [B-15](#b15-requirement-test-traceability-v2) | ✅ Traceability gate and matrix | M1 | NFR-012 | B-03 | 4 h |
 | [B-16](#b16-resumable-analysis-v2) | ✅ Resumable analysis with progress | M1 | NFR-005, NFR-004 | B-12 | 5 h |
 | [B-17](#b17-msvc-code-spike-v2) | ✅ MSVC code under Clang: spike and docs | M1 | NFR-013 | B-10 | 4 h |
-| [B-18](#b18-second-signal-of-either-kind-v1) | ADR-0020: a second signal of either kind ends the analysis | M1 | NFR-005 | B-16 | 2 h |
+| [B-18](#b18-second-signal-of-either-kind-v1) | ✅ ADR-0020: a second signal of either kind ends the analysis | M1 | NFR-005 | B-16 | 2 h |
 | [B-19](#b19-throughput-on-800-units-v1) | NFR-005 throughput measured on 800 TUs | M1 | NFR-005 | B-16 | 1 h |
 | [B-20](#b20-threadsanitizer-preset-v1) | ✅ ThreadSanitizer preset and CI job | M1 | NFR-004, NFR-007 | B-16 | 3 h |
 | [B-21](#b21-exposure-warning-for-partial-database-v1) | Exposure warning for the partial database | M1 | NFR-005 | B-16 | 1 h |
 | [B-22](#b22-mermaid-check-in-ci-v1) | ✅ CI check that committed module maps parse as Mermaid | M1 | FR-007 | B-14 | 2 h |
 | [B-23](#b23-libmodbus-hand-check-v1) | ✅ Hand check of the libmodbus functions | M1 | FR-003, FR-004 | B-14 | 2 h |
+| [B-24](#b24-clang-tidy-checks-headers-v1) | ✅ clang-tidy checks the project's headers | M1 | NFR-007 | B-02 | 1 h |
 
 ## M0
 
@@ -561,6 +562,22 @@ Acceptance criteria:
 3. `lcart --help` describes the second signal; the two open-questions rows
    are removed.
 
+Result (2026-10-09): [ADR-0020](../adr/0020-unit-list-and-second-signal.md)
+records [one TU per fact path](../adr/0020-unit-list-and-second-signal.md#adr0020-tu-list-by-fact-path-v1)
+(the code of B-16, unchanged) and
+[a second signal of either kind](../adr/0020-unit-list-and-second-signal.md#adr0020-second-signal-of-either-kind-v1):
+the handler in `src/cli/src/commands.cpp` now also sets SIGINT and SIGTERM
+to `SIG_DFL` with `sigaction()`, and both are in its `sa_mask`. Tests:
+`SigintThenSigtermEndsLcartAtOnceAndResumeFinishesIt` and
+`SigtermThenSigintEndsLcartAtOnceAndResumeFinishesIt` in
+`tests/cli/lcart_cli_test.cpp` hold the run by filling the socket of its
+standard error, send the first signal, wait until `/proc/<pid>/status`
+shows no handler for either signal, send the second, and expect lcart to
+end by it; `--resume` with 4 workers then gives the export of an
+uninterrupted run. `CommandLine.HelpSaysASecondSignalOfEitherKindEndsLcart`
+checks the help. ADR-0020 notes the remaining window (a second signal
+reaching another thread while the first handler runs).
+
 ### <a id="b19-throughput-on-800-units-v1"></a>**[B-19 v1]** NFR-005 throughput measured on 800 TUs
 
 B-16 measured 2.30× with 4 workers on 200 generated TUs (a run of under a
@@ -691,3 +708,31 @@ Result (2026-10-09): all nine functions match the source of the pinned
 tag: definitions, direct calls and indirect calls; the table is on the
 [libmodbus page](../targets/libmodbus.md#m1-fact-database-and-module-map-no-llm).
 No mismatch, so no new open question.
+
+### <a id="b24-clang-tidy-checks-headers-v1"></a>**[B-24 v1]** clang-tidy checks the project's headers
+
+Found while reviewing B-22 (2026-10-09): in a git worktree,
+`scripts/run-clang-tidy.sh` failed on headers of `src/` that the same run
+in the main clone, and CI, passed. clang-tidy 20 applied `.clang-tidy`'s
+`HeaderFilterRegex` in the worktree but not in the main clone, where it
+dropped every finding in the project's headers as "non-user code".
+
+Acceptance criteria:
+
+1. `scripts/run-clang-tidy.sh` passes the header filter on the command line,
+   so findings in the project's headers are reported in every checkout; it
+   fails if the filter differs from `.clang-tidy`'s.
+2. Every finding that appears with it is fixed, or its check is excluded in
+   `.clang-tidy` with a reason.
+3. `scripts/run-clang-tidy.sh debug-system` passes locally and in CI.
+
+Result (2026-10-09): the only findings in headers were 22 of
+`readability-redundant-member-init`, all `{}` initializers of aggregate
+members (`fact_model.hpp`, `analyzer.hpp`, `command_line.hpp`). They are
+needed: without them GCC 14 (`-Wmissing-field-initializers`) and Clang 20
+(`-Wmissing-designated-field-initializers`), both part of `-Wextra` and
+errors here, warn for a designated initializer that leaves the member out
+(checked on a two-line example and on `parallel_analysis_test.cpp`). The check is excluded with that reason. Why clang-tidy 20 ignored
+the configured filter in the main clone was not found
+([open question](../open-questions.md#open-technical-questions)); the
+explicit option makes it irrelevant.

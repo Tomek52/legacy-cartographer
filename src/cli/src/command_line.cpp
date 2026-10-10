@@ -43,8 +43,8 @@ lcart analyze [--config FILE] [--compilation-database FILE|DIR] [--root DIR]
               the configuration changed
   Progress goes to standard error at least every 30 s. On SIGINT or SIGTERM
   the translation units done so far are kept in .<db name>.partial next to
-  the database, for --resume; a second signal of the same kind (SIGINT
-  again, or SIGTERM again) ends lcart at once.
+  the database, for --resume; a second signal of either kind (SIGINT or
+  SIGTERM) ends lcart at once.
 
 lcart query <query> [--db FILE]
   callers <function>      direct calls of the function, by file and line
