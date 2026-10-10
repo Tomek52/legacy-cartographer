@@ -98,6 +98,7 @@ nav:
       - adr/0017-module-map-format-and-command-line.md
       - adr/0018-facts-export-replaces-only-exports.md
       - adr/0019-parallel-resumable-analysis.md
+      - adr/0020-unit-list-and-second-signal.md
       - adr/0021-clang-flags-and-clang-cl-databases-for-msvc-code.md
   - Testing:
       - testing/index.md

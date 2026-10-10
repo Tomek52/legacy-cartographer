@@ -15,19 +15,23 @@
 #include <sqlite3.h>
 
 #include <algorithm>
+#include <array>
 #include <cerrno>
 #include <chrono>
 #include <csignal>
 #include <cstddef>
+#include <cstdint>
 #include <cstdio>
 #include <fcntl.h>
 #include <filesystem>
 #include <fstream>
+#include <optional>
 #include <spawn.h>
 #include <sstream>
 #include <string>
 #include <string_view>
 #include <sys/file.h>
+#include <sys/socket.h>
 #include <sys/wait.h>
 #include <thread>
 #include <unistd.h>
@@ -900,9 +904,11 @@ private:
 };
 
 /// Starts `program arguments...` in `directory` without a shell, standard
-/// output and error going to `out` and `err`. Returns its pid, or -1.
+/// output and error going to `out` and `err`, or standard error to the
+/// descriptor `err_descriptor` if it is not -1. Returns its pid, or -1.
 pid_t start(const std::string& program, std::vector<std::string> arguments,
-            const fs::path& directory, const fs::path& out, const fs::path& err) {
+            const fs::path& directory, const fs::path& out, const fs::path& err,
+            int err_descriptor = -1) {
     std::string name = program;
     std::vector<char*> argv{name.data()};
     for (std::string& argument : arguments) {
@@ -914,8 +920,12 @@ pid_t start(const std::string& program, std::vector<std::string> arguments,
     posix_spawn_file_actions_addchdir_np(&actions, directory.c_str());
     posix_spawn_file_actions_addopen(&actions, STDOUT_FILENO, out.c_str(),
                                      O_WRONLY | O_CREAT | O_TRUNC, 0600);
-    posix_spawn_file_actions_addopen(&actions, STDERR_FILENO, err.c_str(),
-                                     O_WRONLY | O_CREAT | O_TRUNC, 0600);
+    if (err_descriptor >= 0) {
+        posix_spawn_file_actions_adddup2(&actions, err_descriptor, STDERR_FILENO);
+    } else {
+        posix_spawn_file_actions_addopen(&actions, STDERR_FILENO, err.c_str(),
+                                         O_WRONLY | O_CREAT | O_TRUNC, 0600);
+    }
     pid_t pid = -1;
     const int spawned = posix_spawnp(&pid, name.c_str(), &actions, nullptr, argv.data(), environ);
     posix_spawn_file_actions_destroy(&actions);
@@ -970,6 +980,74 @@ int done_units(const fs::path& path) {
     return done;
 }
 
+/// Whether process `pid` has a handler for `signal`: its bit in the SigCgt
+/// mask of /proc/<pid>/status (proc(5)). Empty if that cannot be read.
+std::optional<bool> catches(pid_t pid, int signal) {
+    std::ifstream status{"/proc/" + std::to_string(pid) + "/status"};
+    constexpr std::string_view key = "SigCgt:";
+    for (std::string line; std::getline(status, line);) {
+        if (line.starts_with(key)) {
+            constexpr int hexadecimal = 16;
+            const std::uint64_t mask = std::stoull(line.substr(key.size()), nullptr, hexadecimal);
+            return ((mask >> (signal - 1)) & 1U) != 0;
+        }
+    }
+    return std::nullopt;
+}
+
+/// Closes the descriptor it holds.
+class Descriptor {
+public:
+    explicit Descriptor(int descriptor) : descriptor_{descriptor} {}
+    Descriptor(const Descriptor&) = delete;
+    Descriptor& operator=(const Descriptor&) = delete;
+    Descriptor(Descriptor&&) = delete;
+    Descriptor& operator=(Descriptor&&) = delete;
+    ~Descriptor() { close(); }
+
+    [[nodiscard]] int get() const { return descriptor_; }
+    void close() {
+        if (descriptor_ >= 0) {
+            static_cast<void>(::close(descriptor_));
+            descriptor_ = -1;
+        }
+    }
+
+private:
+    int descriptor_;
+};
+
+/// Reads what is available on the socket `descriptor` into `text`, without
+/// waiting. True at the end of file: every other end is closed.
+bool read_available(int descriptor, std::string& text) {
+    std::array<char, 4096> buffer{};
+    ssize_t got = 0;
+    while ((got = ::recv(descriptor, buffer.data(), buffer.size(), MSG_DONTWAIT)) > 0) {
+        text.append(buffer.data(), static_cast<std::size_t>(got));
+    }
+    return got == 0;
+}
+
+/// Sends to the socket `descriptor` without waiting until its buffer is
+/// full: a blocking write of even one byte to it then waits for a reader.
+void fill_socket(int descriptor) {
+    const std::string page(4096, '.');
+    constexpr int no_wait = MSG_DONTWAIT | MSG_NOSIGNAL;
+    while (::send(descriptor, page.data(), page.size(), no_wait) > 0) {
+    }
+    while (::send(descriptor, page.data(), 1, no_wait) > 0) {
+    }
+    EXPECT_TRUE(errno == EAGAIN || errno == EWOULDBLOCK) << "errno " << errno;
+}
+
+/// Expects the wait status `wait_status` to say that `signal` ended the
+/// process.
+void expect_ended_by(int wait_status, int signal) {
+    ASSERT_TRUE(WIFSIGNALED(wait_status))
+        << "exit status " << (WIFEXITED(wait_status) ? WEXITSTATUS(wait_status) : -1);
+    EXPECT_EQ(WTERMSIG(wait_status), signal);
+}
+
 /// Changes one META value of the fact database at `path`.
 void set_meta(const fs::path& path, const std::string& key, const std::string& value) {
     sqlite3* database = nullptr;
@@ -1015,13 +1093,15 @@ protected:
                       work_dir() / "run.err");
     }
 
+    /// Standard error goes to run.err, or to `err_descriptor` if it is not -1.
     [[nodiscard]] pid_t start_analyze(const fs::path& root, const fs::path& database,
-                                      const std::vector<std::string>& options) const {
+                                      const std::vector<std::string>& options,
+                                      int err_descriptor = -1) const {
         std::vector<std::string> arguments{"analyze", "--root", root.string(), "--db",
                                            database.string()};
         arguments.insert(arguments.end(), options.begin(), options.end());
         return start(LCART_EXECUTABLE, arguments, work_dir(), work_dir() / "run.out",
-                     work_dir() / "run.err");
+                     work_dir() / "run.err", err_descriptor);
     }
 
     [[nodiscard]] static fs::path partial_of(const fs::path& database) {
@@ -1080,6 +1160,104 @@ protected:
             std::this_thread::sleep_for(std::chrono::milliseconds{1});
         }
         return false;
+    }
+
+    /// Waits until `condition()` holds while `pid` runs, or a minute has
+    /// passed. True if it held.
+    template <typename Condition>
+    [[nodiscard]] static bool wait_while_running(pid_t pid, Condition condition) {
+        const auto deadline = std::chrono::steady_clock::now() + std::chrono::minutes{1};
+        while (std::chrono::steady_clock::now() < deadline) {
+            if (condition()) {
+                return true;
+            }
+            // WNOWAIT: an ended run stays waitable.
+            siginfo_t info{};
+            if (waitid(P_PID, static_cast<id_t>(pid), &info, WEXITED | WNOHANG | WNOWAIT) != 0 ||
+                info.si_pid != 0) {
+                return false; // ended, or not our child
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds{1});
+        }
+        return false;
+    }
+
+    /// Analyses the project of `reference` into `database` with standard
+    /// error on a socket. Once the first unit is committed, fills that
+    /// socket, so that lcart's next write to standard error blocks and the
+    /// run cannot end by itself; sends `first`, waits until lcart has no
+    /// handler left for SIGINT and SIGTERM, then sends `second`. Returns
+    /// lcart's wait status.
+    [[nodiscard]] int stop_twice(const Reference& reference, const fs::path& database, int first,
+                                 int second) const {
+        std::array<int, 2> ends{-1, -1};
+        if (socketpair(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0, ends.data()) != 0) {
+            ADD_FAILURE() << "no socket pair: errno " << errno;
+            return -1;
+        }
+        const Descriptor test_end{ends[0]};
+        Descriptor lcart_end{ends[1]};
+        const pid_t pid = start_analyze(reference.root, database, {"--jobs", "1"}, lcart_end.get());
+        if (pid <= 0) {
+            // kill(-1, ...) would signal every process we may signal.
+            ADD_FAILURE() << "lcart did not start";
+            return -1;
+        }
+        hold_after_first_commit(pid, test_end.get(), lcart_end);
+        send_twice(pid, first, second);
+        return wait_after_releasing(pid, test_end.get());
+    }
+
+    /// Waits until the analysis `pid`, whose standard error the test reads
+    /// from `test_end`, has committed a unit; then fills the socket through
+    /// `lcart_end` and closes the test's copy of that end.
+    static void hold_after_first_commit(pid_t pid, int test_end, Descriptor& lcart_end) {
+        std::string err;
+        EXPECT_TRUE(wait_while_running(pid, [&] {
+            read_available(test_end, err);
+            return err.find("lcart: warning:") != std::string::npos;
+        })) << "no unit committed";
+        fill_socket(lcart_end.get());
+        lcart_end.close();
+    }
+
+    /// Sends `first` to `pid`, waits until it has no handler left for
+    /// SIGINT and SIGTERM, and sends `second`.
+    static void send_twice(pid_t pid, int first, int second) {
+        EXPECT_EQ(kill(pid, first), 0);
+        EXPECT_TRUE(wait_while_running(pid, [pid] {
+            return catches(pid, SIGINT) == false && catches(pid, SIGTERM) == false;
+        })) << "lcart still has a handler for SIGINT or SIGTERM";
+        EXPECT_EQ(kill(pid, second), 0);
+    }
+
+    /// Reads the standard error of `pid` from `test_end`, which lets it
+    /// write again in case it did not end, and returns its wait status.
+    [[nodiscard]] static int wait_after_releasing(pid_t pid, int test_end) {
+        std::string err;
+        const bool ended = wait_while_running(pid, [&] { return read_available(test_end, err); });
+        EXPECT_TRUE(ended) << "lcart did not end";
+        if (!ended) {
+            EXPECT_EQ(kill(pid, SIGKILL), 0);
+        }
+        int wait_status = 0;
+        while (waitpid(pid, &wait_status, 0) < 0 && errno == EINTR) {
+        }
+        return wait_status;
+    }
+
+    /// Ends an analysis of a generated project with `first` and then
+    /// `second`, expects `second` to end it at once, then resumes it and
+    /// checks that the result equals an uninterrupted analysis.
+    void stop_twice_and_resume(int first, int second) const {
+        const Reference uninterrupted = reference(interrupted_units);
+        const fs::path database = work_dir() / "facts.lcart.db";
+        expect_ended_by(stop_twice(uninterrupted, database, first, second), second);
+        EXPECT_FALSE(fs::exists(database));
+        const int done = done_units(partial_of(database));
+        EXPECT_GT(done, 0) << "ended before the first unit";
+        EXPECT_LT(done, interrupted_units) << "ended after the last unit";
+        expect_resume_finishes(uninterrupted, database, done, "4");
     }
 
     /// Analyses the project of `reference` into `database`, sends `signal`
@@ -1162,6 +1340,22 @@ TEST_F(LcartAnalyzeRunTest, SigintEndsTheRunCleanlyAndResumeFinishesIt) {
 // nfr005-performance-budget-v2 (criterion 4).
 TEST_F(LcartAnalyzeRunTest, SigtermEndsTheRunCleanlyAndResumeFinishesIt) {
     interrupt_and_resume(SIGTERM, "1");
+}
+
+// Verifies: b18-second-signal-of-either-kind-v1 (criterion 2: SIGINT and
+// then SIGTERM end lcart by SIGTERM; --resume then finishes the analysis
+// with the export of an uninterrupted run),
+// adr0020-second-signal-of-either-kind-v1 and nfr005-performance-budget-v2
+// (criterion 4: the resumed export equals an uninterrupted one).
+TEST_F(LcartAnalyzeRunTest, SigintThenSigtermEndsLcartAtOnceAndResumeFinishesIt) {
+    stop_twice_and_resume(SIGINT, SIGTERM);
+}
+
+// Verifies: b18-second-signal-of-either-kind-v1 (criterion 2, SIGTERM and
+// then SIGINT), adr0020-second-signal-of-either-kind-v1 and
+// nfr005-performance-budget-v2 (criterion 4).
+TEST_F(LcartAnalyzeRunTest, SigtermThenSigintEndsLcartAtOnceAndResumeFinishesIt) {
+    stop_twice_and_resume(SIGTERM, SIGINT);
 }
 
 // Verifies: b16-resumable-analysis-v2 (criteria 1 and 4: the generated

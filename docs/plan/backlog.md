@@ -27,7 +27,7 @@ expanded in place; its version is bumped if its meaning changes
 | [B-15](#b15-requirement-test-traceability-v2) | ✅ Traceability gate and matrix | M1 | NFR-012 | B-03 | 4 h |
 | [B-16](#b16-resumable-analysis-v2) | ✅ Resumable analysis with progress | M1 | NFR-005, NFR-004 | B-12 | 5 h |
 | [B-17](#b17-msvc-code-spike-v2) | ✅ MSVC code under Clang: spike and docs | M1 | NFR-013 | B-10 | 4 h |
-| [B-18](#b18-second-signal-of-either-kind-v1) | ADR-0020: a second signal of either kind ends the analysis | M1 | NFR-005 | B-16 | 2 h |
+| [B-18](#b18-second-signal-of-either-kind-v1) | ✅ ADR-0020: a second signal of either kind ends the analysis | M1 | NFR-005 | B-16 | 2 h |
 | [B-19](#b19-throughput-on-800-units-v1) | NFR-005 throughput measured on 800 TUs | M1 | NFR-005 | B-16 | 1 h |
 | [B-20](#b20-threadsanitizer-preset-v1) | ThreadSanitizer preset and CI job | M1 | NFR-004, NFR-007 | B-16 | 3 h |
 | [B-21](#b21-exposure-warning-for-partial-database-v1) | Exposure warning for the partial database | M1 | NFR-005 | B-16 | 1 h |
@@ -560,6 +560,22 @@ Acceptance criteria:
    uninterrupted run.
 3. `lcart --help` describes the second signal; the two open-questions rows
    are removed.
+
+Result (2026-10-09): [ADR-0020](../adr/0020-unit-list-and-second-signal.md)
+records [one TU per fact path](../adr/0020-unit-list-and-second-signal.md#adr0020-tu-list-by-fact-path-v1)
+(the code of B-16, unchanged) and
+[a second signal of either kind](../adr/0020-unit-list-and-second-signal.md#adr0020-second-signal-of-either-kind-v1):
+the handler in `src/cli/src/commands.cpp` now also sets SIGINT and SIGTERM
+to `SIG_DFL` with `sigaction()`, and both are in its `sa_mask`. Tests:
+`SigintThenSigtermEndsLcartAtOnceAndResumeFinishesIt` and
+`SigtermThenSigintEndsLcartAtOnceAndResumeFinishesIt` in
+`tests/cli/lcart_cli_test.cpp` hold the run by filling the socket of its
+standard error, send the first signal, wait until `/proc/<pid>/status`
+shows no handler for either signal, send the second, and expect lcart to
+end by it; `--resume` with 4 workers then gives the export of an
+uninterrupted run. `CommandLine.HelpSaysASecondSignalOfEitherKindEndsLcart`
+checks the help. ADR-0020 notes the remaining window (a second signal
+reaching another thread while the first handler runs).
 
 ### <a id="b19-throughput-on-800-units-v1"></a>**[B-19 v1]** NFR-005 throughput measured on 800 TUs
 
