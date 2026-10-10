@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Measure `lcart analyze` on generated projects (B-16, NFR-005 criteria 2 and 5).
+"""Measure `lcart analyze` on generated projects (B-16, B-19; NFR-005 criteria 2 and 5).
 
 Generates projects with scripts/gen-many-tus.py in a temporary directory and
 reports, as Markdown:
@@ -56,7 +56,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--lcart", type=pathlib.Path,
                         default=ROOT / "build" / "debug-system" / "src" / "cli" / "lcart")
-    parser.add_argument("--units", type=int, default=200)
+    parser.add_argument("--units", type=int, default=800)
     parser.add_argument("--runs", type=int, default=3,
                         help="runs per measurement; the fastest counts (default 3)")
     args = parser.parse_args()

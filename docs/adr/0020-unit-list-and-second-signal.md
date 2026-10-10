@@ -2,7 +2,7 @@
 
 - **Status:** Accepted
 - **Date:** 2026-10-09
-- **Requirements:** [NFR-005](../specs/requirements.md#nfr005-performance-budget-v2),
+- **Requirements:** [NFR-005](../specs/requirements.md#nfr005-performance-budget-v3),
   [NFR-004](../specs/requirements.md#nfr004-deterministic-output-v1),
   [B-18](../plan/backlog.md#b18-second-signal-of-either-kind-v1)
 - **Supersedes / superseded by:** — (amends

@@ -1372,7 +1372,7 @@ protected:
 
 // Verifies: b16-resumable-analysis-v2 (criterion 3: SIGINT ends the run
 // cleanly, completed units are committed, the summary is printed, exit
-// status 5) and nfr005-performance-budget-v2 (criteria 3 and 4: progress
+// status 5) and nfr005-performance-budget-v3 (criteria 3 and 4: progress
 // and summary; the resumed export equals an uninterrupted one and units
 // done before are not parsed again, counted in the summary).
 TEST_F(LcartAnalyzeRunTest, SigintEndsTheRunCleanlyAndResumeFinishesIt) {
@@ -1380,7 +1380,7 @@ TEST_F(LcartAnalyzeRunTest, SigintEndsTheRunCleanlyAndResumeFinishesIt) {
 }
 
 // Verifies: b16-resumable-analysis-v2 (criterion 3, for SIGTERM) and
-// nfr005-performance-budget-v2 (criterion 4).
+// nfr005-performance-budget-v3 (criterion 4).
 TEST_F(LcartAnalyzeRunTest, SigtermEndsTheRunCleanlyAndResumeFinishesIt) {
     interrupt_and_resume(SIGTERM, "1");
 }
@@ -1388,7 +1388,7 @@ TEST_F(LcartAnalyzeRunTest, SigtermEndsTheRunCleanlyAndResumeFinishesIt) {
 // Verifies: b18-second-signal-of-either-kind-v1 (criterion 2: SIGINT and
 // then SIGTERM end lcart by SIGTERM; --resume then finishes the analysis
 // with the export of an uninterrupted run),
-// adr0020-second-signal-of-either-kind-v1 and nfr005-performance-budget-v2
+// adr0020-second-signal-of-either-kind-v1 and nfr005-performance-budget-v3
 // (criterion 4: the resumed export equals an uninterrupted one).
 TEST_F(LcartAnalyzeRunTest, SigintThenSigtermEndsLcartAtOnceAndResumeFinishesIt) {
     stop_twice_and_resume(SIGINT, SIGTERM);
@@ -1396,7 +1396,7 @@ TEST_F(LcartAnalyzeRunTest, SigintThenSigtermEndsLcartAtOnceAndResumeFinishesIt)
 
 // Verifies: b18-second-signal-of-either-kind-v1 (criterion 2, SIGTERM and
 // then SIGINT), adr0020-second-signal-of-either-kind-v1 and
-// nfr005-performance-budget-v2 (criterion 4).
+// nfr005-performance-budget-v3 (criterion 4).
 TEST_F(LcartAnalyzeRunTest, SigtermThenSigintEndsLcartAtOnceAndResumeFinishesIt) {
     stop_twice_and_resume(SIGTERM, SIGINT);
 }

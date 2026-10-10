@@ -358,7 +358,7 @@ Acceptance criteria:
 3. No timestamps in exported facts; the report's generation time is in a
    separate metadata block.
 
-#### <a id="nfr005-performance-budget-v2"></a>**[NFR-005 v2]** Performance and long runs
+#### <a id="nfr005-performance-budget-v3"></a>**[NFR-005 v3]** Performance and long runs
 
 The tool shall analyse libmodbus (about 5.8 kLOC in `src/` at v3.2.0) in
 under 60 seconds on a 4-core developer machine. For large code bases, where
@@ -370,9 +370,11 @@ Acceptance criteria:
 
 1. CI prints the analysis time for libmodbus; a regression above 2× the
    recorded baseline fails the job.
-2. On a generated fixture of at least 200 translation units, throughput
-   (TUs per minute) is reported for 1 and 4 workers; the target is ≥ 2.5×
-   for 4 workers (confirmed or revised in B-16).
+2. On a generated fixture of at least 800 translation units, throughput
+   (TUs per minute) is reported for 1 and 4 workers; with 4 workers it is
+   at least 2.5 times that with 1 worker (version 3: measured on 800
+   instead of 200 TUs, whose run of under a second is dominated by
+   start-up; B-19).
 3. While analysing, the tool prints parsed / failed / total TUs and an
    estimated time remaining at least every 30 seconds, and a summary when
    interrupted.

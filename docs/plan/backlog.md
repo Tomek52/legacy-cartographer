@@ -28,7 +28,7 @@ expanded in place; its version is bumped if its meaning changes
 | [B-16](#b16-resumable-analysis-v2) | ✅ Resumable analysis with progress | M1 | NFR-005, NFR-004 | B-12 | 5 h |
 | [B-17](#b17-msvc-code-spike-v2) | MSVC code under Clang: spike and docs | M1 | NFR-013 | B-10 | 4 h |
 | [B-18](#b18-second-signal-of-either-kind-v1) | ✅ ADR-0020: a second signal of either kind ends the analysis | M1 | NFR-005 | B-16 | 2 h |
-| [B-19](#b19-throughput-on-800-units-v1) | NFR-005 throughput measured on 800 TUs | M1 | NFR-005 | B-16 | 1 h |
+| [B-19](#b19-throughput-on-800-units-v1) | ✅ NFR-005 throughput measured on 800 TUs | M1 | NFR-005 | B-16 | 1 h |
 | [B-20](#b20-threadsanitizer-preset-v1) | ThreadSanitizer preset and CI job | M1 | NFR-004, NFR-007 | B-16 | 3 h |
 | [B-21](#b21-exposure-warning-for-partial-database-v1) | ✅ Exposure warning for the partial database | M1 | NFR-005 | B-16 | 1 h |
 | [B-22](#b22-mermaid-check-in-ci-v1) | CI check that committed module maps parse as Mermaid | M1 | FR-007 | B-14 | 2 h |
@@ -406,7 +406,7 @@ cited and passing, NFR-001, NFR-005 and NFR-013 not yet cited by a test.
 
 ### <a id="b16-resumable-analysis-v2"></a>**[B-16 v2]** Resumable analysis with progress
 
-Acceptance criteria: those of [NFR-005](../specs/requirements.md#nfr005-performance-budget-v2)
+Acceptance criteria: those of [NFR-005](../specs/requirements.md#nfr005-performance-budget-v3)
 parts 2–5, plus:
 
 1. A generator script creates the ≥ 200-TU fixture on the fly (not
@@ -569,6 +569,21 @@ Acceptance criteria:
    ratio is ≥ 2.5×. If it is not, the item stops there and the target goes
    to the owner as a question (revising it is the owner's decision).
 3. The open-questions row is removed.
+
+Result (2026-10-10): NFR-005 v3 measures criterion 2 on 800 TUs, and
+`scripts/measure-analysis.py` uses 800 by default. Measured with a Release
+build (as in B-16) on the 4-core development container, fastest of 3 runs:
+
+| Project | Workers | Wall time | TUs per minute | Peak RSS |
+|---|---|---|---|---|
+| 800 TUs | 1 | 13.75 s | 3491 | 93 MiB |
+| 800 TUs | 4 | 5.15 s | 9319 | 101 MiB |
+| 1600 TUs | 4 | | | 108 MiB |
+
+The ratio is **2.67×** (target ≥ 2.5×); the exports of 1 and 4 workers are
+identical, and peak memory grows by 7 % with twice the TUs. Both runs are
+slower than B-16's on the same container (9.46 s and 3.67 s), so absolute
+times vary between sessions; the ratio is what the criterion compares.
 
 ### <a id="b20-threadsanitizer-preset-v1"></a>**[B-20 v1]** ThreadSanitizer preset and CI job
 

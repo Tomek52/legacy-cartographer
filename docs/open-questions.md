@@ -33,7 +33,7 @@ moving the answer into the relevant spec or ADR and deleting it here.
 | Undefined behaviour in toml++ 3.4.0 on malformed input | `lcart.toml` is ASCII and toml++'s assertions are off until a fixed release is packaged | [ADR-0015](adr/0015-ascii-configuration-while-tomlplusplus-3-4.md) |
 | Paths of files outside the analysis root in the facts export | the spelling of the first directive that includes the file, `#2`... if taken, no hash; translation unit and diagnostic paths stored like file paths, diagnostics linked to their file | [ADR-0016](adr/0016-facts-export-and-command-line.md#adr0016-paths-outside-root-v1) (Accepted) |
 | Function with external linkage defined in several translation units | each definition is a function with its own calls; the analysis warns | [ADR-0013](adr/0013-functions-with-external-linkage-defined-twice.md) |
-| Performance for large code bases | hours or days are acceptable; the tool must use all cores, show progress and resume interrupted runs; incremental re-analysis later | [NFR-005](specs/requirements.md#nfr005-performance-budget-v2) |
+| Performance for large code bases | hours or days are acceptable; the tool must use all cores, show progress and resume interrupted runs; incremental re-analysis later | [NFR-005](specs/requirements.md#nfr005-performance-budget-v3) |
 
 ## Questions for the maintainer
 
@@ -48,7 +48,6 @@ moving the answer into the relevant spec or ADR and deleting it here.
 | Detect source files edited between an interrupted analysis and `--resume` (check `translation_unit.inputs_sha256`)? Today a resumed run mixes old and new code. | [ADR-0019](adr/0019-parallel-resumable-analysis.md#adr0019-resume-v1) | M2 |
 | Run each translation unit in a child process so a Clang crash cannot end the run? Costs process start-up per TU. | [security T5](security.md), [ADR-0019](adr/0019-parallel-resumable-analysis.md#adr0019-interrupt-v1) | M2 (one process for now; a TU that always crashes Clang blocks `--resume`) |
 | How to show paths of files outside the analysis root (stored absolute, e.g. Clang's resource directory or a home directory) in handoff bundles? The export's rule (spelling of the first directive, [ADR-0016](adr/0016-facts-export-and-command-line.md#adr0016-paths-outside-root-v1)) is the candidate. | [file facts](architecture/data-model.md#arch-data-model-file-facts-v1), [security](security.md) | M2 (bundles) |
-| NFR-005 criterion 2 asks for ≥ 2.5× throughput with 4 workers "confirmed or revised in B-16". Measured 2.30× on the 200-TU generated fixture (a run of under a second) and 2.58× on 800 TUs: keep the target, measure on a larger fixture, or revise it? | [B-16 result](plan/backlog.md#b16-resumable-analysis-v2), [NFR-005](specs/requirements.md#nfr005-performance-budget-v2) | M1 end |
 | The worker pool (threads, condition variables, dispatch window) has no ThreadSanitizer run: there is no TSan preset. Add one, at least for `parallel_analysis_test.cpp`? | [ADR-0019](adr/0019-parallel-resumable-analysis.md#adr0019-one-writer-in-tu-order-v1), [NFR-004](specs/requirements.md#nfr004-deterministic-output-v1) | M1 end |
 
 ## Not verified yet ("TODO: verify")
