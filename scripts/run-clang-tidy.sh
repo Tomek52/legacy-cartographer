@@ -14,6 +14,15 @@ if [[ ! -f "$build_dir/compile_commands.json" ]]; then
     exit 2
 fi
 
+# The header filter is passed explicitly: clang-tidy 20 did not apply
+# HeaderFilterRegex from .clang-tidy in every checkout (it did in a git
+# worktree, not in the main clone), so findings in the project's own headers
+# were dropped as "non-user code" (B-24). Keep it equal to .clang-tidy's.
+header_filter='.*/(src|tests|fuzz)/.*'
+grep -qxF "HeaderFilterRegex: '$header_filter'" .clang-tidy ||
+    { echo "run-clang-tidy: header filter differs from .clang-tidy" >&2; exit 2; }
+
 git ls-files -- 'src/*.cpp' 'tests/*.cpp' 'fuzz/*.cpp' \
-    | xargs --no-run-if-empty -n 1 -P "$(nproc)" "$clang_tidy" -p "$build_dir" --quiet
+    | xargs --no-run-if-empty -n 1 -P "$(nproc)" "$clang_tidy" -p "$build_dir" --quiet \
+        --header-filter="$header_filter"
 echo "run-clang-tidy: OK"
