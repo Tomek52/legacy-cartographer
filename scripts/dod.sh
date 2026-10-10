@@ -5,14 +5,14 @@
 # release, asan-ubsan) and CodeQL. A pull request is done only when CI is
 # green as well.
 #
-# Usage: [PRESETS="debug-system asan-ubsan-system"] [BASE=origin/main]
-#        [DOD_NO_ADD=1] scripts/dod.sh
+# Usage: [PRESETS="debug-system asan-ubsan-system tsan-system"]
+#        [BASE=origin/main] [DOD_NO_ADD=1] scripts/dod.sh
 # DOD_NO_ADD=1 leaves the git index alone (for read-only reviewers); new
 # untracked files are then not format- or tidy-checked.
 set -uo pipefail
 cd "$(dirname "$0")/.."
 
-presets="${PRESETS:-debug-system asan-ubsan-system}"
+presets="${PRESETS:-debug-system asan-ubsan-system tsan-system}"
 base="${BASE:-origin/main}"
 log_dir="build/logs"
 mkdir -p "$log_dir"
@@ -49,6 +49,15 @@ run() { # name, command...
 }
 
 for preset in $presets; do
+    # TSan aborts with "unexpected memory mapping" when mmap is randomised
+    # with more bits than its memory layout allows; say so instead of
+    # failing after the build.
+    if [[ "$preset" == tsan-system ]] &&
+        (($(cat /proc/sys/vm/mmap_rnd_bits 2>/dev/null || echo 0) > 28)); then
+        summary+=("FAIL  build+test $preset  (vm.mmap_rnd_bits > 28; run: sudo sysctl vm.mmap_rnd_bits=28)")
+        failed=1
+        continue
+    fi
     run "build+test $preset" cmake --workflow --preset "$preset"
 done
 if [[ " $presets " == *" asan-ubsan-system "* ]]; then

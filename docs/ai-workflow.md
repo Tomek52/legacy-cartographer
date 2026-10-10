@@ -87,10 +87,10 @@ in other words; when a rule changes, change it at its source.
 
 - Acceptance criteria of the backlog item pass, with tests that cite the
   requirement anchors.
-- `scripts/dod.sh` is all PASS (GCC and Clang with ASan/UBSan from Ubuntu
-  packages, format, clang-tidy, docs check, targets), and CI is green on
-  the pull request (adds the Conan presets `debug`, `clang-debug`,
-  `release`, `asan-ubsan`).
+- `scripts/dod.sh` is all PASS (GCC, Clang with ASan/UBSan and Clang with
+  TSan from Ubuntu packages, format, clang-tidy, docs check, targets), and
+  CI is green on the pull request (adds the Conan presets `debug`,
+  `clang-debug`, `release`, `asan-ubsan`).
 - New decisions have an ADR; docs, roadmap checkboxes and open questions are
   updated.
 - No `TODO` without a backlog or milestone reference (`TODO(B-07)`,
