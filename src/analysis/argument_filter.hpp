@@ -12,13 +12,15 @@ struct FilteredArguments {
 
 /// Removes compiler arguments that would load code into the analysing
 /// process: plugins and pass plugins, in driver form (`-fplugin=`), as cc1
-/// options passed with `-Xclang` / `-Xclang=`, or bare in a `-cc1` command,
-/// and the same inside clang-cl's pass-through arguments (`/clang:<arg>`,
-/// `-clang:<arg>`, ADR-0021). Also removes `@file` arguments: response files
-/// must be expanded before filtering, so one left over cannot be checked
-/// (docs/security.md, T5). Removal is repeated until nothing is left to
-/// remove, so an `-Xclang` is never left forwarding what followed a removed
-/// argument.
+/// options passed with `-Xclang` / `-Xclang=` / `-Xpreprocessor`, in a
+/// `-Wp,` list (the whole `-Wp,` argument is removed), or bare in a `-cc1`
+/// command, and the same inside clang-cl's pass-through arguments
+/// (`/clang:<arg>`, `-clang:<arg>`, ADR-0021). Also removes `@file`
+/// arguments: response files must be expanded before filtering, so one left
+/// over cannot be checked (docs/security.md, T5). An `-Xclang` or
+/// `-Xpreprocessor` right before a removed argument is removed with it, so
+/// it never forwards what followed; removal is repeated until nothing is
+/// left to remove.
 ///
 /// The option list was taken from `clang-20 --help-hidden` and
 /// `clang-20 -cc1 --help` (2026-10-03). Arguments are otherwise unchanged.

@@ -137,10 +137,14 @@ to make it *do* something: delete files, run a command, send data to a URL.
   `clang-20 --help-hidden` and `clang-20 -cc1 --help`: driver options
   `-fplugin=`, `-fpass-plugin=`, `--hipspv-pass-plugin=`, `-fplugin-arg-*`;
   cc1 options `-load`, `-plugin`, `-add-plugin`, `-plugin-arg-*`,
-  `-fpass-plugin=`, whether passed with `-Xclang`, `-Xclang=` or bare in a
-  `-cc1` command, and the same inside clang-cl's pass-through arguments
-  `/clang:` and `-clang:` (B-17,
+  `-fpass-plugin=`, whether passed with `-Xclang`, `-Xclang=` or
+  `-Xpreprocessor`, in a `-Wp,` list (the driver copies both into the cc1
+  command; the whole `-Wp,` argument is removed), or bare in a `-cc1`
+  command, and the same inside clang-cl's pass-through arguments `/clang:`
+  and `-clang:` (B-17,
   [ADR-0021](adr/0021-clang-flags-and-clang-cl-databases-for-msvc-code.md#adr0021-pass-through-filtered-v1)).
+  An `-Xclang` or `-Xpreprocessor` right before a removed argument is
+  removed with it.
   Response files (`@file`) are expanded first, so they cannot
   hide such options; any `@` argument left over is removed too. LibTooling
   itself never loads `-load` plugins (only `clang`'s own cc1 entry point

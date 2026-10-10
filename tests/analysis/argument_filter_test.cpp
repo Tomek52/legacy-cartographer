@@ -104,13 +104,61 @@ TEST(ArgumentFilter, KeepsHarmlessClangClPassThroughOptions) {
     EXPECT_EQ(remove_code_loading_arguments(args).arguments, args);
 }
 
-TEST(ArgumentFilter, RemovesXclangLeftDanglingByARemoval) {
-    // -Xclang forwards the pass-through argument as it stands; once that is
-    // removed, the -Xclang would forward whatever an adjuster appends.
+TEST(ArgumentFilter, RemovesTheXclangWhoseValueIsRemoved) {
+    // -Xclang forwards the pass-through argument as it stands; left alone
+    // once that is removed, it would forward the next argument (or whatever
+    // an adjuster appends).
+    for (const Args& tail : {Args{}, Args{"-DFOO", "a.cpp"}}) {
+        Args args{"clang-cl", "-Xclang", "/clang:-fplugin=/p/a.so"};
+        args.insert(args.end(), tail.begin(), tail.end());
+        Args kept{"clang-cl"};
+        kept.insert(kept.end(), tail.begin(), tail.end());
+        const auto result = remove_code_loading_arguments(args);
+        EXPECT_EQ(result.arguments, kept);
+        EXPECT_EQ(result.removed, (Args{"-Xclang /clang:-fplugin=/p/a.so"}));
+    }
+}
+
+TEST(ArgumentFilter, RemovesTheForwarderOfARemovedPassThroughValue) {
+    const auto result = remove_code_loading_arguments(
+        {"clang-cl", "/clang:-Xclang", "/clang:-fplugin=/p/a.so", "/clang:-DFOO", "a.cpp"});
+    EXPECT_EQ(result.arguments, (Args{"clang-cl", "/clang:-DFOO", "a.cpp"}));
+    EXPECT_EQ(result.removed, (Args{"/clang:-Xclang /clang:-fplugin=/p/a.so"}));
+}
+
+// The driver copies the values of -Wp, and -Xpreprocessor into the cc1
+// command unchanged (LLVM 20.1.2 clang/lib/Driver/ToolChains/Clang.cpp line
+// 1236): `clang-20 -### -c a.c -Wp,-load,/p/a.so` emits "-load" "/p/a.so".
+TEST(ArgumentFilter, RemovesWpArgumentsWithCc1PluginOptions) {
+    const auto result = remove_code_loading_arguments(
+        {"clang", "-Wp,-load,/p/a.so", "-Wp,-DX,-UY", "-Wp,-MD,deps.d", "-Wp,-DX,-plugin,p",
+         "-Wp,-fpass-plugin=/p/b.so", "-Wp,-plugin-arg-p,v", "a.c"});
+    EXPECT_EQ(result.arguments, (Args{"clang", "-Wp,-DX,-UY", "-Wp,-MD,deps.d", "a.c"}));
+    EXPECT_EQ(result.removed, (Args{"-Wp,-load,/p/a.so", "-Wp,-DX,-plugin,p",
+                                    "-Wp,-fpass-plugin=/p/b.so", "-Wp,-plugin-arg-p,v"}));
+}
+
+TEST(ArgumentFilter, RemovesWpPluginOptionsPassedThroughClangCl) {
     const auto result =
-        remove_code_loading_arguments({"clang-cl", "a.cpp", "-Xclang", "/clang:-fplugin=/p/a.so"});
+        remove_code_loading_arguments({"clang-cl", "/clang:-Wp,-load,/p/a.so", "/DX", "a.cpp"});
+    EXPECT_EQ(result.arguments, (Args{"clang-cl", "/DX", "a.cpp"}));
+    EXPECT_EQ(result.removed, (Args{"/clang:-Wp,-load,/p/a.so"}));
+}
+
+TEST(ArgumentFilter, RemovesXpreprocessorLoadWithItsValue) {
+    const auto result =
+        remove_code_loading_arguments({"clang", "-Xpreprocessor", "-load", "-Xpreprocessor",
+                                       "/p/a.so", "-Xpreprocessor", "-DX", "a.c"});
+    EXPECT_EQ(result.arguments, (Args{"clang", "-Xpreprocessor", "-DX", "a.c"}));
+    EXPECT_EQ(result.removed, (Args{"-Xpreprocessor -load -Xpreprocessor /p/a.so"}));
+}
+
+TEST(ArgumentFilter, RemovesXpreprocessorPluginOptionsPassedThroughClangCl) {
+    const auto result =
+        remove_code_loading_arguments({"clang-cl", "/clang:-Xpreprocessor", "/clang:-add-plugin",
+                                       "/clang:-Xpreprocessor", "/clang:p", "a.cpp"});
     EXPECT_EQ(result.arguments, (Args{"clang-cl", "a.cpp"}));
-    EXPECT_EQ(result.removed, (Args{"/clang:-fplugin=/p/a.so", "-Xclang"}));
+    EXPECT_EQ(result.removed.size(), 1U);
 }
 
 } // namespace

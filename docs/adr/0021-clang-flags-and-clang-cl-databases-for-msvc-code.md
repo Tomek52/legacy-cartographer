@@ -145,11 +145,17 @@ against the target registry).
 <a id="adr0021-pass-through-filtered-v1"></a>**Pass-through arguments are
 filtered.** `remove_code_loading_arguments()` also reads the values of the
 `/clang:` and `-clang:` arguments, in order, as one argument list, and
-removes the arguments that load code there by the same rules (with
-`-Xclang`, `-Xclang=` and `@file`), whatever the driver mode. Removal is
-repeated until nothing is left to remove, so no `-Xclang` is left
-forwarding the argument that followed a removed one. Each removal is a
-warning, as before (security T5).
+removes the arguments that load code there by the same rules, whatever
+the driver mode. In both lists the filter also treats `-Xpreprocessor` as a
+forwarder like `-Xclang`, and removes a whole `-Wp,<a>,<b>` argument if any
+of its comma-separated values is a cc1 option that loads code: the driver
+copies the values of both into the cc1 command unchanged
+(`Clang.cpp` line 1236; `clang-20 -### -c a.c -Wp,-load,/p/a.so` and
+`clang-cl /clang:-Wp,-load,/p/a.so` both emit `"-load" "/p/a.so"`). An
+`-Xclang` or `-Xpreprocessor` right before a removed argument is removed
+with it, so it never forwards the argument that followed; removal is
+repeated until nothing is left to remove. Each removal is a warning, as
+before (security T5).
 
 <a id="adr0021-windows-headers-v1"></a>**Windows SDK and MSVC headers**
 come from the compilation database. The candidates, none tried with real

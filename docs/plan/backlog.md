@@ -516,7 +516,8 @@ question). Two fixes: the database is wrapped in
 `inferTargetAndDriverMode()`, because LibTooling's dependency-file
 adjuster dropped cl's `-MD`/`-MT` from `cl.exe` commands; and the
 argument filter now also reads clang-cl's `/clang:` and `-clang:`
-pass-through arguments (security T5; the plugin was not loaded before
+pass-through arguments, `-Wp,` lists and `-Xpreprocessor` (the last two
+found in review; security T5; such plugins were not loaded before
 either, since LibTooling never loads `-load` plugins). The how-to
 [Analysing an MSVC code base under WSL2](../how-to/msvc-under-wsl2.md)
 lists the steps tried. Left open: a database from MSBuild (NFR-013
