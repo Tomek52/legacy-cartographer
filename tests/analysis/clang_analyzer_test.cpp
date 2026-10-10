@@ -211,8 +211,9 @@ TEST_F(ClangAnalyzerTest, RecordsSyntaxErrorAsDiagnosticWithLocation) {
 }
 
 TEST_F(ClangAnalyzerTest, StripsPluginArgumentsAndWarns) {
-    // Without the filter, Clang fails to load the (nonexistent) plugins and
-    // the translation unit counts as failed.
+    // LibTooling would not load these plugins (it never calls
+    // LoadRequestedPlugins(), ADR-0021); the filter removes them anyway, as
+    // defence in depth, and warns for each.
     RecordingFactWriter facts;
     ClangAnalyzer analyzer;
     const auto summary = analyzer.analyze(

@@ -27,5 +27,18 @@ jobs:
         run: pip install -r requirements-docs.txt
       - name: Check docs
         run: scripts/docs-check.sh
+      # Mermaid 11.17.2 (the mermaid@11 that MkDocs Material loads) and jsdom,
+      # pinned by tools/mermaid-check/package-lock.json (B-22).
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22.22.0"
+          cache: npm
+          cache-dependency-path: tools/mermaid-check/package-lock.json
+      - name: Install the Mermaid check (pinned)
+        run: npm ci --ignore-scripts --prefix tools/mermaid-check
+      - name: Module maps parse as Mermaid
+        run: scripts/check-mermaid.sh
       - name: Test the docs checks themselves
+        env:
+          LCART_REQUIRE_MERMAID: "1"  # the Mermaid tests must run here, not skip
         run: python3 -m unittest discover -s tests/docs -v
