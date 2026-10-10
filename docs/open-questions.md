@@ -67,5 +67,4 @@ moving the answer into the relevant spec or ADR and deleting it here.
 | MkDocs/Material settings that keep raw HTML in generated docs from executing | [security](security.md) | M2 |
 | Usable local model sizes for claim generation | [NFR-003](specs/requirements.md#nfr003-fully-local-mode-v1) | M6 |
 | Claude Code permission rule syntax for a bundle's `.claude/settings.json` | [handoff contract](specs/handoff-contract.md#claim-agent-permissions-v1) | M2 |
-| A CI check that the committed libmodbus map's Mermaid block parses and renders (FR-007 criterion 1; checked by hand once in B-14) | [FR-007](specs/requirements.md#fr007-module-map-without-llm-v1) | M1 end |
-| Parsing Mermaid without a browser to validate agent diagrams | [FR-008](specs/requirements.md#fr008-generate-documentation-v2) | M2 |
+| Validating agent diagrams with Mermaid in `lcart ingest`. Parsing without a browser works: B-22 runs Mermaid's own `mermaid.parse` under Node.js with jsdom as the only DOM ([B-22 result](plan/backlog.md#b22-mermaid-check-in-ci-v1)). Open: whether `lcart` may depend on Node.js at run time for it (an ADR), and that a parse is weaker than a render (Mermaid 11.17.2 parsed a quoted label with an unescaped `"` inside it). | [FR-008](specs/requirements.md#fr008-generate-documentation-v2) | M2 |
