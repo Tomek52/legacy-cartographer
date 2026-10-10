@@ -26,12 +26,12 @@ expanded in place; its version is bumped if its meaning changes
 | [B-14](#b14-libmodbus-baseline-v1) | ✅ libmodbus baseline map and timing | M1 | NFR-001, NFR-005 | B-05, B-13 | 3 h |
 | [B-15](#b15-requirement-test-traceability-v2) | ✅ Traceability gate and matrix | M1 | NFR-012 | B-03 | 4 h |
 | [B-16](#b16-resumable-analysis-v2) | ✅ Resumable analysis with progress | M1 | NFR-005, NFR-004 | B-12 | 5 h |
-| [B-17](#b17-msvc-code-spike-v2) | MSVC code under Clang: spike and docs | M1 | NFR-013 | B-10 | 4 h |
+| [B-17](#b17-msvc-code-spike-v2) | ✅ MSVC code under Clang: spike and docs | M1 | NFR-013 | B-10 | 4 h |
 | [B-18](#b18-second-signal-of-either-kind-v1) | ✅ ADR-0020: a second signal of either kind ends the analysis | M1 | NFR-005 | B-16 | 2 h |
 | [B-19](#b19-throughput-on-800-units-v1) | NFR-005 throughput measured on 800 TUs | M1 | NFR-005 | B-16 | 1 h |
 | [B-20](#b20-threadsanitizer-preset-v1) | ThreadSanitizer preset and CI job | M1 | NFR-004, NFR-007 | B-16 | 3 h |
 | [B-21](#b21-exposure-warning-for-partial-database-v1) | ✅ Exposure warning for the partial database | M1 | NFR-005 | B-16 | 1 h |
-| [B-22](#b22-mermaid-check-in-ci-v1) | CI check that committed module maps parse as Mermaid | M1 | FR-007 | B-14 | 2 h |
+| [B-22](#b22-mermaid-check-in-ci-v1) | ✅ CI check that committed module maps parse as Mermaid | M1 | FR-007 | B-14 | 2 h |
 | [B-23](#b23-libmodbus-hand-check-v1) | ✅ Hand check of the libmodbus functions | M1 | FR-003, FR-004 | B-14 | 2 h |
 
 ## M0
@@ -503,6 +503,29 @@ Version 2 (2026-10-09): the development container and CI have no Windows,
 MSBuild or Windows SDK, so the MSBuild part of v1 is not a criterion of
 this item any more; it stays a criterion of NFR-013.
 
+Result (2026-10-09): [ADR-0021](../adr/0021-clang-flags-and-clang-cl-databases-for-msvc-code.md)
+records the spike (clang 20.1.2, LLVM source at `llvmorg-20.1.2`). The
+target `x86_64-pc-windows-msvc` implies `-fms-extensions`,
+`-fms-compatibility` and `-fms-compatibility-version=19.33`; clang-cl
+commands (`clang-cl`, `cl`, `cl.exe`, `--driver-mode=cl`) parse as they
+are. The fixture `tests/fixtures/msvc_constructs` and
+`tests/analysis/msvc_code_test.cpp` verify NFR-013 criterion 1 with both
+database styles, and criterion 2 only as path relativity (a root at
+`<tmp>/mnt/c/...` on the Linux file system; a real drvfs mount is an open
+question). Two fixes: the database is wrapped in
+`inferTargetAndDriverMode()`, because LibTooling's dependency-file
+adjuster dropped cl's `-MD`/`-MT` from `cl.exe` commands; and the
+argument filter now also reads clang-cl's `/clang:` and `-clang:`
+pass-through arguments, `-Wp,` lists and `-Xpreprocessor` (the last two
+found in review; security T5; such plugins were not loaded before
+either, since LibTooling never loads `-load` plugins). The how-to
+[Analysing an MSVC code base under WSL2](../how-to/msvc-under-wsl2.md)
+lists the steps tried. Left open: a database from MSBuild (NFR-013
+criterion 3, a Windows machine), real Windows SDK and MSVC headers,
+Windows paths in a database made on Windows, calls lost to delayed
+template parsing, and Clang configuration files bypassing the filter
+([open questions](../open-questions.md)).
+
 ## M1 closing items
 
 Added 2026-10-09 from the open questions left by B-16 and the remaining
@@ -626,6 +649,34 @@ Acceptance criteria:
 2. It fails, naming the file and Mermaid's error, on a deliberately broken
    diagram (a test of the script).
 3. CI runs it; the `TODO: verify` row for the CI Mermaid check is removed.
+
+Result (2026-10-09): `scripts/check-mermaid.sh` runs
+`tools/mermaid-check/check-mermaid.mjs`, which calls Mermaid's own
+`mermaid.parse` on every ` ```mermaid ` block of the libmodbus map and of
+`tests/golden/*.map.md`, and prints `file:line`, the Mermaid version and
+Mermaid's error for each block that does not parse (exit 1). Parsing
+without a browser works: Node.js 22 with jsdom as the only DOM. jsdom is
+needed, tried without it: Mermaid sanitises labels with DOMPurify, which
+binds to a `window` when Mermaid is loaded, and without one every flowchart
+with a label fails with `DOMPurify.addHook is not a function`. Nothing is
+laid out or rendered, and a run in a network namespace without a network
+passes. The versions are pinned exactly in `package.json` and by
+`package-lock.json`: Mermaid 11.17.2 (2026-08-25), the newest 11.x and what
+`mermaid@11`, the tag MkDocs Material 9.7.7 loads from unpkg to draw the
+site, resolves to today; 12.x (12.1.0, 2026-10-02) is newer but is not what
+renders the docs. jsdom 29.1.1, because 30.x needs Node.js 22.22.2 or later. Material's
+tag is not pinned, so the site can draw with a newer 11.x than the check
+parses with; the pin is moved by hand. `npm ci --ignore-scripts` is the only
+step that uses the network. The docs workflow sets up Node.js 22.22.0
+(npm cache on the lock file), installs, runs the check, and runs
+`tests/docs/test_check_mermaid.py` with `LCART_REQUIRE_MERMAID=1`; locally
+the test is skipped without Node.js or the installed packages. A fixture
+with a missing `|` after an edge label fails, naming the file and line and
+Mermaid's `Parse error`; a fixture with every entity code of ADR-0017
+passes. A parse is weaker than a render: a quoted label with an unescaped
+`"` inside it parsed (the FR-008 open question records this). `npm audit`
+reports two low-severity advisories in KaTeX, a Mermaid dependency for math
+labels, which the maps do not use.
 
 ### <a id="b23-libmodbus-hand-check-v1"></a>**[B-23 v1]** Hand check of the libmodbus functions
 

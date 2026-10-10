@@ -1,6 +1,6 @@
 # 0009. Linux and WSL2 only; MSVC code analysed in Clang's MSVC mode
 
-- **Status:** Accepted
+- **Status:** Accepted; the TODO in its MSVC decision (exact flags, clang-cl arguments) resolved by [ADR-0021](0021-clang-flags-and-clang-cl-databases-for-msvc-code.md)
 - **Date:** 2026-10-03
 - **Requirements:** [NFR-013](../specs/requirements.md#nfr013-linux-and-wsl2-v1), [FR-001](../specs/requirements.md#fr001-ingest-compilation-database-v1)
 
