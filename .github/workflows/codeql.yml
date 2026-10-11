@@ -30,7 +30,7 @@ jobs:
       - name: Install toolchain and libraries
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y -qq ninja-build g++-14 llvm-20-dev libclang-20-dev libclang-cpp20-dev libsqlite3-dev nlohmann-json3-dev libtomlplusplus-dev libgtest-dev
+          sudo apt-get install -y -qq ninja-build gcc-14 g++-14 clang-20 llvm-20-dev libclang-20-dev libclang-cpp20-dev libsqlite3-dev nlohmann-json3-dev libtomlplusplus-dev libgtest-dev
       - uses: github/codeql-action/init@v3
         with:
           languages: c-cpp
