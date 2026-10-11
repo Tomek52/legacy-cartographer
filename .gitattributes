@@ -1,0 +1,9 @@
+# Line endings. Every text file is LF in the index and in the working tree on
+# every platform, whatever core.autocrlf says: tests compare golden files and
+# file hashes byte for byte, and shell scripts fail on CRLF. This matches
+# .editorconfig (end_of_line = lf). Without this file a checkout on Windows
+# with core.autocrlf=true has CRLF and 11 tests of lcart fail.
+#
+# `text=auto` leaves files that Git detects as binary alone. The libmodbus
+# submodule (targets/) keeps its own attributes.
+* text=auto eol=lf

@@ -37,9 +37,10 @@ system:
 Case-insensitive file names on drvfs against the case of `#include` lines
 were not tried (`TODO: verify`).
 
-If you check the repository out on Windows with `core.autocrlf=true`, the
-files have CRLF line endings, and 11 of the tests of `lcart` itself fail
-(golden files, file hashes). Build `lcart` from a clone made inside WSL2.
+The repository's `.gitattributes` keeps every text file LF, whatever
+`core.autocrlf` says. A checkout made before that file existed has CRLF
+files, and 11 of the tests of `lcart` itself fail (golden files, file
+hashes): make a fresh clone.
 
 ## 2. Get a compilation database from an MSBuild solution
 
