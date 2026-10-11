@@ -38,9 +38,9 @@ moving the answer into the relevant spec or ADR and deleting it here.
 
 ## Questions for the maintainer
 
-| Question | Context | Decide by |
-|---|---|---|
-| NFR-013 criterion 3 (a tested way to get a compilation database from an MSBuild solution) needs a Windows machine, which neither the development container nor CI has. Try it on a Windows machine before M1 is marked done, or move the criterion to a later milestone? | [NFR-013](specs/requirements.md#nfr013-linux-and-wsl2-v1), [B-17](plan/backlog.md#b17-msvc-code-spike-v2) | M1 end |
+None at the moment. The question whether to try NFR-013 criterion 3 on a
+Windows machine before M1 is done was answered by doing it on 2026-10-11
+([ADR-0022](adr/0022-msbuild-logger-for-compilation-databases.md)).
 
 ## Open technical questions
 
@@ -52,6 +52,9 @@ moving the answer into the relevant spec or ADR and deleting it here.
 | With an MSVC target before C++20, Clang defaults to `-fdelayed-template-parsing`, and calls in never-instantiated function templates are not recorded (B-17 spike). Append `-fno-delayed-template-parsing` to every MSVC command? It changes the facts, and code that only MSVC's lenient template parsing accepts would fail to parse. | [ADR-0021](adr/0021-clang-flags-and-clang-cl-databases-for-msvc-code.md), [how-to](how-to/msvc-under-wsl2.md) | M2 |
 | The Clang driver inside lcart reads configuration files: `--config=<file>`, and default ones such as `<triple>-clang.cfg` in the directory of the program a command names (both shown in the B-17 spike). Their arguments bypass `remove_code_loading_arguments()` (plugins are not loaded by LibTooling today, ADR-0021 finding 4, but the filter should not depend on that). Remove `--config` and add `--no-default-config`? | [security T5](security.md#security-malicious-build-input-v1), [ADR-0021](adr/0021-clang-flags-and-clang-cl-databases-for-msvc-code.md) | M1 end |
 | Why does clang-tidy 20.1.2 ignore `HeaderFilterRegex` from `.clang-tidy` in the main clone (findings in `src/` headers dropped as non-user code, while `--dump-config` shows the filter) but apply it in a git worktree? `scripts/run-clang-tidy.sh` passes the filter explicitly, so nothing depends on the answer. | [B-24](plan/backlog.md#b24-clang-tidy-checks-headers-v1) | when clang-tidy is upgraded |
+| Register the LLVM X86 target in `lcart`? Without any target, a Win32 (`i686`) translation unit that includes `<windows.h>` fails: `winnt.h` has MS-style inline assembly, and Clang reports "Unable to find target for this triple (no targets are registered)" (tried on Windows with the sample solution; x64 is not affected). Registering targets also changes what ADR-0021's `inferTargetAndDriverMode()` wrapper may add. | [ADR-0022](adr/0022-msbuild-logger-for-compilation-databases.md), [ADR-0021](adr/0021-clang-flags-and-clang-cl-databases-for-msvc-code.md), [how-to](how-to/msvc-under-wsl2.md) | M2 |
+| On a WSL2 drive mount (drvfs, file system type `v9fs`) `lcart analyze` with the default database `lcart-out/facts.lcart.db` under the root fails with "database is locked" (tried). Default the database elsewhere, detect the mount and say so, or leave it to the how-to (`--db` on the Linux file system)? | [NFR-013](specs/requirements.md#nfr013-linux-and-wsl2-v1), [how-to](how-to/msvc-under-wsl2.md) | M2 |
+| The repository has no `.gitattributes`. A checkout on Windows with `core.autocrlf=true` has CRLF line endings, and 11 tests fail when it is built (golden files, file hashes). Add `* text=auto eol=lf` (or `eol=lf` for fixtures and golden files)? | [how-to](how-to/msvc-under-wsl2.md) | M1 end |
 
 ## Not verified yet ("TODO: verify")
 
@@ -61,10 +64,8 @@ moving the answer into the relevant spec or ADR and deleting it here.
 | `modbus_mapping_new` signature and per-iteration cost for fuzzing | [libmodbus plan](targets/libmodbus.md) | M4 |
 | `modbus_close` / `modbus_free` semantics for the RAII wrapper | [libmodbus plan](targets/libmodbus.md) | M5 |
 | Exact terms of `tests/LICENSE` in libmodbus | [ADR-0003](adr/0003-licensing.md) | before reusing any upstream test code |
-| A tested way to get a compilation database from an MSBuild solution | [ADR-0009](adr/0009-linux-and-wsl2-only.md), [NFR-013](specs/requirements.md#nfr013-linux-and-wsl2-v1), [how-to](how-to/msvc-under-wsl2.md) | a Windows machine (question for the maintainer) |
-| Rewriting the Windows paths (`C:\...`, backslashes) of a compilation database made on Windows for WSL2 | [how-to](how-to/msvc-under-wsl2.md), [ADR-0021](adr/0021-clang-flags-and-clang-cl-databases-for-msvc-code.md) | a real database from Windows |
-| Windows SDK and MSVC headers for real code: `/winsysroot`, `/vctoolsdir` + `/winsdkdir`, `/imsvc`, `-Xmicrosoft-windows-sys-root`, `-isystem`; copies versus `/mnt/c`; case of `#include` names; whether a WSL2 `PATH` with Windows directories lets Clang find an MSVC installation | [ADR-0021](adr/0021-clang-flags-and-clang-cl-databases-for-msvc-code.md#adr0021-windows-headers-v1), [how-to](how-to/msvc-under-wsl2.md) | a machine with the Windows SDK and MSVC |
-| An analysis root on a real WSL2 drive mount (`/mnt/<drive>/`, drvfs) works and its stored paths are root-relative (NFR-013 criterion 2; only path relativity is tested, on the Linux file system) | [NFR-013](specs/requirements.md#nfr013-linux-and-wsl2-v1), [how-to](how-to/msvc-under-wsl2.md) | WSL2 |
+| The MSBuild logger on other setups than Build Tools 2022 with x64 and Win32 `v143` projects: older Visual Studio, other platform toolsets, C++/CLI, custom build steps, a build with compile errors, `.rc`/`.idl` files, the `arm` and `arm64` branches. Its CI check uses the database it wrote once; `tools/msbuild-compdb/verify.ps1` needs Windows. | [ADR-0022](adr/0022-msbuild-logger-for-compilation-databases.md), [how-to](how-to/msvc-under-wsl2.md) | a Windows machine with the setup |
+| Windows SDK and MSVC headers through `/winsysroot`, `/vctoolsdir` + `/winsdkdir`, `-Xmicrosoft-windows-sys-root`, `-isystem`; headers copied to the Linux file system instead of read through `/mnt/c`; case of `#include` names against file names on drvfs; whether a WSL2 `PATH` with Windows directories lets Clang find an MSVC installation. (`/imsvc` with `/mnt/c` is tried.) | [ADR-0021](adr/0021-clang-flags-and-clang-cl-databases-for-msvc-code.md#adr0021-windows-headers-v1), [how-to](how-to/msvc-under-wsl2.md) | a machine with the Windows SDK and MSVC |
 | MkDocs/Material settings that keep raw HTML in generated docs from executing | [security](security.md) | M2 |
 | Usable local model sizes for claim generation | [NFR-003](specs/requirements.md#nfr003-fully-local-mode-v1) | M6 |
 | Claude Code permission rule syntax for a bundle's `.claude/settings.json` | [handoff contract](specs/handoff-contract.md#claim-agent-permissions-v1) | M2 |

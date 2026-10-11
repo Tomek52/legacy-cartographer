@@ -494,5 +494,7 @@ Acceptance criteria:
 2. An analysis root under `/mnt/<drive>/` (WSL2) works, and stored paths
    are relative to the root (no drive letters in facts).
 3. The documentation describes at least one tested way to obtain a
-   compilation database for an MSBuild solution (open: needs Windows, see
-   the open questions).
+   compilation database for an MSBuild solution (met by the MSBuild logger
+   of [ADR-0022](../adr/0022-msbuild-logger-for-compilation-databases.md),
+   tried on one Windows machine; its limits are in the
+   [how-to](../how-to/msvc-under-wsl2.md) and the open questions).
