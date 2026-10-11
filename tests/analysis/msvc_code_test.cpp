@@ -11,10 +11,10 @@
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
-#include <iterator>
 #include <memory>
 #include <optional>
 #include <ostream>
+#include <sstream>
 #include <string>
 #include <string_view>
 #include <tuple>
@@ -280,8 +280,11 @@ private:
         std::ofstream{path} << text;
     }
     static std::string read_file(const fs::path& path) {
-        std::ifstream in{path};
-        return {std::istreambuf_iterator<char>{in}, std::istreambuf_iterator<char>{}};
+        // Not istreambuf_iterator: GCC 14 at -O3 reports -Wnull-dereference in it.
+        const std::ifstream in{path, std::ios::binary};
+        std::ostringstream text;
+        text << in.rdbuf();
+        return std::move(text).str();
     }
     static void replace_all(std::string& text, const std::string& from, const std::string& to) {
         for (std::size_t at = text.find(from); at != std::string::npos;
