@@ -27,7 +27,10 @@ Built-in providers and local models are planned for later (M6).
 far: the SQLite fact store (B-06); analysis of files, includes, functions,
 call edges and modules with Clang LibTooling (B-07–B-11); `lcart analyze`,
 `lcart query` and the JSON Lines export (B-12); the module map, `lcart map`
-(B-13); parallel analysis that can be interrupted and resumed (B-16). See the
+(B-13); the libmodbus baseline map, generated in CI without network (B-14);
+parallel analysis that can be interrupted and resumed (B-16); MSVC code under
+WSL2, with a logger that writes the compilation database from an MSBuild
+solution (B-17, [guide](docs/how-to/msvc-under-wsl2.md)). See the
 [roadmap](docs/plan/roadmap.md).
 
 ## Build

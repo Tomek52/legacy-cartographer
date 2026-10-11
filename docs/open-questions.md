@@ -8,13 +8,13 @@ moving the answer into the relevant spec or ADR and deleting it here.
 
 | # | Assumption | Where it matters | Revisit when |
 |---|---|---|---|
-| A1 | Repository `legacy-cartographer`, executable `lcart`, namespace `lcart::`. | everywhere | before going public |
+| A1 | Repository `legacy-cartographer`, executable `lcart`, namespace `lcart::`. Public under this name since 2026-10-11. | everywhere | – |
 | A2 | Apache-2.0 for own code. | [ADR-0003](adr/0003-licensing.md) | – |
 | A4 | libmodbus pinned at v3.2.0 (latest tag on 2026-10-03). | [libmodbus plan](targets/libmodbus.md) | next upstream release |
 | A5 | One SQLite file per analysed project; no server. | [data model](architecture/data-model.md) | M1 end |
 | A7 | Conan manages small libraries only (SQLite, nlohmann_json, GoogleTest, later toml++); a `debug-system` preset builds from Ubuntu packages for offline machines. | `conanfile.py`, presets | B-02 |
 | A8 | C4 diagrams as Mermaid flowcharts, not Mermaid's experimental `C4Context`. | [architecture](architecture/index.md) | – |
-| A9 | CodeQL workflow is manual-only while private: it needs GitHub Advanced Security. | `.github/workflows/codeql.yml` | at publication |
+| A9 | CodeQL runs on pull requests, `main` and weekly since the repository became public (2026-10-11); it needed GitHub Advanced Security while private. Results appear after the first run on `main`. | `.github/workflows/codeql.yml` | first CodeQL run on `main` |
 | A10 | Verification covers only structural claims (5 kinds); behaviour stays prose. | [claim schema](specs/claim-schema.md) | M2 end |
 | A11 | The libmodbus `tests/` directory is its own `tests` module (by the default rule; kept in B-14). | [libmodbus plan](targets/libmodbus.md) | M3 |
 

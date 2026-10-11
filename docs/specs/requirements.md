@@ -307,8 +307,9 @@ Acceptance criteria:
    `cmake/CheckIncludeBoundaries.cmake`) fails if one includes it
    ([B-04](../plan/backlog.md#b04-include-boundary-check-v1)).
 2. CI runs the M1 commands on libmodbus in a job without network access
-   (TODO: verify how to cut network in GitHub Actions; fallback is
-   `unshare -n`).
+   (`libmodbus baseline`: `lcart analyze` and `lcart map` run under
+   `sudo unshare --net` after the tools are installed;
+   [B-14](../plan/backlog.md#b14-libmodbus-baseline-v1)).
 
 #### <a id="nfr002-no-source-egress-by-default-v2"></a>**[NFR-002 v2]** No source egress by default
 

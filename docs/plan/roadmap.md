@@ -70,16 +70,38 @@ resolution (FR-015, M2), incremental re-analysis, anything LLM.
 
 **Definition of Done:**
 
-- All acceptance criteria of FR-001–FR-007 have passing tests that cite them.
-- Fixture projects and golden files committed; determinism test passes.
-- libmodbus module map generated in CI and published in the docs; hand
-  check of the functions listed in the [libmodbus plan](../targets/libmodbus.md) done.
-- Analysis time for libmodbus recorded (NFR-005 baseline).
-- Repository made public ([publication](#publication)).
-- A ruleset on `main` requires a pull request and the CI checks
-  ([ADR-0011](../adr/0011-pull-request-flow-with-agent-review.md#adr0011-merge-on-green-v1)).
-- ADR for the threading model of analysis (if it differs from the
-  [components page](../architecture/components.md#arch-threading-v1)).
+- [x] All acceptance criteria of FR-001–FR-007 have passing tests that cite
+      them (FR-001 to FR-007 are cited and passing in the
+      [traceability matrix](traceability.md); the gate of B-15 enforces it
+      once M1 is `done`).
+- [x] Fixture projects and golden files committed; determinism test passes
+      (NFR-004 is cited and passing in the matrix).
+- [x] libmodbus module map generated in CI and published in the docs
+      ([map](../targets/libmodbus-map.md), job `libmodbus baseline`, B-14);
+      hand check of the functions listed in the
+      [libmodbus plan](../targets/libmodbus.md) done (B-23).
+- [x] Analysis time for libmodbus recorded (NFR-005 baseline, B-14; 800 TUs
+      in B-19).
+- [ ] Repository made public ([publication](#publication)). Public since
+      2026-10-11; open: the documentation site on GitHub Pages is built and
+      deployed by `.github/workflows/docs.yml` from `main`, but needs
+      Settings, Pages, Source "GitHub Actions" (owner). CodeQL runs on
+      pull requests, `main` and weekly (`.github/workflows/codeql.yml`).
+- [ ] A ruleset on `main` requires a pull request and the CI checks
+      ([ADR-0011](../adr/0011-pull-request-flow-with-agent-review.md#adr0011-merge-on-green-v1)).
+      Owner (Settings, Rules): not in place on 2026-10-11 (the rulesets API
+      lists none). Suggested: target the default branch; require a pull
+      request, squash as the only merge method, the 11 checks of `build` and
+      `docs` by name; block force pushes and deletion; zero required
+      approvals, since the agents act as the owner and cannot approve their
+      own pull request.
+- [x] ADR for the threading model of analysis (if it differs from the
+      [components page](../architecture/components.md#arch-threading-v1)):
+      [ADR-0019](../adr/0019-parallel-resumable-analysis.md), amended by
+      [ADR-0020](../adr/0020-unit-list-and-second-signal.md).
+
+M1 is marked `done` when the two open items are closed; that switches on
+the traceability gate for its requirements (see the top of this page).
 
 ## <a id="m2-llm-verification-v2"></a>**[M2 v2]** Agent handoff and claim verification
 
