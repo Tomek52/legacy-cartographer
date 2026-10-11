@@ -23,8 +23,7 @@ Built-in providers and local models are planned for later (M6).
 
 ## Status
 
-**M1 in progress: fact database and module map, without LLM.** Done so
-far: the SQLite fact store (B-06); analysis of files, includes, functions,
+**M1 done: fact database and module map, without LLM.** What it does: the SQLite fact store (B-06); analysis of files, includes, functions,
 call edges and modules with Clang LibTooling (B-07–B-11); `lcart analyze`,
 `lcart query` and the JSON Lines export (B-12); the module map, `lcart map`
 (B-13); the libmodbus baseline map, generated in CI without network (B-14);

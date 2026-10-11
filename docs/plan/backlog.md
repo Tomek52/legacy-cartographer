@@ -553,10 +553,10 @@ M1 cannot be marked done after these items alone: NFR-013 criterion 3 (a
 tested way to get a compilation database from MSBuild) needed a Windows
 machine. It was tried on 2026-10-11 and is met by
 [ADR-0022](../adr/0022-msbuild-logger-for-compilation-databases.md) (see the
-update in B-17). What remains for M1 is in its Definition of Done in the
-[roadmap](roadmap.md#m1-fact-database-v3): the repository is public
-(2026-10-11), the ruleset on `main` and the documentation site need the
-owner's settings on GitHub.
+update in B-17). The rest of M1's Definition of Done was in the
+[roadmap](roadmap.md#m1-fact-database-v3): the repository was made public,
+and the ruleset on `main` and the documentation site on Pages were set up,
+on 2026-10-11. M1 is `done` from that date.
 
 ### <a id="b18-second-signal-of-either-kind-v1"></a>**[B-18 v1]** ADR-0020: a second signal of either kind ends the analysis
 
