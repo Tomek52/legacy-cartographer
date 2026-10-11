@@ -14,6 +14,7 @@
 #include <memory>
 #include <optional>
 #include <ostream>
+#include <sstream>
 #include <string>
 #include <string_view>
 #include <tuple>
@@ -65,6 +66,11 @@ protected:
             out << R"([{"directory": ")" << root.string() << R"(", "command": ")" << command << ' '
                 << file << R"(", "file": ")" << file << "\"}]\n";
         }
+        return analyze_database(database, root);
+    }
+
+    /// Analyses the translation units of an existing compilation database.
+    [[nodiscard]] AnalysisSummary analyze_database(const fs::path& database, const fs::path& root) {
         auto store = SqliteFactStore::open(":memory:");
         if (!store) {
             ADD_FAILURE() << store.error().message;
@@ -185,7 +191,8 @@ TEST_F(MsvcCodeTest, RemovesPluginOptionsPassedThroughClangCl) {
 
 // Verifies: nfr013-linux-and-wsl2-v1 (criterion 2, path relativity only: a
 // root whose path looks like a WSL2 drive mount, on the Linux file system;
-// a real drvfs mount is an open question, docs/open-questions.md)
+// a root on a real drvfs mount was tried by hand on 2026-10-11, ADR-0022,
+// and the facts were the same)
 TEST_F(MsvcCodeTest, StoresPathsRelativeToARootUnderMnt) {
     const fs::path root = work_dir() / "mnt" / "c" / "src" / "project";
     fs::create_directories(root);
@@ -202,6 +209,119 @@ TEST_F(MsvcCodeTest, StoresPathsRelativeToARootUnderMnt) {
         }
     }
     EXPECT_EQ(paths, (std::vector<std::string>{"api.cc", "api.h"}));
+}
+
+// The database that tools/msbuild-compdb/CompDbLogger.cs wrote for the
+// msbuild_solution fixture on Windows (tests/fixtures/msbuild_solution/
+// compile_commands.golden.json), with the paths of that machine replaced
+// by placeholders. The Windows SDK and the MSVC library are not available
+// here: the test puts small stand-ins at the directories the database names
+// with /imsvc, so it checks how lcart reads the database, not the SDK.
+class MsbuildDatabaseTest : public MsvcCodeTest {
+protected:
+    static fs::path solution_dir() { return fixture_dir().parent_path() / "msbuild_solution"; }
+
+    /// Writes the golden database with `drop_system_includes` as asked, the
+    /// placeholders replaced, and the stand-in headers in place.
+    [[nodiscard]] fs::path write_database(bool drop_system_includes) const {
+        const fs::path stand_ins = work_dir() / "windows";
+        const fs::path msvc_include = stand_ins / "msvc" / "include";
+        const fs::path sdk_um = stand_ins / "sdk" / "um";
+        fs::create_directories(msvc_include);
+        fs::create_directories(sdk_um);
+        write_file(msvc_include / "cstdio", "namespace std { int printf(const char*, ...); }\n");
+        write_file(sdk_um / "windows.h", "void __stdcall OutputDebugStringA(const char*);\n"
+                                         "unsigned __int64 __stdcall GetTickCount64(void);\n");
+
+        std::string text = read_file(solution_dir() / "compile_commands.golden.json");
+        if (drop_system_includes) {
+            // Remove each pair `"/imsvc", "<dir>", `.
+            for (std::size_t at = text.find(R"("/imsvc", ")"); at != std::string::npos;
+                 at = text.find(R"("/imsvc", ")")) {
+                const std::size_t closing_quote = text.find("\", ", at + 11);
+                text.erase(at, closing_quote + 3 - at);
+            }
+        }
+        replace_all(text, "@ROOT@", solution_dir().string());
+        replace_all(text, "@MSVC@", (stand_ins / "msvc").string());
+        replace_all(text, "@SDK@", (stand_ins / "sdk").string());
+        replace_all(text, "@VS@", (stand_ins / "vs").string());
+        const fs::path database = work_dir() / "compile_commands.json";
+        write_file(database, text);
+        return database;
+    }
+
+    /// The stored files, split into those under the root (root-relative
+    /// paths) and external ones (file names: the store keeps their absolute
+    /// path, the export shows the spelling of the #include).
+    struct StoredFiles {
+        std::vector<std::string> own;
+        std::vector<std::string> external;
+    };
+    [[nodiscard]] StoredFiles stored_files() const {
+        StoredFiles result;
+        const auto files = store().files();
+        if (!files) {
+            ADD_FAILURE() << files.error().message;
+            return result;
+        }
+        for (const FileFact& file : *files) {
+            if (file.is_external) {
+                result.external.push_back(fs::path{file.path}.filename().string());
+            } else {
+                result.own.push_back(file.path);
+            }
+        }
+        return result;
+    }
+
+private:
+    static void write_file(const fs::path& path, const std::string& text) {
+        std::ofstream{path} << text;
+    }
+    static std::string read_file(const fs::path& path) {
+        // Not istreambuf_iterator: GCC 14 at -O3 reports -Wnull-dereference in it.
+        const std::ifstream in{path, std::ios::binary};
+        std::ostringstream text;
+        text << in.rdbuf();
+        return std::move(text).str();
+    }
+    static void replace_all(std::string& text, const std::string& from, const std::string& to) {
+        for (std::size_t at = text.find(from); at != std::string::npos;
+             at = text.find(from, at + to.size())) {
+            text.replace(at, from.size(), to);
+        }
+    }
+};
+
+// Verifies: nfr013-linux-and-wsl2-v1 (criterion 3, the part that runs
+// without Windows: lcart reads what the MSBuild logger writes; the logger
+// itself is checked on Windows by tools/msbuild-compdb/verify.ps1, ADR-0022)
+TEST_F(MsbuildDatabaseTest, AnalysesTheDatabaseOfAnMsbuildSolution) {
+    const AnalysisSummary summary = analyze_database(write_database(false), solution_dir());
+    // Both translation units parse: app/main.cc only with the project's
+    // APP_GREETING definition (a quoted value with spaces, written by the
+    // logger as "/D", "APP_GREETING=\"hello from app\""), core/core.cc with
+    // <windows.h> from the directory named by /imsvc.
+    EXPECT_EQ(summary.translation_units_parsed, 2U);
+    EXPECT_EQ(summary.diagnostics, 0U);
+    expect_no_stored_diagnostics();
+    EXPECT_EQ(calls("main"), (std::vector<Call>{{"core_stamp", 11, 10}}));
+    EXPECT_EQ(calls("core_stamp"), (std::vector<Call>{{"core_log", 14, 3}, {"core_mix", 15, 10}}));
+
+    const StoredFiles files = stored_files();
+    // No drive letter and no absolute path in the facts.
+    EXPECT_EQ(files.own, (std::vector<std::string>{"app/main.cc", "core/core.cc", "core/core.h"}));
+    EXPECT_EQ(files.external, (std::vector<std::string>{"cstdio", "windows.h"}));
+}
+
+// The control: without the /imsvc entries the system headers are found only
+// through the environment of the shell that runs lcart, so the database
+// must name them (ADR-0021, ADR-0022).
+TEST_F(MsbuildDatabaseTest, SystemIncludeDirectoriesMustBeInTheDatabase) {
+    const AnalysisSummary summary = analyze_database(write_database(true), solution_dir());
+    EXPECT_EQ(summary.translation_units_parsed, 0U);
+    EXPECT_EQ(summary.diagnostics, 2U);
 }
 
 } // namespace

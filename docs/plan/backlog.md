@@ -527,6 +527,20 @@ Windows paths in a database made on Windows, calls lost to delayed
 template parsing, and Clang configuration files bypassing the filter
 ([open questions](../open-questions.md)).
 
+Update (2026-10-11), on a Windows machine with Build Tools 2022 and WSL2:
+the MSBuild part is closed outside this item, by
+[ADR-0022](../adr/0022-msbuild-logger-for-compilation-databases.md). The
+logger `tools/msbuild-compdb/CompDbLogger.cs` writes the database from an
+MSBuild solution (sample: `tests/fixtures/msbuild_solution`);
+`MsbuildDatabaseTest` in `tests/analysis/msvc_code_test.cpp` analyses the
+database it wrote there, and `tools/msbuild-compdb/verify.ps1` checks the
+logger on Windows. Tried since: a root on a real drvfs mount (the fact
+database must be on the Linux file system), real Windows SDK and MSVC headers
+through `/imsvc` and `/mnt/c`, and Windows paths (rewritten by the logger's
+`map=`). NFR-013 criterion 3 is met. Open from the Windows run: the Win32
+configuration fails in `lcart` (no LLVM targets), and the options other than
+`/imsvc` for the headers were not tried ([open questions](../open-questions.md)).
+
 ## M1 closing items
 
 Added 2026-10-09 from the open questions left by B-16 and the remaining
