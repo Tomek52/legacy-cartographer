@@ -533,14 +533,33 @@ TranslationUnitBatch TranslationUnitRecorder::record(const ParseJob& job) {
     tool.appendArgumentsAdjuster(
         [&batch](const clang::tooling::CommandLineArguments& arguments, llvm::StringRef filename) {
             FilteredArguments filtered = remove_code_loading_arguments(arguments);
-            for (const std::string& removed : filtered.removed) {
-                batch.warnings.push_back(filename.str() + ": removed '" + removed +
-                                         "' (loads code into the analyser)");
+            for (std::size_t i = 0; i < filtered.removed.size(); ++i) {
+                batch.warnings.push_back(filename.str() + ": removed '" + filtered.removed[i] +
+                                         "' (" + filtered.reasons[i] + ")");
             }
             return std::move(filtered.arguments);
         });
     tool.appendArgumentsAdjuster(clang::tooling::getInsertArgumentAdjuster(
         "-resource-dir=" LCART_CLANG_RESOURCE_DIR, clang::tooling::ArgumentInsertPosition::END));
+    // Stop the driver from reading default configuration files (clang.cfg,
+    // <triple>-clang.cfg) next to the program named by the command: their
+    // arguments would bypass remove_code_loading_arguments() (docs/security.md
+    // T5, ADR-0023). Inserted right after the program name (position BEGIN of
+    // the argument list). --no-default-config is accepted in clang-cl mode too
+    // (verified on clang-20 20.1.2). A `-cc1` command line must start with
+    // `-cc1` right after the program name, so the flag is not inserted there;
+    // ClangTool drives such commands anyway, and an explicit --config is still
+    // removed by the filter above.
+    tool.appendArgumentsAdjuster(
+        [](const clang::tooling::CommandLineArguments& arguments, llvm::StringRef /*filename*/) {
+            clang::tooling::CommandLineArguments adjusted = arguments;
+            if (adjusted.size() >= 2 && adjusted[1] == "-cc1") {
+                return adjusted;
+            }
+            const auto after_program = adjusted.begin() + (adjusted.empty() ? 0 : 1);
+            adjusted.insert(after_program, "--no-default-config");
+            return adjusted;
+        });
 
     CollectingDiagnosticConsumer consumer{job.translation_unit, files_, root_prefixes_};
     tool.setDiagnosticConsumer(&consumer);

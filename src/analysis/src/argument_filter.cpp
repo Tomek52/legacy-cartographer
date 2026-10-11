@@ -50,6 +50,28 @@ constexpr std::array clang_cl_pass_through_prefixes{
     std::string_view{"-clang:"},
 };
 
+// The driver option that reads a configuration file (`clang-20
+// --help-hidden`): `--config=<file>` (one argument) and the separate form
+// `--config <file>` (two arguments). The file's own arguments bypass this
+// filter, so the driver must never read it (docs/security.md T5, ADR-0023).
+// `-config` (one dash) is NOT an option; `--config-system-dir=`,
+// `--config-user-dir=` and `-multi-lib-config=` only point at directories
+// or data, are moot once default configuration files are off, and are left
+// alone. Only `--config=` and the whole word `--config` match below, so
+// those look-alikes (and a plain file named `config`) are kept.
+constexpr std::string_view config_equals{"--config="};
+constexpr std::string_view config_word{"--config"};
+
+// Why an argument was removed, reported to the user as a warning. The text
+// must be true: a configuration file is read, not loaded as code.
+enum class Reason : std::uint8_t { loads_code, reads_config };
+constexpr std::string_view loads_code_reason{"loads code into the analyser"};
+constexpr std::string_view reads_config_reason{"reads a configuration file"};
+
+[[nodiscard]] std::string_view reason_text(Reason reason) {
+    return reason == Reason::reads_config ? reads_config_reason : loads_code_reason;
+}
+
 [[nodiscard]] bool starts_with_any(std::string_view argument, const auto& prefixes) {
     return std::ranges::any_of(
         prefixes, [argument](std::string_view prefix) { return argument.starts_with(prefix); });
@@ -137,43 +159,76 @@ struct Forwarded {
     std::unreachable();
 }
 
-/// Number of arguments starting at `i` that must be removed; 0 keeps it.
-[[nodiscard]] std::size_t removal_width(const std::vector<std::string>& args, std::size_t i) {
+/// What to remove starting at `i`: how many arguments, and why. A width of
+/// 0 keeps the argument.
+struct Removal {
+    std::size_t width;
+    Reason reason;
+};
+
+/// A configuration-file option at `i`: `--config=<file>` (one argument) or
+/// `--config <file>` (two). Nothing else matches, so `--config-system-dir=`,
+/// `--config-user-dir=`, `-multi-lib-config=`, `-config` and a file named
+/// `config` are kept.
+[[nodiscard]] std::optional<std::size_t> config_width(const std::vector<std::string>& args,
+                                                      std::size_t i) {
     const std::string_view argument = args[i];
-    if (argument.starts_with('@') || starts_with_any(argument, driver_prefixes) ||
-        wp_loads_code(argument)) {
+    if (argument.starts_with(config_equals)) {
         return 1;
     }
+    if (argument == config_word) {
+        return i + 1 < args.size() ? 2 : 1; // trailing `--config` has no value to drop
+    }
+    return std::nullopt;
+}
+
+/// What to remove starting at `i`; width 0 keeps the argument.
+[[nodiscard]] Removal removal_at(const std::vector<std::string>& args, std::size_t i) {
+    const std::string_view argument = args[i];
+    if (const auto width = config_width(args, i)) {
+        return {.width = *width, .reason = Reason::reads_config};
+    }
+    if (argument.starts_with('@') || starts_with_any(argument, driver_prefixes) ||
+        wp_loads_code(argument)) {
+        return {.width = 1, .reason = Reason::loads_code};
+    }
     if (const auto forwarded = forwarded_at(args, i)) {
-        return forwarded_width(args, i, *forwarded);
+        return {.width = forwarded_width(args, i, *forwarded), .reason = Reason::loads_code};
     }
     switch (classify_cc1(argument)) { // bare cc1 form, as in a `-cc1` command
     case Cc1Kind::harmless:
-        return 0;
+        return {.width = 0, .reason = Reason::loads_code};
     case Cc1Kind::loads_code:
-        return 1;
+        return {.width = 1, .reason = Reason::loads_code};
     case Cc1Kind::loads_code_with_value:
-        return 2;
+        return {.width = 2, .reason = Reason::loads_code};
     }
     std::unreachable();
 }
 
-using Groups = std::vector<std::vector<std::size_t>>;
+/// One removed option: the ascending indices into the argument list it
+/// spans, and why it is removed.
+struct Group {
+    std::vector<std::size_t> indices;
+    Reason reason{Reason::loads_code};
+};
+using Groups = std::vector<Group>;
 
 /// Adds to each group (ascending indices into `args`) the -Xclang or
 /// -Xpreprocessor right before it, unless that is removed already: its value
-/// is being removed, and left alone it would forward the next argument.
+/// is being removed, and left alone it would forward the next argument. The
+/// forwarder joins the group and keeps its reason.
 void add_forwarders(Groups& groups, const std::vector<std::string>& args) {
     std::vector<bool> removed(args.size(), false);
-    for (const std::vector<std::size_t>& group : groups) {
-        for (const std::size_t index : group) {
+    for (const Group& group : groups) {
+        for (const std::size_t index : group.indices) {
             removed[index] = true;
         }
     }
-    for (std::vector<std::size_t>& group : groups) {
-        const std::size_t first = group.front();
+    for (Group& group : groups) {
+        const std::size_t first = group.indices.front();
         if (first > 0 && !removed[first - 1] && is_separate_forwarder(args[first - 1])) {
-            group.insert(group.begin(), first - 1);
+            group.indices.insert(group.indices.begin(), first - 1);
             removed[first - 1] = true;
         }
     }
@@ -185,16 +240,17 @@ void add_forwarders(Groups& groups, const std::vector<std::string>& args) {
     Groups groups;
     std::size_t i = 0;
     while (i < args.size()) {
-        const std::size_t width = removal_width(args, i);
-        if (width == 0) {
+        const Removal removal = removal_at(args, i);
+        if (removal.width == 0) {
             ++i;
             continue;
         }
-        std::vector<std::size_t>& group = groups.emplace_back();
-        for (std::size_t k = i; k < i + width && k < args.size(); ++k) {
-            group.push_back(k);
+        Group& group = groups.emplace_back();
+        group.reason = removal.reason;
+        for (std::size_t k = i; k < i + removal.width && k < args.size(); ++k) {
+            group.indices.push_back(k);
         }
-        i += width;
+        i += removal.width;
     }
     add_forwarders(groups, args);
     return groups;
@@ -223,8 +279,8 @@ void add_forwarders(Groups& groups, const std::vector<std::string>& args) {
         }
     }
     Groups groups = removals(values);
-    for (std::vector<std::size_t>& group : groups) {
-        for (std::size_t& index : group) {
+    for (Group& group : groups) {
+        for (std::size_t& index : group.indices) {
             index = positions[index];
         }
     }
@@ -250,9 +306,9 @@ FilteredArguments remove_code_loading_arguments(std::vector<std::string> argumen
             break;
         }
         std::vector<bool> removed(arguments.size(), false);
-        for (const std::vector<std::size_t>& group : groups) {
+        for (const Group& group : groups) {
             std::string joined;
-            for (const std::size_t index : group) {
+            for (const std::size_t index : group.indices) {
                 if (!joined.empty()) {
                     joined += ' ';
                 }
@@ -260,6 +316,7 @@ FilteredArguments remove_code_loading_arguments(std::vector<std::string> argumen
                 removed[index] = true;
             }
             result.removed.push_back(std::move(joined));
+            result.reasons.emplace_back(reason_text(group.reason));
         }
         std::vector<std::string> kept;
         kept.reserve(arguments.size());
