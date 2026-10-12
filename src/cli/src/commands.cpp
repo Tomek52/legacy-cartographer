@@ -136,9 +136,14 @@ Outcome<AnalysisInput> resolve_input(const AnalyzeCommand& command) {
 }
 
 /// The fact database of a run of `lcart analyze` (ADR-0019): written to
-/// `.<name>.partial` next to `target`, locked with `flock` for the whole
-/// run, and moved over the target only by commit(). An interrupted or
-/// failed run leaves it in place for `--resume`.
+/// `.<name>.partial` next to `target` and moved over the target only by
+/// commit(). The whole run is locked with `flock` on a separate file
+/// `.<name>.partial.lock` next to it, never on the partial database itself,
+/// so that SQLite's own POSIX locks on the database do not clash with the
+/// run lock on a drive mount (v9fs), where they do clash on the same file
+/// (on ext4 they do not; ADR-0023). An interrupted or failed run leaves the partial database in
+/// place for `--resume`; the lock file is never deleted (removing it would
+/// race with a waiting run) and stays, empty, in the output directory.
 class PartialDatabase {
 public:
     /// Fails if `target` exists and is not a fact database (lcart replaces
@@ -154,8 +159,9 @@ public:
         }
         // The directory resolved (it exists now): SQLITE_OPEN_NOFOLLOW
         // refuses a link in any component of the name, and only the
-        // partial database's own name must not be one. The lock, the
-        // store and the final rename all use these paths.
+        // partial database's own name must not be one. The lock file, the
+        // partial database, the store and the final rename all use these
+        // paths.
         std::error_code ec;
         const fs::path directory = fs::canonical(target.parent_path(), ec);
         if (ec) {
@@ -165,7 +171,8 @@ public:
         PartialDatabase partial;
         partial.target_ = directory / target.filename();
         partial.file_ = directory / ("." + target.filename().string() + ".partial");
-        if (auto locked = partial.lock(resume); !locked) {
+        partial.lock_file_ = directory / ("." + target.filename().string() + ".partial.lock");
+        if (auto locked = partial.take_lock(); !locked) {
             return std::unexpected(std::move(locked.error()));
         }
         if (auto prepared = partial.prepare(resume); !prepared) {
@@ -184,10 +191,12 @@ public:
     PartialDatabase& operator=(const PartialDatabase&) = delete;
     PartialDatabase(PartialDatabase&& other) noexcept = default;
     PartialDatabase& operator=(PartialDatabase&&) = delete;
-    /// Keeps the file: an interrupted or failed run is resumed from it.
+    /// Keeps the partial database: an interrupted or failed run is resumed
+    /// from it. The lock file stays too (it is never deleted).
     ~PartialDatabase() {
-        // SQLite first: closing any descriptor of the file drops SQLite's
-        // POSIX locks on it.
+        // SQLite first: closing any descriptor of the partial database drops
+        // SQLite's POSIX locks on it. The run lock on the separate lock file
+        // is dropped after.
         store_.reset();
         lock_.reset();
     }
@@ -245,28 +254,24 @@ private:
         return {};
     }
 
-    /// Opens the partial database file and takes the `flock` on it; for a
-    /// new analysis, creates it if missing. Nothing is created or written
-    /// through a symbolic link: a new file is created with O_EXCL; an
-    /// existing name is opened as it is (a link is followed, since open()
-    /// with O_NOFOLLOW is out of reach without a vararg call), then refused
-    /// unless it is the regular file at that name, before anything is
-    /// written. The store reopens it with SQLITE_OPEN_NOFOLLOW.
-    Outcome<void> lock(bool resume) {
+    /// Opens the run lock file `.<name>.partial.lock` and takes the `flock`
+    /// on it (ADR-0023): the whole run is locked on this file, never on the
+    /// partial database, so that SQLite's own POSIX locks on the database do
+    /// not clash with it on a drive mount. Nothing is created or written
+    /// through a symbolic link, with the same care as the partial database:
+    /// a new file is created with O_EXCL ("x"); an existing name is opened
+    /// as it is ("r+"; this follows a link, since open() with O_NOFOLLOW is
+    /// out of reach without a vararg call), then refused unless it is the
+    /// regular file at that name. The lock file is never deleted; a run
+    /// before it existed creates it, a later run reuses it.
+    Outcome<void> take_lock() {
         std::error_code ec;
-        const bool exists = fs::exists(fs::symlink_status(file_, ec));
-        if (resume && !exists) {
-            return fail(ExitStatus::failure,
-                        "no interrupted analysis to resume: " + file_.string() + " does not exist");
-        }
-        // "x" (O_EXCL) creates the file and fails on any existing name, a
-        // symbolic link included. An existing name is opened without
-        // creating ("r+"; this follows a link) and checked below.
+        const bool exists = fs::exists(fs::symlink_status(lock_file_, ec));
         // "e": closed on exec (glibc).
-        lock_ = std::make_unique<OpenFile>(file_, exists ? "r+e" : "w+xe");
+        lock_ = std::make_unique<OpenFile>(lock_file_, exists ? "r+e" : "w+xe");
         if (!lock_->is_open()) {
             return fail(ExitStatus::failure,
-                        "cannot open " + file_.string() + ": " +
+                        "cannot open " + lock_file_.string() + ": " +
                             std::error_code{errno, std::generic_category()}.message());
         }
         const int descriptor = lock_->descriptor();
@@ -278,19 +283,62 @@ private:
         // name after the open, is refused (lcart writes only its own file).
         struct stat opened{};
         struct stat named{};
-        if (::fstat(descriptor, &opened) != 0 || ::lstat(file_.c_str(), &named) != 0 ||
+        if (::fstat(descriptor, &opened) != 0 || ::lstat(lock_file_.c_str(), &named) != 0 ||
             !S_ISREG(named.st_mode) || opened.st_dev != named.st_dev ||
             opened.st_ino != named.st_ino) {
-            return fail(ExitStatus::failure, file_.string() + " is not a regular file");
+            return fail(ExitStatus::failure, lock_file_.string() + " is not a regular file");
         }
         return {};
     }
 
-    /// For `resume`, checks the file is a fact database; otherwise empties
-    /// it (keeping the locked file) and removes a leftover `-journal` file.
+    /// Prepares the partial database `.<name>.partial`, now that the run
+    /// lock is held. For `resume`, requires it exists and checks it is a
+    /// fact database. Without `resume`, an existing partial database is
+    /// emptied (replaced) together with a leftover `-journal` file that
+    /// SQLite would otherwise roll back into the new database; a missing one
+    /// is created by the store. Either way, an existing name is refused
+    /// unless it is the regular file at that name (not a symbolic link, and
+    /// not another file put there), before anything is read or written; a
+    /// new file is left to the store, which creates it with
+    /// SQLITE_OPEN_NOFOLLOW (O_EXCL) and reopens an existing one the same way.
     [[nodiscard]] Outcome<void> prepare(bool resume) const {
         std::error_code ec;
         const fs::path journal = file_.string() + "-journal";
+        const bool exists = fs::exists(fs::symlink_status(file_, ec));
+        if (resume && !exists) {
+            return fail(ExitStatus::failure,
+                        "no interrupted analysis to resume: " + file_.string() + " does not exist");
+        }
+        if (exists) {
+            // An existing partial database is lcart's own file: refuse a
+            // symbolic link, or another file put at the name, before reading
+            // or writing it, with or without --resume (the run lock is on a
+            // separate file now, so this check lives here). "r+" follows a
+            // link; the lstat/fstat check refuses one. The store reopens the
+            // file with SQLITE_OPEN_NOFOLLOW.
+            const OpenFile partial{file_, "r+e"};
+            if (!partial.is_open()) {
+                return fail(ExitStatus::failure,
+                            "cannot open " + file_.string() + ": " +
+                                std::error_code{errno, std::generic_category()}.message());
+            }
+            struct stat opened{};
+            struct stat named{};
+            if (::fstat(partial.descriptor(), &opened) != 0 ||
+                ::lstat(file_.c_str(), &named) != 0 || !S_ISREG(named.st_mode) ||
+                opened.st_dev != named.st_dev || opened.st_ino != named.st_ino) {
+                return fail(ExitStatus::failure, file_.string() + " is not a regular file");
+            }
+            if (!resume) {
+                // Replaced: emptied here, and its -journal removed below so
+                // SQLite does not roll it back into the new database.
+                if (::ftruncate(partial.descriptor(), 0) != 0) {
+                    return fail(ExitStatus::failure,
+                                "cannot replace " + file_.string() + ": " +
+                                    std::error_code{errno, std::generic_category()}.message());
+                }
+            }
+        }
         if (resume) {
             // With a -journal file left by a crash, SQLite first rolls the
             // unfinished translation unit back, which a read-only check
@@ -302,12 +350,6 @@ private:
                                              " without --resume");
             }
             return {};
-        }
-        // Truncated rather than removed: the lock stays on this file.
-        if (::ftruncate(lock_->descriptor(), 0) != 0) {
-            return fail(ExitStatus::failure,
-                        "cannot replace " + file_.string() + ": " +
-                            std::error_code{errno, std::generic_category()}.message());
         }
         fs::remove(journal, ec);
         if (ec) {
@@ -341,7 +383,11 @@ private:
 
     fs::path target_;
     fs::path file_;
-    /// Holds the `flock` for the whole run (ADR-0019).
+    /// The run lock file next to the partial database (ADR-0023); never
+    /// deleted. Empty: it carries the `flock`, no data.
+    fs::path lock_file_;
+    /// Holds the `flock` for the whole run on `lock_file_` (ADR-0019,
+    /// ADR-0023).
     std::unique_ptr<OpenFile> lock_;
     std::unique_ptr<facts::SqliteFactStore> store_;
 };

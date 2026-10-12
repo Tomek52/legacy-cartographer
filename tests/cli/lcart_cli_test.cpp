@@ -591,14 +591,17 @@ TEST_F(LcartCliTest, FailedAnalysisKeepsThePreviousDatabase) {
     EXPECT_EQ(run.status, exit_failure);
     EXPECT_EQ(query(database, {"callers", "app_run"}).out,
               "app/legacy.c:4:12\tlegacy_run\napp/main.c:10:12\tmain\n");
-    // Nothing is left next to it.
+    // Nothing is left next to it but the run lock file, which is never
+    // deleted and stays empty (ADR-0023); the partial database is gone.
     std::vector<std::string> names;
     for (const fs::directory_entry& entry : fs::directory_iterator{work_dir()}) {
         names.push_back(entry.path().filename().string());
     }
     std::ranges::sort(names);
-    EXPECT_EQ(names, (std::vector<std::string>{"compile_commands.json", "stderr.txt", "stdout.txt",
+    EXPECT_EQ(names, (std::vector<std::string>{".two_modules.lcart.db.partial.lock",
+                                               "compile_commands.json", "stderr.txt", "stdout.txt",
                                                "two_modules.lcart.db"}));
+    EXPECT_EQ(fs::file_size(work_dir() / ".two_modules.lcart.db.partial.lock"), 0U);
 }
 
 TEST_F(LcartCliTest, ForceDoesNotRemoveADirectory) {
@@ -820,9 +823,11 @@ TEST_F(LcartCliTest, MapWritesTheDefaultPath) {
     const Outcome second = lcart({"map"});
     EXPECT_EQ(second.status, exit_success) << second.err;
     EXPECT_EQ(read_file(output), golden_map());
-    // Written through a file next to it that is renamed: nothing is left.
-    EXPECT_EQ(sorted_names(output.parent_path()),
-              (std::vector<std::string>{"facts.lcart.db", "map.md"}));
+    // Written through a file next to it that is renamed: nothing is left but
+    // the analysis run lock file, which stays (ADR-0023).
+    EXPECT_EQ(
+        sorted_names(output.parent_path()),
+        (std::vector<std::string>{".facts.lcart.db.partial.lock", "facts.lcart.db", "map.md"}));
 }
 
 TEST_F(LcartCliTest, MapToStandardOutput) {
@@ -1151,6 +1156,14 @@ protected:
         return database.parent_path() / ("." + database.filename().string() + ".partial");
     }
 
+    /// The run lock file next to the partial database: `flock` for the whole
+    /// run is taken on this, never on the partial database itself, so that
+    /// SQLite's own POSIX locks on the database do not clash with it on a
+    /// drive mount (v9fs); ADR-0023.
+    [[nodiscard]] static fs::path lock_of(const fs::path& database) {
+        return database.parent_path() / ("." + database.filename().string() + ".partial.lock");
+    }
+
     /// Arguments of `lcart analyze` for the two_modules fixture into `database`.
     [[nodiscard]] std::vector<std::string> two_modules_arguments(const fs::path& database) const {
         const fs::path root = fixture("two_modules");
@@ -1438,15 +1451,20 @@ TEST_F(LcartAnalyzeRunTest, JobsOutOfRangeIsAUsageError) {
 }
 
 // Verifies: b16-resumable-analysis-v2 (ADR-0019: one run per target; the
-// partial database is locked for the whole run).
+// run is locked for the whole of it). ADR-0023: the lock is on a separate
+// file `.<name>.partial.lock`, never on the partial database itself, so a
+// second run that holds that lock file (LOCK_EX | LOCK_NB) is refused with
+// the existing message, while SQLite's own locks on the database do not
+// clash with it on a drive mount (v9fs).
 TEST_F(LcartAnalyzeRunTest, SecondRunOnTheSameTargetIsRefused) {
     const fs::path database = work_dir() / "facts.lcart.db";
-    const fs::path partial = partial_of(database);
+    const fs::path lock = lock_of(database);
     const std::vector<std::string> arguments = two_modules_arguments(database);
     std::vector<std::string> resume = arguments;
     resume.emplace_back("--resume");
     {
-        const LockedFile running{partial};
+        // A running analysis holds the lock file, not the partial database.
+        const LockedFile running{lock};
         ASSERT_TRUE(running.locked());
         const Outcome refused = lcart(arguments);
         EXPECT_EQ(refused.status, exit_failure);
@@ -1456,7 +1474,33 @@ TEST_F(LcartAnalyzeRunTest, SecondRunOnTheSameTargetIsRefused) {
     // The lock ended with the file.
     const Outcome analysed = lcart(arguments);
     EXPECT_EQ(analysed.status, exit_success) << analysed.err;
+    EXPECT_FALSE(fs::exists(partial_of(database)));
+    // ADR-0023: the lock file is never deleted; it stays, empty, in the
+    // output directory (removing it would race with a waiting run).
+    ASSERT_TRUE(fs::is_regular_file(lock)) << lock;
+    EXPECT_EQ(fs::file_size(lock), 0U) << lock;
+}
+
+// Verifies: b16-resumable-analysis-v2 (ADR-0023: the run lock is on a
+// separate file, so an `flock` on the partial database file itself no longer
+// refuses a run; this is what unblocks the default database on a drive
+// mount, where SQLite also locks that file). The partial database here is an
+// empty file: a new run (no --resume) replaces it, as it does any unlocked
+// leftover, and succeeds despite the held lock on it.
+TEST_F(LcartAnalyzeRunTest, FlockOnThePartialDatabaseDoesNotStopARun) {
+    const fs::path database = work_dir() / "facts.lcart.db";
+    const fs::path partial = partial_of(database);
+    // An empty leftover partial database, as a crash on a drive mount may
+    // leave; create it before locking it, as the running-analysis tests do.
+    std::ofstream{partial}.close();
+    const LockedFile holding_the_database{partial};
+    ASSERT_TRUE(holding_the_database.locked());
+
+    const Outcome run = lcart(two_modules_arguments(database));
+    EXPECT_EQ(run.status, exit_success) << run.err;
     EXPECT_FALSE(fs::exists(partial));
+    EXPECT_EQ(query(database, {"export"}).out,
+              read_file(fs::path{LCART_GOLDEN_DIR} / "two_modules.facts.jsonl"));
 }
 
 // Verifies: b16-resumable-analysis-v2 (ADR-0019: without --resume, an
