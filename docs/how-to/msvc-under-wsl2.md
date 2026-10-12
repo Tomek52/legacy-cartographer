@@ -24,15 +24,24 @@ The analysis root can be any directory, including one under
 contain no drive letter. Two differences from a root on the Linux file
 system:
 
-- **The fact database must not be on the drive mount.** With the root on
-  `/mnt/c/...` and the default database in `lcart-out/` under it, `lcart
-  analyze` stops with `preparing a fact query: database is locked` (tried;
-  SQLite does not work on drvfs). Give `--db` a path on the Linux file
-  system, for example `--db ~/facts/project.lcart.db`.
+- **The default fact database now works on the drive mount.** Earlier, with
+  the root on `/mnt/c/...` and the default database in `lcart-out/` under it,
+  `lcart analyze` stopped with `preparing a fact query: database is locked`,
+  and the workaround was to give `--db` a path on the Linux file system. The
+  cause was lcart's own run lock: it took `flock` on the partial database
+  file, and on the drive mount (file system type v9fs) that clashed with
+  SQLite's own POSIX locks on the same file (on the Linux file system they do
+  not clash). lcart now takes the run lock on a separate file
+  (`.<name>.partial.lock` next to the partial database; ADR-0023), so the
+  default database works on `/mnt/c` too. Tried (2026-10-11, clang 20.1.2): a
+  one-file project under `/mnt/c` (confirmed v9fs) analysed with the default
+  database — it failed with `database is locked` before the change and
+  succeeded after it; `--db` on the Linux file system worked both times.
 - The facts were the same for a root on `/mnt/c` and for a copy on the Linux
   file system (tried: sorted exports of the sample compared line by line).
   Reading is slower on the mount; ADR-0009 recommends copying the code base
-  into the Linux file system for speed.
+  into the Linux file system for speed, and the Linux file system is still
+  the faster place for the database.
 
 Case-insensitive file names on drvfs against the case of `#include` lines
 were not tried (`TODO: verify`).
@@ -111,7 +120,9 @@ and compares the logger's output with
 `tests/fixtures/msbuild_solution/compile_commands.golden.json`; run it after
 changing the logger.
 
-Then run `lcart` under WSL2 (step 5) with `--db` on the Linux file system.
+Then run `lcart` under WSL2 (step 5). The default database in `lcart-out/`
+works now, including under `/mnt/c`; `--db` on the Linux file system is still
+faster.
 
 ## 3. Write the commands so that Clang reads them as MSVC code
 
@@ -206,8 +217,10 @@ lcart query export --db ~/facts/project.lcart.db | grep '"record":"diagnostic"' 
 
 On the sample solution this printed `analysed 2/2 translation units, 0
 diagnostics` (tried: root on `/mnt/c`, database on the Linux file system,
-database from step 2 with `map=`). Each translation unit Clang cannot parse
-becomes diagnostics and lowers coverage (ADR-0009).
+database from step 2 with `map=`). The default database under the root works
+too since ADR-0023 (tried with a one-file project under `/mnt/c`); `--db` on
+the Linux file system is kept here because it is faster. Each translation
+unit Clang cannot parse becomes diagnostics and lowers coverage (ADR-0009).
 
 Templates: before C++20, the MSVC target turns on
 `-fdelayed-template-parsing`, and calls in the body of a function template
@@ -229,7 +242,7 @@ parsing accepts may then fail to parse
 | `cl.exe /c -MD ...` | parses since B-17 (`-MD` used to be dropped by a LibTooling adjuster) |
 | `/clang:-fplugin=...`, `-clang:-fplugin=...`, `/clang:-Xclang /clang:-load ...` | removed with a warning since B-17; the plugin was not loaded before either |
 | Root at a path like `/mnt/c/...` on the Linux file system | stored paths relative to the root |
-| Root on a real drvfs mount (`/mnt/c`), database in the default `lcart-out/` | fails: `database is locked` |
+| Root on a real drvfs mount (`/mnt/c`), database in the default `lcart-out/` | before ADR-0023: fails `database is locked`; after: 2 of 2 translation units, 0 diagnostics (tried with a one-file project) |
 | Root on a real drvfs mount, `--db` on the Linux file system | 2 of 2 translation units, 0 diagnostics; facts equal to those of a root on the Linux file system |
 | Compilation database from an MSBuild solution: text log (`-v:detailed`) | not usable: relative paths, no system include directories, localized text |
 | Compilation database from an MSBuild solution: the logger of step 2 (Build Tools 2022, x64, `-m:4`, a replayed `.binlog`, a precompiled header) | works; output identical for `-m:4` and serial |
