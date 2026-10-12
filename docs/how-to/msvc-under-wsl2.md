@@ -98,12 +98,18 @@ units parsed); x64 and Win32 configurations. Not tried: older Visual Studio
 versions, other platform toolsets than `v143`, C++/CLI, custom build steps,
 a solution with compile errors (`TODO: verify`).
 
-The Win32 configuration gives `--target=i686-pc-windows-msvc` commands. They
-parse in `clang-cl`, but in `lcart` the files that include `<windows.h>`
-fail (`MS-style inline assembly is not available: Unable to find target for
-this triple`), because `lcart` registers no LLVM targets (tried; [open
-question](../open-questions.md#open-technical-questions)). Analyse the x64
-configuration.
+The Win32 configuration gives `--target=i686-pc-windows-msvc` commands. With
+`lcart` as of 2026-10-11 (commit `41f6e4f`) the files that include
+`<windows.h>` failed in it (`MS-style inline assembly is not available:
+Unable to find target for this triple`), because `lcart` registered no LLVM
+targets; `clang-cl` parsed the same files. `lcart` now registers the targets
+that its LLVM provides before it parses
+(ADR-0023),
+and the tests parse a function with MS-style inline assembly for the x86 and
+x86_64 Windows targets. The real Windows SDK with the Win32 configuration was
+not tried again (`TODO: verify`); until it is, check the Win32 result of a
+first analysis for diagnostics. arm64 has no MS-style inline assembly at all
+(`clang` says `unsupported architecture 'aarch64'`).
 
 On Windows, `tools\msbuild-compdb\verify.ps1` rebuilds the sample solution
 and compares the logger's output with
@@ -233,6 +239,7 @@ parsing accepts may then fail to parse
 | Compilation database from an MSBuild solution: text log (`-v:detailed`) | not usable: relative paths, no system include directories, localized text |
 | Compilation database from an MSBuild solution: the logger of step 2 (Build Tools 2022, x64, `-m:4`, a replayed `.binlog`, a precompiled header) | works; output identical for `-m:4` and serial |
 | The same, Win32 configuration | database fine; in `lcart` the files with `<windows.h>` fail (no LLVM targets) |
+| The same, Win32 configuration, after `lcart` registers the LLVM targets | a function with `__asm` parses for x86 and x86_64 (tests, stand-in code); the real `<windows.h>` of the SDK with Win32 not tried again |
 | Windows database as made (`C:\...`, backslashes), no `map=` | fails: `Compile command not found`, 0 of 2 |
 | The same with `map=` to `/mnt/c/...` | 2 of 2, 0 diagnostics |
 | Real Windows SDK and MSVC headers through `/imsvc` and `/mnt/c` | parse with no diagnostics |

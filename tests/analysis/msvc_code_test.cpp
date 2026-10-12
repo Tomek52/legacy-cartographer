@@ -164,6 +164,48 @@ TEST_F(MsvcCodeTest, ParsesAClExeCommand) {
     expect_api_facts(analyze("cl.exe /c /nologo /DAPI_EXPORTS /I."));
 }
 
+// Verifies: nfr013-linux-and-wsl2-v1 (MSVC code under Clang: the analysis
+// reads what the Windows SDK's winnt.h contains). MS-style inline assembly
+// (`__asm`) parses for the x86 targets of Windows. Clang looks the target up
+// in LLVM's registry to assemble the block, so without registered targets it
+// reports "MS-style inline assembly is not available: Unable to find target
+// for this triple (no targets are registered)" (ParseStmtAsm.cpp, LLVM
+// 20.1.2); lcart registers the targets before it parses (ADR-0023). The
+// function below stands in for the construct: the Windows SDK and the real
+// winnt.h are not available here. arm64 has no MS-style inline assembly at
+// all (clang says "unsupported architecture 'aarch64'"), so it is not tested.
+TEST_F(MsvcCodeTest, ParsesMsInlineAssemblyForAnX86Target) {
+    const fs::path root = work_dir();
+    {
+        std::ofstream{root / "asm.cc"} << "void f(void) { __asm { nop } }\n";
+    }
+    const AnalysisSummary summary = analyze(
+        "clang -c --target=i686-pc-windows-msvc -fms-extensions -fms-compatibility -fasm-blocks",
+        "asm.cc", root);
+    EXPECT_EQ(summary.translation_units_parsed, 1U);
+    EXPECT_EQ(summary.diagnostics, 0U);
+    expect_no_stored_diagnostics();
+    const auto found = store().find_functions("f");
+    ASSERT_TRUE(found.has_value());
+    EXPECT_EQ(found->size(), 1U);
+}
+
+TEST_F(MsvcCodeTest, ParsesMsInlineAssemblyForAnX64Target) {
+    const fs::path root = work_dir();
+    {
+        std::ofstream{root / "asm.cc"} << "void f(void) { __asm { nop } }\n";
+    }
+    const AnalysisSummary summary = analyze(
+        "clang -c --target=x86_64-pc-windows-msvc -fms-extensions -fms-compatibility -fasm-blocks",
+        "asm.cc", root);
+    EXPECT_EQ(summary.translation_units_parsed, 1U);
+    EXPECT_EQ(summary.diagnostics, 0U);
+    expect_no_stored_diagnostics();
+    const auto found = store().find_functions("f");
+    ASSERT_TRUE(found.has_value());
+    EXPECT_EQ(found->size(), 1U);
+}
+
 TEST_F(MsvcCodeTest, DashSpelledClOptionsReachTheDriver) {
     // LibTooling's dependency-file adjuster drops every -M... argument
     // unless the command names --driver-mode=cl, which a command run as
