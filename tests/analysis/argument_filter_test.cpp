@@ -161,4 +161,76 @@ TEST(ArgumentFilter, RemovesXpreprocessorPluginOptionsPassedThroughClangCl) {
     EXPECT_EQ(result.removed.size(), 1U);
 }
 
+// --- Clang configuration files (--config), docs/security.md T5 ---
+// The driver reads them and their arguments bypass this filter unless they
+// are removed here too; a default clang.cfg is stopped by --no-default-config
+// in the recorder (ADR-0021, ADR-0023).
+
+TEST(ArgumentFilter, RemovesConfigEqualsForm) {
+    const auto result =
+        remove_code_loading_arguments({"clang", "-c", "--config=/etc/evil.cfg", "a.c"});
+    EXPECT_EQ(result.arguments, (Args{"clang", "-c", "a.c"}));
+    EXPECT_EQ(result.removed, (Args{"--config=/etc/evil.cfg"}));
+    ASSERT_EQ(result.reasons.size(), 1U);
+    EXPECT_EQ(result.reasons[0], "reads a configuration file");
+}
+
+TEST(ArgumentFilter, RemovesConfigSeparateFormWithItsValue) {
+    const auto result =
+        remove_code_loading_arguments({"clang", "-c", "--config", "/etc/evil.cfg", "a.c"});
+    EXPECT_EQ(result.arguments, (Args{"clang", "-c", "a.c"}));
+    EXPECT_EQ(result.removed, (Args{"--config /etc/evil.cfg"}));
+    ASSERT_EQ(result.reasons.size(), 1U);
+    EXPECT_EQ(result.reasons[0], "reads a configuration file");
+}
+
+TEST(ArgumentFilter, KeepsSurroundingArgumentsInOrderAroundConfig) {
+    const auto result =
+        remove_code_loading_arguments({"clang", "-Iinc", "--config", "/etc/evil.cfg", "-DX=1",
+                                       "--config=/etc/other.cfg", "-O2", "a.c"});
+    EXPECT_EQ(result.arguments, (Args{"clang", "-Iinc", "-DX=1", "-O2", "a.c"}));
+    EXPECT_EQ(result.removed, (Args{"--config /etc/evil.cfg", "--config=/etc/other.cfg"}));
+}
+
+TEST(ArgumentFilter, RemovesConfigPassedThroughClangCl) {
+    const auto result = remove_code_loading_arguments(
+        {"clang-cl", "/c", "/clang:--config=/etc/evil.cfg", "/DX", "a.cpp"});
+    EXPECT_EQ(result.arguments, (Args{"clang-cl", "/c", "/DX", "a.cpp"}));
+    EXPECT_EQ(result.removed, (Args{"/clang:--config=/etc/evil.cfg"}));
+    ASSERT_EQ(result.reasons.size(), 1U);
+    EXPECT_EQ(result.reasons[0], "reads a configuration file");
+}
+
+TEST(ArgumentFilter, RemovesConfigSeparateFormPassedThroughClangCl) {
+    const auto result = remove_code_loading_arguments(
+        {"clang-cl", "/c", "/clang:--config", "/clang:/etc/evil.cfg", "a.cpp"});
+    EXPECT_EQ(result.arguments, (Args{"clang-cl", "/c", "a.cpp"}));
+    EXPECT_EQ(result.removed, (Args{"/clang:--config /clang:/etc/evil.cfg"}));
+}
+
+TEST(ArgumentFilter, KeepsOptionsThatMerelyLookLikeConfig) {
+    // -config (one dash) is not an option; --config-foo, the config-dir
+    // options and a plain file named "config" are not --config and must be
+    // kept.
+    const Args args{"clang",
+                    "-c",
+                    "-config",
+                    "ignored.cfg",
+                    "--config-foo",
+                    "--config-system-dir=/d",
+                    "--config-user-dir=/u",
+                    "-multi-lib-config=/m",
+                    "config",
+                    "a.c"};
+    const auto result = remove_code_loading_arguments(args);
+    EXPECT_EQ(result.arguments, args);
+    EXPECT_TRUE(result.removed.empty());
+}
+
+TEST(ArgumentFilter, PluginRemovalsKeepTheCodeLoadingReason) {
+    const auto result = remove_code_loading_arguments({"clang", "-fplugin=/p/a.so", "a.c"});
+    ASSERT_EQ(result.reasons.size(), 1U);
+    EXPECT_EQ(result.reasons[0], "loads code into the analyser");
+}
+
 } // namespace

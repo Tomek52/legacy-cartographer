@@ -251,6 +251,88 @@ TEST_F(ClangAnalyzerTest, StripsPluginArgumentsInsideResponseFiles) {
     EXPECT_NE(summary->warnings[0].find("-fplugin=/nonexistent/evil.so"), std::string::npos);
 }
 
+// Verifies: security-malicious-build-input-v1 (T5: a Clang configuration
+// file named in the command does not influence the analysis; its arguments
+// are removed and the removal is reported). ADR-0023.
+TEST_F(ClangAnalyzerTest, IgnoresExplicitConfigFileAndWarns) {
+    // A translation unit that only compiles when the config defines
+    // FROM_CONFIG; the config would define it, so if the config were read
+    // the TU would parse. The filter removes --config, so the #error fires.
+    {
+        std::ofstream src{work_dir() / "needs_config.c"};
+        src << "#ifndef FROM_CONFIG\n#error configuration file was read\n#endif\nint ok;\n";
+    }
+    const fs::path config = work_dir() / "evil.cfg";
+    {
+        std::ofstream cfg{config};
+        cfg << "-DFROM_CONFIG=1\n";
+    }
+    const fs::path database = work_dir() / "compile_commands.json";
+    {
+        std::ofstream out{database};
+        out << R"([{"directory": ")" << work_dir().string()
+            << R"(", "command": "clang -c --config=)" << config.string()
+            << R"( needs_config.c", "file": "needs_config.c"}])" << '\n';
+    }
+    RecordingFactWriter facts;
+    ClangAnalyzer analyzer;
+    const auto summary = analyzer.analyze({.compilation_database = database,
+                                           .root = work_dir(),
+                                           .exclude_globs = {},
+                                           .module_rules = {}},
+                                          facts);
+
+    ASSERT_TRUE(summary.has_value()) << summary.error().message;
+    // The config was ignored, so FROM_CONFIG is undefined and the TU fails.
+    EXPECT_EQ(summary->translation_units_parsed, 0U);
+    EXPECT_GT(summary->diagnostics, 0U);
+    ASSERT_EQ(summary->warnings.size(), 1U);
+    EXPECT_NE(summary->warnings[0].find("--config=" + config.string()), std::string::npos);
+    EXPECT_NE(summary->warnings[0].find("reads a configuration file"), std::string::npos);
+}
+
+// Verifies: security-malicious-build-input-v1 (T5: a default clang.cfg next
+// to the program named by the command does not influence the analysis;
+// --no-default-config, inserted by the recorder, stops it). ADR-0023.
+TEST_F(ClangAnalyzerTest, IgnoresDefaultConfigFileNextToTheProgram) {
+    {
+        std::ofstream src{work_dir() / "needs_config.c"};
+        src << "#ifndef FROM_CONFIG\n#error configuration file was read\n#endif\nint ok;\n";
+    }
+    // The program named by the command: any path whose DIRECTORY holds
+    // clang.cfg. ClangTool reads the default config from that directory and
+    // does not require the program to exist as an executable (verified on
+    // clang-20 20.1.2 with LibTooling). The basename stays "clang" so the
+    // driver mode is inferred the usual way.
+    const fs::path toolbin = work_dir() / "toolbin";
+    fs::create_directories(toolbin);
+    {
+        std::ofstream cfg{toolbin / "clang.cfg"};
+        cfg << "-DFROM_CONFIG=1\n";
+    }
+    const std::string program = (toolbin / "clang").string();
+    const fs::path database = work_dir() / "compile_commands.json";
+    {
+        std::ofstream out{database};
+        out << R"([{"directory": ")" << work_dir().string() << R"(", "command": ")" << program
+            << R"( -c needs_config.c", "file": "needs_config.c"}])" << '\n';
+    }
+    RecordingFactWriter facts;
+    ClangAnalyzer analyzer;
+    const auto summary = analyzer.analyze({.compilation_database = database,
+                                           .root = work_dir(),
+                                           .exclude_globs = {},
+                                           .module_rules = {}},
+                                          facts);
+
+    ASSERT_TRUE(summary.has_value()) << summary.error().message;
+    // The default config was ignored, so the TU fails and nothing is removed
+    // (no explicit --config in the command).
+    EXPECT_EQ(summary->translation_units_parsed, 0U);
+    EXPECT_GT(summary->diagnostics, 0U);
+    EXPECT_TRUE(summary->warnings.empty());
+}
+
 TEST_F(ClangAnalyzerTest, MissingCompilationDatabaseIsAnError) {
     RecordingFactWriter facts;
     ClangAnalyzer analyzer;

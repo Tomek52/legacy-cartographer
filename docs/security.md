@@ -152,8 +152,13 @@ to make it *do* something: delete files, run a command, send data to a URL.
   hide such options; any `@` argument left over is removed too. LibTooling
   itself never loads `-load` plugins (only `clang`'s own cc1 entry point
   does, ADR-0021), so the filter is defence in depth. Clang configuration
-  files read by the driver bypass it
-  ([open question](open-questions.md#open-technical-questions)).
+  files, whose arguments the driver would read past this filter, are stopped
+  too (ADR-0023): the filter removes `--config=<file>` and the separate
+  `--config <file>` (plain or passed through clang-cl), and the recorder
+  inserts `--no-default-config` right after the program name of every
+  command so the driver never reads a default `clang.cfg` or
+  `<triple>-clang.cfg` next to the named program (not for a `-cc1` command,
+  which must start with `-cc1`). Each removal is reported as a warning.
 - Parsing hostile C/C++ can still crash or exhaust Clang. Analysis runs
   in-process, one TU at a time: a Clang crash ends the run. Mitigation: each
   TU's facts are committed as it completes, so `--resume` continues after the
