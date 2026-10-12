@@ -10,6 +10,7 @@
 #include <llvm/ADT/StringExtras.h>
 #include <llvm/ADT/StringRef.h>
 #include <llvm/Support/SHA256.h>
+#include <llvm/Support/TargetSelect.h>
 #include <llvm/Support/VirtualFileSystem.h>
 
 #include <algorithm>
@@ -785,13 +786,36 @@ common::Result<AnalysisSummary> AnalysisRun::run() {
 
 } // namespace
 
+namespace {
+
+/// Registers every target the linked LLVM provides, once per process, as
+/// clang's own main does before it parses anything. Without it, MS-style
+/// inline assembly (`__asm`, used by the Windows SDK's winnt.h for x86 and
+/// arm64) is rejected with "Unable to find target for this triple (no
+/// targets are registered)", because Clang's parser looks the target up in
+/// LLVM's registry to assemble the block (ADR-0023). Registration is
+/// idempotent and not thread-safe, so it happens before any worker starts.
+void register_llvm_targets() {
+    static std::once_flag registered;
+    std::call_once(registered, [] {
+        llvm::InitializeAllTargets();
+        llvm::InitializeAllTargetMCs();
+        llvm::InitializeAllAsmPrinters();
+        llvm::InitializeAllAsmParsers();
+    });
+}
+
+} // namespace
+
 common::Result<AnalysisSummary> ClangAnalyzer::analyze(const AnalysisRequest& request,
                                                        facts::FactWriter& out) {
+    register_llvm_targets();
     return AnalysisRun{request, out, nullptr}.run();
 }
 
 common::Result<AnalysisSummary> ClangAnalyzer::analyze(const AnalysisRequest& request,
                                                        facts::AnalysisStore& out) {
+    register_llvm_targets();
     return AnalysisRun{request, out, &out}.run();
 }
 
