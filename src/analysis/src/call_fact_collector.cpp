@@ -27,6 +27,7 @@ void CallFactCollector::on_definition(const FunctionEvent& definition,
             fact.kind = facts::CallKind::direct;
         } else {
             fact.via = call.via;
+            fact.field = call.field;
         }
         const std::optional<facts::FileId> file_id = files_->internal_file(files[call.file]);
         if (!file_id) {
@@ -35,6 +36,23 @@ void CallFactCollector::on_definition(const FunctionEvent& definition,
         }
         fact.site = {.file = *file_id, .line = call.line, .column = call.column};
         if (auto written = out_->add_call(fact); !written) {
+            status_ = written;
+        }
+    }
+}
+
+void CallFactCollector::on_field_assignments(std::span<const FieldAssignmentEvent> assignments) {
+    for (const FieldAssignmentEvent& assignment : assignments) {
+        if (!status_) {
+            return;
+        }
+        const std::optional<facts::FunctionId> function = functions_->id_of(assignment.function);
+        if (!function) {
+            continue; // not a function fact
+        }
+        if (auto written =
+                out_->add_field_assignment({.field = assignment.field, .function = *function});
+            !written) {
             status_ = written;
         }
     }

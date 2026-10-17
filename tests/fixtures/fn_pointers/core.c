@@ -23,3 +23,8 @@ int run(context_t *ctx) {
 int size_only(void) {
     return (int)sizeof(checksum(1));
 }
+
+int local_pointer(int value) {
+    handler_t local_handler = checksum;
+    return local_handler(value);
+}

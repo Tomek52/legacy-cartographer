@@ -40,6 +40,7 @@ void BatchWriter::apply(const AstEvent& ast, const TranslationUnitBatch& batch) 
     for (const auto& [definition, id] : written) {
         calls_.on_definition(*definition, batch.files, id);
     }
+    calls_.on_field_assignments(ast.field_assignments);
 }
 
 common::Result<std::uint32_t> BatchWriter::apply(const TranslationUnitBatch& batch,

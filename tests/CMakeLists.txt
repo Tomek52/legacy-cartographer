@@ -30,6 +30,7 @@ add_executable(lcart_analysis_tests
     analysis/call_edges_test.cpp
     analysis/clang_analyzer_test.cpp
     analysis/function_facts_test.cpp
+    analysis/may_call_edges_test.cpp
     analysis/modules_test.cpp
     analysis/msvc_code_test.cpp
     analysis/parallel_analysis_test.cpp)

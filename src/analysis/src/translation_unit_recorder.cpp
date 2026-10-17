@@ -26,8 +26,15 @@
 #include <llvm/Support/SHA256.h>
 #include <llvm/Support/VirtualFileSystem.h>
 
+#include <algorithm>
+#include <cstddef>
+#include <cstdint>
+#include <iterator>
 #include <memory>
+#include <optional>
+#include <string>
 #include <utility>
+#include <vector>
 
 namespace lcart::analysis {
 
@@ -248,11 +255,9 @@ private:
     return sources.getFileEntryRefForID(sources.getFileID(sources.getExpansionLoc(location)));
 }
 
-/// For an indirect call, the called member and the object it is read from,
-/// as written: `backend.recv` for `ctx->backend->recv(...)` and
-/// `local.recv` for `local.recv(...)`. FR-015 resolves the member through
-/// the tables assigned to it. Empty for a plain function pointer.
-[[nodiscard]] std::string member_name(const clang::Expr& callee) {
+/// For an indirect call, the member it calls (`ctx->backend->recv` in
+/// `ctx->backend->recv(...)`); null for a plain function pointer.
+[[nodiscard]] const clang::MemberExpr* called_member(const clang::Expr& callee) {
     const clang::Expr* expression = callee.IgnoreParenImpCasts();
     // `(*handler)(...)` and `(*ctx->backend->recv)(...)` call what `*` reads.
     while (const auto* dereference = llvm::dyn_cast<clang::UnaryOperator>(expression)) {
@@ -261,7 +266,29 @@ private:
         }
         expression = dereference->getSubExpr()->IgnoreParenImpCasts();
     }
-    const auto* member = llvm::dyn_cast<clang::MemberExpr>(expression);
+    return llvm::dyn_cast<clang::MemberExpr>(expression);
+}
+
+/// Clang's USR of `field` if it has function-pointer type, the key that
+/// links indirect calls through it to the functions assigned to it
+/// (ADR-0026); empty otherwise or if Clang cannot generate one.
+[[nodiscard]] std::string function_pointer_field_usr(const clang::ValueDecl& member) {
+    const auto* field = llvm::dyn_cast<clang::FieldDecl>(&member);
+    if (field == nullptr || !field->getType()->isFunctionPointerType()) {
+        return {};
+    }
+    llvm::SmallString<128> usr;
+    if (clang::index::generateUSRForDecl(field, usr)) {
+        return {};
+    }
+    return usr.str().str();
+}
+
+/// For an indirect call, the called member and the object it is read from,
+/// as written: `backend.recv` for `ctx->backend->recv(...)` and
+/// `local.recv` for `local.recv(...)`. Empty for a plain function pointer.
+[[nodiscard]] std::string member_name(const clang::Expr& callee) {
+    const clang::MemberExpr* member = called_member(callee);
     if (member == nullptr) {
         return {};
     }
@@ -325,7 +352,8 @@ private:
             llvm::isa<clang::CXXPseudoDestructorExpr>(callee_expression->IgnoreParenImpCasts())) {
             return;
         }
-        CallEvent event{.callee = std::nullopt, .via = {}, .file = {}, .line = 0, .column = 0};
+        CallEvent event{
+            .callee = std::nullopt, .via = {}, .field = {}, .file = {}, .line = 0, .column = 0};
         if (const clang::FunctionDecl* callee = call.getDirectCallee()) {
             event.callee = builder.known_function(callee->getCanonicalDecl());
             if (!event.callee) {
@@ -333,6 +361,11 @@ private:
             }
         } else {
             event.via = member_name(*callee_expression);
+            // FR-015 resolves a call through a field of function-pointer
+            // type with the functions assigned to that field.
+            if (const clang::MemberExpr* member = called_member(*callee_expression)) {
+                event.field = function_pointer_field_usr(*member->getMemberDecl());
+            }
         }
 
         // A call written in a macro is located at the macro's use (FR-004
@@ -352,6 +385,126 @@ private:
     return calls;
 }
 
+/// The function an initializer names, as `rtu_send` or `&rtu_send`, in
+/// parentheses or cast; null for anything else (a null pointer, a variable).
+[[nodiscard]] const clang::FunctionDecl* named_function(const clang::Expr& value) {
+    const clang::Expr* expression = value.IgnoreParenCasts();
+    if (const auto* address = llvm::dyn_cast<clang::UnaryOperator>(expression);
+        address != nullptr && address->getOpcode() == clang::UO_AddrOf) {
+        expression = address->getSubExpr()->IgnoreParenCasts();
+    }
+    const auto* reference = llvm::dyn_cast<clang::DeclRefExpr>(expression);
+    return reference == nullptr ? nullptr
+                                : llvm::dyn_cast<clang::FunctionDecl>(reference->getDecl());
+}
+
+using FieldInitializerVisitor =
+    llvm::function_ref<void(const clang::FieldDecl& field, const clang::Expr& value)>;
+
+/// `expression` as the semantic form of an initializer list; null if it is
+/// none. The semantic form has one initializer per base class, then per
+/// field in declaration order without unnamed bit-fields, one for the
+/// initialized field of a union, and no designators, whether the source is
+/// positional or designated (InitListExpr in clang/AST/Expr.h; checked with
+/// -ast-dump of clang-20).
+[[nodiscard]] const clang::InitListExpr* semantic_list(const clang::Expr& expression) {
+    const auto* list = llvm::dyn_cast<clang::InitListExpr>(expression.IgnoreParenImpCasts());
+    if (list == nullptr) {
+        return nullptr;
+    }
+    const clang::InitListExpr* semantic = list->getSemanticForm();
+    return semantic != nullptr ? semantic : list;
+}
+
+/// The initializers in the semantic `list` of a `record`, each with the
+/// field it initializes, or null for a base class.
+[[nodiscard]] std::vector<std::pair<const clang::FieldDecl*, const clang::Expr*>>
+member_initializers(const clang::InitListExpr& list, const clang::RecordDecl& record) {
+    std::vector<std::pair<const clang::FieldDecl*, const clang::Expr*>> members;
+    unsigned index = 0;
+    if (const auto* with_bases = llvm::dyn_cast<clang::CXXRecordDecl>(&record);
+        with_bases != nullptr && with_bases->hasDefinition()) {
+        index = std::min(with_bases->getNumBases(), list.getNumInits());
+        for (unsigned base = 0; base < index; ++base) {
+            members.emplace_back(nullptr, list.getInit(base));
+        }
+    }
+    for (const clang::FieldDecl* field : record.fields()) {
+        if (index >= list.getNumInits()) {
+            break;
+        }
+        if (field->isUnnamedBitField() ||
+            (record.isUnion() &&
+             !clang::declaresSameEntity(list.getInitializedFieldInUnion(), field))) {
+            continue;
+        }
+        members.emplace_back(field, list.getInit(index++));
+    }
+    return members;
+}
+
+/// Calls `on_field` with every field of function-pointer type that the
+/// initializer list `initializer` initializes and the expression it gets,
+/// in nested structs, base classes and array elements too.
+void visit_function_pointer_fields(const clang::Expr& initializer,
+                                   FieldInitializerVisitor on_field) {
+    // A work list, not recursion: nesting depth is up to the analysed code.
+    std::vector<const clang::Expr*> pending{&initializer};
+    for (std::size_t next = 0; next < pending.size(); ++next) {
+        const clang::InitListExpr* list =
+            pending[next] == nullptr ? nullptr : semantic_list(*pending[next]);
+        if (list == nullptr) {
+            continue;
+        }
+        const clang::RecordDecl* record = list->getType()->getAsRecordDecl();
+        if (record == nullptr) { // an array: its elements
+            std::ranges::copy(list->inits(), std::back_inserter(pending));
+            continue;
+        }
+        for (const auto& [field, value] : member_initializers(*list, *record)) {
+            if (field != nullptr && value != nullptr && field->getType()->isFunctionPointerType()) {
+                on_field(*field, *value);
+            } else {
+                pending.push_back(value);
+            }
+        }
+    }
+}
+
+/// The functions that the initializer of `variable` assigns to struct
+/// fields of function-pointer type (FR-015), located under the root and
+/// declared in this AST (`builder` has their references).
+[[nodiscard]] std::vector<FieldAssignmentEvent> field_assignments_of(const clang::VarDecl& variable,
+                                                                     clang::SourceManager& sources,
+                                                                     BatchBuilder& builder) {
+    std::vector<FieldAssignmentEvent> assignments;
+    const clang::Expr* initializer = variable.getInit();
+    // In a template, the initializer is resolved only in instantiations,
+    // which are not recorded (as calls, FR-003).
+    if (initializer == nullptr || initializer->isInstantiationDependent()) {
+        return assignments;
+    }
+    // Named: the visitor keeps only a reference to it.
+    auto on_field = [&](const clang::FieldDecl& field, const clang::Expr& value) {
+        const clang::FunctionDecl* function = named_function(value);
+        if (function == nullptr) {
+            return;
+        }
+        const std::optional<std::uint32_t> reference =
+            builder.known_function(function->getCanonicalDecl());
+        const clang::OptionalFileEntryRef file = file_of(sources, value.getBeginLoc());
+        if (!reference || !file || builder.fact_path(sources, *file).is_external) {
+            return;
+        }
+        std::string usr = function_pointer_field_usr(field);
+        if (!usr.empty()) {
+            assignments.push_back({.field = std::move(usr), .function = *reference});
+        }
+    };
+    visit_function_pointer_fields(*initializer, on_field);
+    return assignments;
+}
+
 /// Records every function declaration of a parsed translation unit located
 /// under the root. Template instantiations and implicit code are not
 /// visited (the visitor's defaults). The dynamic visitor, not the
@@ -360,8 +513,20 @@ private:
 class FunctionVisitor final : public clang::DynamicRecursiveASTVisitor {
 public:
     FunctionVisitor(clang::ASTContext& context, BatchBuilder& builder, AstEvent& ast,
-                    std::vector<std::pair<std::size_t, const clang::FunctionDecl*>>& definitions)
-        : context_(&context), builder_(&builder), ast_(&ast), definitions_(&definitions) {}
+                    std::vector<std::pair<std::size_t, const clang::FunctionDecl*>>& definitions,
+                    std::vector<const clang::VarDecl*>& static_variables)
+        : context_(&context), builder_(&builder), ast_(&ast), definitions_(&definitions),
+          static_variables_(&static_variables) {}
+
+    /// Variables with static storage duration and an initializer, whose
+    /// field assignments FR-015 records (ADR-0026: not those of automatic
+    /// variables, which are not static initializers).
+    bool VisitVarDecl(clang::VarDecl* variable) override {
+        if (variable->hasGlobalStorage() && variable->hasInit() && !variable->isInvalidDecl()) {
+            static_variables_->push_back(variable);
+        }
+        return true;
+    }
 
     bool VisitFunctionDecl(clang::FunctionDecl* function) override {
         if (!is_recorded_kind(*function)) {
@@ -408,11 +573,14 @@ private:
     BatchBuilder* builder_;
     AstEvent* ast_;
     std::vector<std::pair<std::size_t, const clang::FunctionDecl*>>* definitions_;
+    std::vector<const clang::VarDecl*>* static_variables_;
 };
 
-/// Records functions, then the calls of every definition: a call may name
-/// a function declared later in the translation unit (a C++ member defined
-/// later in its class), and every callee must already have its reference.
+/// Records functions, then the calls of every definition and the field
+/// assignments of static initializers: a call or an initializer may name a
+/// function declared later in the translation unit (a C++ member defined
+/// later in its class), and every function named must already have its
+/// reference.
 class FunctionAndCallConsumer final : public clang::ASTConsumer {
 public:
     explicit FunctionAndCallConsumer(BatchBuilder& builder) : builder_(&builder) {}
@@ -421,10 +589,17 @@ public:
         builder_->begin_ast();
         AstEvent ast;
         std::vector<std::pair<std::size_t, const clang::FunctionDecl*>> definitions;
-        FunctionVisitor{context, *builder_, ast, definitions}.TraverseAST(context);
+        std::vector<const clang::VarDecl*> static_variables;
+        FunctionVisitor{context, *builder_, ast, definitions, static_variables}.TraverseAST(
+            context);
         for (const auto& [index, definition] : definitions) {
             ast.functions[index].calls =
                 calls_of(*definition, context.getSourceManager(), *builder_);
+        }
+        for (const clang::VarDecl* variable : static_variables) {
+            std::ranges::move(
+                field_assignments_of(*variable, context.getSourceManager(), *builder_),
+                std::back_inserter(ast.field_assignments));
         }
         builder_->batch().events.emplace_back(std::move(ast));
     }

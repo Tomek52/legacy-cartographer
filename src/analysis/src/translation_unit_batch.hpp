@@ -20,7 +20,9 @@ namespace lcart::analysis {
 // The worker leaves out only events the writer would ignore without any
 // effect on the facts: directives in files outside the root, functions and
 // call sites located outside the root, calls to functions that are not
-// recorded, and calls in bodies of functions without a USR.
+// recorded, calls in bodies of functions without a USR, and field
+// assignments located outside the root or naming a function that is not
+// recorded.
 
 /// Index of a BatchFile in TranslationUnitBatch::files.
 using BatchFileIndex = std::uint32_t;
@@ -56,6 +58,9 @@ struct CallEvent {
     /// the same AstEvent (FunctionEvent::canonical). Empty: indirect call.
     std::optional<std::uint32_t> callee;
     std::string via; ///< Indirect call: the member and its object, as written.
+    /// Indirect call through a struct field of function-pointer type:
+    /// Clang's USR of the field (ADR-0026); empty otherwise.
+    std::string field;
     BatchFileIndex file{};
     std::uint32_t line{};
     std::uint32_t column{};
@@ -84,11 +89,21 @@ struct FunctionEvent {
     std::vector<CallEvent> calls;
 };
 
-/// The parsed AST of one compile command: its function declarations in
-/// traversal order. A translation unit with several compile commands has
-/// one per command.
+/// A function assigned to a struct field of function-pointer type in the
+/// initializer of a variable with static storage duration, located under
+/// the root (FR-015, ADR-0026).
+struct FieldAssignmentEvent {
+    std::string field; ///< Clang's USR of the field.
+    /// The function as a batch-local reference (FunctionEvent::canonical).
+    std::uint32_t function{};
+};
+
+/// The parsed AST of one compile command: its function declarations and
+/// field assignments in traversal order. A translation unit with several
+/// compile commands has one per command.
 struct AstEvent {
     std::vector<FunctionEvent> functions;
+    std::vector<FieldAssignmentEvent> field_assignments;
 };
 
 using BatchEvent = std::variant<MainFileEvent, IncludeEvent, AstEvent>;
