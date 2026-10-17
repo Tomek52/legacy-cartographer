@@ -35,21 +35,21 @@ expanded in place; its version is bumped if its meaning changes
 | [B-23](#b23-libmodbus-hand-check-v1) | ✅ Hand check of the libmodbus functions | M1 | FR-003, FR-004 | B-14 | 2 h |
 | [B-24](#b24-clang-tidy-checks-headers-v1) | ✅ clang-tidy checks the project's headers | M1 | NFR-007 | B-02 | 1 h |
 | [B-25](#b25-claim-parser-v1) | Claim parser and its fuzzer | M2 | FR-009, NFR-010 | – | 5 h |
-| [B-26](#b26-function-pointer-tables-v1) | `may_call` edges from function-pointer tables | M2 | FR-015 | – | 6 h |
+| [B-26](#b26-function-pointer-tables-v1) | `may_call` edges from function-pointer tables | M2 | FR-015 | – | 8 h |
 | [B-27](#b27-claim-verifier-v1) | Claim verifier | M2 | FR-010 | B-25, B-26 | 6 h |
-| [B-28](#b28-verification-report-v1) | Verification report and `lcart verify` | M2 | FR-010, FR-011 | B-27 | 4 h |
+| [B-28](#b28-verification-report-v1) | Verification report and `lcart verify` | M2 | FR-010, FR-011 | B-27, B-30 | 4 h |
 | [B-29](#b29-labelled-claim-set-v1) | Labelled claim set and accuracy gate | M2 | NFR-009 | B-27 | 6 h |
-| [B-30](#b30-facts-only-handoff-bundle-v1) | `lcart handoff`: facts-only bundle | M2 | FR-008, NFR-002 | – | 6 h |
-| [B-31](#b31-include-source-excerpts-v1) | `--include-source` excerpts | M2 | NFR-002 | B-30 | 3 h |
+| [B-30](#b30-facts-only-handoff-bundle-v1) | `lcart handoff`: facts-only bundle | M2 | FR-008, NFR-002 | B-26 | 6 h |
+| [B-31](#b31-include-source-excerpts-v1) | `--include-source` excerpts | M2 | NFR-002, NFR-010 | B-30 | 3 h |
 | [B-32](#b32-agent-permissions-in-bundle-v1) | Agent permission configuration in the bundle | M2 | NFR-010 | B-30 | 2 h |
 | [B-33](#b33-ingest-agent-output-v1) | `lcart ingest`: output contract and annotated documents | M2 | FR-008, FR-011, NFR-010 | B-28, B-30 | 6 h |
 | [B-34](#b34-mermaid-check-in-ingest-v1) | Mermaid check of agent diagrams | M2 | FR-008 | B-33 | 3 h |
 | [B-35](#b35-no-raw-html-in-generated-docs-v1) | No raw HTML from the agent in published documents | M2 | NFR-010 | B-33 | 2 h |
 | [B-36](#b36-libmodbus-handoff-end-to-end-v1) | libmodbus handoff end to end without network | M2 | NFR-002 | B-31, B-33 | 3 h |
 | [B-37](#b37-real-agent-run-on-libmodbus-v1) | Real agent run on libmodbus, published | M2 | FR-008, NFR-009 | B-29, B-32, B-34, B-35, B-36 | 4 h |
-| [B-38](#b38-resume-detects-edited-sources-v1) | `--resume` detects edited sources | M2 | NFR-004 | – | 3 h |
-| [B-39](#b39-database-on-drive-mount-v1) | A clear error for the database on a WSL2 drive mount | M2 | NFR-013 | – | 2 h |
-| [B-40](#b40-msvc-delayed-template-parsing-v1) | MSVC delayed template parsing: decision | M2 | NFR-013 | – | 2 h |
+| [B-38](#b38-resume-detects-edited-sources-v1) | `--resume` detects edited sources | M2 (carry-over) | NFR-004 | – | 5 h |
+| [B-39](#b39-adrs-for-merged-decisions-v1) | ADRs for the decisions of #29, #30 and #31 | M2 (carry-over) | NFR-013 | – | 2 h |
+| [B-40](#b40-msvc-delayed-template-parsing-v1) | MSVC delayed template parsing: decision | M2 (carry-over) | NFR-013 | – | 2 h |
 
 ## M0
 
@@ -803,8 +803,9 @@ Added 2026-10-17 from the [M2 milestone](roadmap.md#m2-llm-verification-v2).
 The order follows the dependencies: the verifier side (B-25 to B-29) needs
 no agent and can be done first; the handoff side (B-30 to B-36) then feeds
 it; B-37 is the run with a real agent that M2's Definition of Done asks for.
-B-38 to B-40 answer the open technical questions dated M2 that belong to
-the analysis rather than to the handoff.
+B-38 to B-40 (carry-over, outside M2's scope and Definition of Done)
+answer open technical questions dated M2 that belong to the analysis
+rather than to the handoff, and record decisions already merged. Each item that implements a stub removes its `TODO(M2)` marker.
 
 ### <a id="b25-claim-parser-v1"></a>**[B-25 v1]** Claim parser and its fuzzer
 
@@ -821,7 +822,8 @@ plus:
    per kind. A test per rule shows a violating input rejected.
 2. Invalid input yields `schema_violation` with **every** problem found,
    each with its JSON pointer (`/claims/3/kind`); nothing is returned from
-   it. Duplicate claim IDs are a problem.
+   it. Duplicate claim IDs are a problem; the claim schema page says so,
+   with its anchor's version bumped.
 3. Input over a size limit (a constant, e.g. 4 MiB) and nesting deeper than
    the schema allows are rejected before parsing into a DOM, so neither
    memory nor recursion depends on the input.
@@ -843,7 +845,8 @@ plus:
    designated (`.send = rtu_send`), across translation units; an indirect
    call through `p->field` (or `s.field`) of that struct type gets a
    `may_call` edge to each of them. Fixture: `fn_pointers` (its
-   `rtu_backend` table), expected edges written by hand
+   `rtu_backend` table, positional; a designated initializer is added to
+   the fixture), expected edges written by hand
    ([fixture rules](../testing/strategy.md#testing-fixture-rules-v1)).
 2. An indirect call that is not through such a field (a local function
    pointer, a parameter) gets no `may_call` edge.
@@ -858,6 +861,12 @@ plus:
    the map changes).
 5. Determinism: the edges do not depend on the order of translation units
    (shuffled-order test, [NFR-004](../specs/requirements.md#nfr004-deterministic-output-v1)).
+6. The field assignments are stored per translation unit (resolution runs
+   after the last one, like `MODULE_DEPENDENCY`), so `--resume` keeps
+   working ([ADR-0019](../adr/0019-parallel-resumable-analysis.md#adr0019-resume-v1));
+   the fact database's `schema_version` is bumped and the
+   [data model](../architecture/data-model.md#arch-data-model-call-edges-v1)
+   updated.
 
 ### <a id="b27-claim-verifier-v1"></a>**[B-27 v1]** Claim verifier
 
@@ -874,7 +883,8 @@ except criterion 3 (B-28), plus:
    ([B-26](#b26-function-pointer-tables-v1)).
 3. Every `confirmed` and `contradicted` verdict carries the fact IDs it
    rests on; for `contradicted` / `relation_absent`, the subject's
-   definition (or file) is the evidence.
+   definition (or file) is the evidence. `entity_not_found` has no fact to
+   cite: its evidence is the coverage (all translation units parsed).
 4. A coverage fact with failed translation units turns every
    `entity_not_found` into `unverified` / `coverage_incomplete` (test with
    the `broken_tu` fixture's database).
@@ -889,14 +899,20 @@ except criterion 2 (B-33), and criterion 3 of
 
 1. `lcart verify <claims.json> [--db] [--out]` reads a hand-written claims
    file, verifies it against the fact database and writes
-   `verification-report.md` and `verification-report.json`; exit code 0
-   when no claim is contradicted, a documented non-zero code otherwise.
+   `verification-report.md` and `verification-report.json`; exit status 0
+   when no claim is contradicted, a new status otherwise, added to the list
+   of [ADR-0016](../adr/0016-facts-export-and-command-line.md) by an
+   amending ADR.
 2. The JSON report has a versioned format (`format`, `format_version`) and
    is described in a new spec section; the Markdown report shows counts per
    status and per kind, then contradicted and unverified claims with reason
    and evidence (file and line, not row IDs only), then the coverage.
 3. Both formats are byte-identical for identical input and match golden
-   files for a fixture.
+   files for a fixture: the report has no generation time (NFR-004
+   criterion 3 allows one only in a separate metadata block, and none is
+   needed).
+5. The handoff contract version (B-30) is in the report; `lcart verify`,
+   which has no bundle, writes `null`.
 4. The report's `agent` field is empty for `lcart verify` and filled by
    `--agent` in `lcart ingest` (B-33).
 
@@ -917,7 +933,10 @@ plus:
    checked again.
 2. A data-driven test verifies each claim, prints the confusion matrix per
    kind and overall, and fails below the NFR-009 precision targets; it also
-   reports recall of `contradicted` and the unverified rate.
+   reports recall of `contradicted` and the unverified rate. Fixture claims
+   run in ctest on every preset; libmodbus claims run in the
+   `libmodbus baseline` job, the only place with a libmodbus fact
+   database, and the gate counts both.
 3. The result table is published on a docs page (the
    [testing strategy](../testing/strategy.md) links it) and regenerated by a
    script, not by hand.
@@ -928,8 +947,8 @@ plus:
 ### <a id="b30-facts-only-handoff-bundle-v1"></a>**[B-30 v1]** `lcart handoff`: facts-only bundle
 
 Acceptance criteria: criterion 1 of [FR-008](../specs/requirements.md#fr008-generate-documentation-v2)
-and criteria 1, 2 and 4 of [NFR-002](../specs/requirements.md#nfr002-no-source-egress-by-default-v2),
-plus:
+and criterion 2 of [NFR-002](../specs/requirements.md#nfr002-no-source-egress-by-default-v2)
+(criterion 1 is [B-36](#b36-libmodbus-handoff-end-to-end-v1)), plus:
 
 1. `lcart handoff [--db] [--out] [--module NAME]...` writes the
    [bundle layout](../specs/handoff-contract.md#claim-handoff-bundle-layout-v1)
@@ -942,15 +961,26 @@ plus:
    cannot drift. `claim-schema.json` is likewise the schema block of the
    [claim schema](../specs/claim-schema.md#claim-json-schema-v1).
 3. Files outside the analysis root are shown as in the facts export
-   ([ADR-0016](../adr/0016-facts-export-and-command-line.md#adr0016-paths-outside-root-v1));
+   ([ADR-0016](../adr/0016-facts-export-and-command-line.md#adr0016-paths-outside-root-v1)),
+   except that a directive spelled with an absolute path shows only
+   `<outside-root>/` and the file name (with ADR-0016's `#2`... suffixes);
    no absolute path, user name or home directory appears in the bundle
-   (test with a fixture that includes a file from a temporary directory).
-   This answers the open question on paths outside the root.
+   (tests with a file from a temporary directory, included by a relative
+   and by an absolute spelling). ADR-0016 leaves bundles their own rule;
+   this one is written into the handoff contract, and it answers the open
+   question on paths outside the root.
 4. A fixture whose comments and string literals contain a marker string
    produces a bundle without that string in any file.
 5. The handoff contract gets a version field in `MANIFEST.json`
    (`contract_version: 1`); a change to the prompt or the output contract
-   bumps it.
+   bumps it. `MANIFEST.json` also records the run ID and the options it was
+   computed from.
+6. `facts/calls.json` lists `may_call` edges ([B-26](#b26-function-pointer-tables-v1))
+   apart from direct and indirect calls, and prompt rule 5 says they are
+   candidates, not calls.
+7. The [bundle layout](../specs/handoff-contract.md#claim-handoff-bundle-layout-v1)
+   and the prompt are updated for criteria 3, 5 and 6, with their anchors'
+   versions bumped.
 
 ### <a id="b31-include-source-excerpts-v1"></a>**[B-31 v1]** `--include-source` excerpts
 
@@ -969,6 +999,11 @@ plus:
    outside it is listed in `MANIFEST.json` as skipped.
 4. The bundle states at the top of `PROMPT.md` and in `MANIFEST.json` that
    it contains source code.
+5. Each excerpt is delimited as data, between fixed begin and end lines
+   naming its file and line range, and a test shows that an excerpt whose
+   text contains the end line cannot close the block early
+   ([NFR-010](../specs/requirements.md#nfr010-untrusted-input-v1) criterion
+   2, [T3](../security.md#security-prompt-injection-v2)).
 
 ### <a id="b32-agent-permissions-in-bundle-v1"></a>**[B-32 v1]** Agent permission configuration in the bundle
 
@@ -979,7 +1014,8 @@ Acceptance criteria:
    shell and web tools ([running the agent safely](../specs/handoff-contract.md#claim-agent-permissions-v1),
    [T3a](../security.md#security-agent-tools-v1)). The rule syntax is taken
    from the Claude Code documentation current at the time, with the version
-   and link recorded in the contract; the TODO: verify row is closed.
+   and link recorded in the contract; the bundle layout lists the file
+   (anchor version bumped) and the TODO: verify row is closed.
 2. A manual check with Claude Code in a bundle shows a denied shell command
    and a denied write outside the output directory; the result and Claude
    Code version are recorded in this item. (Not automated: it needs an
@@ -994,7 +1030,7 @@ Acceptance criteria: criteria 2 to 4 of [FR-008](../specs/requirements.md#fr008-
 and criterion 2 of [FR-011](../specs/requirements.md#fr011-verification-report-v2),
 plus:
 
-1. `lcart ingest <dir> --agent "<name, model>" [--db] [--out]` checks the
+1. `lcart ingest <dir> --bundle <bundle-dir> --agent "<name, model>" [--db] [--out]` checks the
    [output contract](../specs/handoff-contract.md#claim-agent-output-v1),
    lists every problem and ingests nothing if there is one. Recorded agent
    outputs, one valid and one per kind of problem, are committed test data.
@@ -1008,8 +1044,11 @@ plus:
    report. Golden files for the valid recorded output.
 4. The marker scanner has a fuzz target in CI (arbitrary Markdown and
    claims), like the claim parser.
-5. The bundle's run ID is checked against the fact database: output made
-   from another bundle is rejected.
+5. `lcart ingest` reads the run ID and options from the bundle's
+   `MANIFEST.json` (B-30), recomputes the ID from the current fact database
+   and those options, and rejects the output if it differs (the facts
+   changed since the handoff) or if the output directory's name is not that
+   ID. The handoff contract says so.
 
 ### <a id="b34-mermaid-check-in-ingest-v1"></a>**[B-34 v1]** Mermaid check of agent diagrams
 
@@ -1018,12 +1057,18 @@ has a TODO: verify; B-22 showed that Mermaid parses under Node.js with jsdom.
 
 Acceptance criteria:
 
-1. An ADR decides how `lcart ingest` checks Mermaid blocks: run
-   `tools/mermaid-check` when Node.js is present (and say so when it is
-   not), a built-in subset check of flowchart syntax, or both. FR-008
-   criterion 5 is rewritten to the decision, with a version bump.
-2. A broken diagram in a recorded agent output is reported with document
-   and line; it does not stop the ingestion of the rest.
+1. An ADR decides how `lcart ingest` checks Mermaid blocks: a built-in
+   subset check of flowchart syntax, Mermaid itself under Node.js
+   (`tools/mermaid-check`), or both. The ADR keeps the report identical on
+   every machine ([NFR-004](../specs/requirements.md#nfr004-deterministic-output-v1):
+   an optional checker is chosen by a switch and named in the report, never
+   by whether Node.js happens to be installed) and says how starting a
+   program fits the deterministic core
+   ([ADR-0006](../adr/0006-external-agent-handoff-for-llm-work.md#adr0006-handoff-is-deterministic-core-v1)).
+   FR-008 criterion 5 is rewritten to the decision, with a version bump.
+2. A broken diagram in a recorded agent output is a finding in the report,
+   with document and line, not a breach of the output contract: the rest
+   is ingested.
 3. The open-questions row on Mermaid in `lcart ingest` is closed.
 
 ### <a id="b35-no-raw-html-in-generated-docs-v1"></a>**[B-35 v1]** No raw HTML from the agent in published documents
@@ -1055,9 +1100,13 @@ for `handoff` and `ingest`, plus:
 1. The `libmodbus baseline` CI job also runs `lcart handoff` (facts-only and
    `--include-source`) and `lcart ingest` of a recorded agent output for
    libmodbus under `unshare --net`.
-2. The recorded output is written by hand for the test, small, with true,
+2. The test executables of `claims`, `verify`, `report`, `handoff` and the
+   M2 command-line tests also run under `unshare --net` in that job, so
+   "all M2 tests pass with network blocked" (M2's Definition of Done) is
+   checked, not assumed.
+3. The recorded output is written by hand for the test, small, with true,
    false and undecidable claims, and its expected report is committed.
-3. The facts-only libmodbus bundle contains no comment text of libmodbus
+4. The facts-only libmodbus bundle contains no comment text of libmodbus
    (a check with strings taken from its comments).
 
 ### <a id="b37-real-agent-run-on-libmodbus-v1"></a>**[B-37 v1]** Real agent run on libmodbus, published
@@ -1079,7 +1128,8 @@ Acceptance criteria:
 3. Failure modes seen (invented names, wrong direction, broken contract,
    instructions followed from the data) are recorded on the
    [libmodbus page](../targets/libmodbus.md), with counts.
-4. M2 is marked `done` in the roadmap if the other items are done.
+4. M2 is marked `done` in the roadmap when B-25 to B-37 are done; B-38 to
+   B-40 are carried over from the open questions and do not hold it.
 
 ### <a id="b38-resume-detects-edited-sources-v1"></a>**[B-38 v1]** `--resume` detects edited sources
 
@@ -1088,29 +1138,39 @@ From the open questions: a resumed run mixes old and new code
 
 Acceptance criteria:
 
-1. `lcart analyze --resume` compares `translation_unit.inputs_sha256` of
-   every finished unit with its files now; if any differ it stops with an
-   error that names them and says to run without `--resume`.
-2. A test edits a header between an interrupted run and `--resume` and
-   expects the error; without edits, the resumed export equals an
+`translation_unit.inputs_sha256` exists in the schema but nothing writes
+it, and no list of the files each unit read is stored.
+
+1. Each finished translation unit records the files it read (the files of
+   its include facts and the unit itself) with their `FILE.sha256`, in the
+   same transaction as its facts.
+2. `lcart analyze --resume` hashes those files again; if any differ it
+   stops with an error that names them and says to run without `--resume`.
+3. A test edits a header between an interrupted run and `--resume` and
+   expects the error naming it; without edits, the resumed export equals an
    uninterrupted run (existing tests stay green).
-3. An ADR amends ADR-0019 if the check changes its resume rule; the
-   open-questions row is removed.
+4. An ADR amends ADR-0019, which decided that edits are not detected
+   ([resume](../adr/0019-parallel-resumable-analysis.md#adr0019-resume-v1));
+   the schema version and data model are updated; the open-questions row is
+   removed.
 
-### <a id="b39-database-on-drive-mount-v1"></a>**[B-39 v1]** A clear error for the database on a WSL2 drive mount
+### <a id="b39-adrs-for-merged-decisions-v1"></a>**[B-39 v1]** ADRs for the decisions of #29, #30 and #31
 
-From the open questions: on drvfs (`v9fs`), SQLite reports "database is
-locked" for the default database under the root.
+The owner delegated three decisions on 2026-10-11, merged as #29 (Clang
+configuration files ignored), #30 (the run lock on a separate file, which
+also made the default database work on a WSL2 drive mount) and #31 (LLVM
+targets registered). Code and docs cite all three as ADR-0023, which does
+not exist (`docs/security.md`, `docs/how-to/msvc-under-wsl2.md`,
+`src/cli/src/commands.cpp`, `src/analysis/src/clang_analyzer.cpp`).
 
 Acceptance criteria:
 
-1. When the database cannot be locked and its directory is on a `v9fs` or
-   `9p` file system (read from `/proc/self/mountinfo`), `lcart` says so and
-   suggests `--db` on the Linux file system; the default location does not
-   change.
-2. A unit test of the mount detection reads a sample `mountinfo`; the
-   how-to describes the message.
-3. The open-questions row is removed.
+1. Three ADRs, ADR-0023 to ADR-0025, record the decisions as merged
+   (status Accepted, decided by delegation, with the date), in the index.
+2. Every citation names the right one of them; the Decided rows of the
+   open questions link to them.
+3. A regression test exists for each decision (or the item names the
+   existing one).
 
 ### <a id="b40-msvc-delayed-template-parsing-v1"></a>**[B-40 v1]** MSVC delayed template parsing: decision
 
@@ -1122,8 +1182,11 @@ Acceptance criteria:
 
 1. An ADR decides whether lcart appends `-fno-delayed-template-parsing` to
    MSVC commands, always, never or by a configuration option, with the
-   cost measured on the `msvc_constructs` fixture (facts gained, units that
-   stop parsing).
-2. Tests on that fixture show the decided behaviour; the how-to says what
-   users see.
+   cost measured on a new fixture `msvc_templates` (a never-instantiated
+   function template with calls, and a template only MSVC's lenient
+   parsing accepts): facts gained, units that stop parsing.
+   `msvc_constructs` stays as it is, so its line and column expectations do
+   not move.
+2. Tests on the new fixture show the decided behaviour; the how-to says
+   what users see.
 3. The open-questions row is removed.
