@@ -17,6 +17,8 @@ moving the answer into the relevant spec or ADR and deleting it here.
 | A9 | CodeQL runs on pull requests, `main` and weekly since the repository became public (2026-10-11); it needed GitHub Advanced Security while private. Results appear after the first run on `main`. | `.github/workflows/codeql.yml` | first CodeQL run on `main` |
 | A10 | Verification covers only structural claims (5 kinds); behaviour stays prose. | [claim schema](specs/claim-schema.md) | M2 end |
 | A11 | The libmodbus `tests/` directory is its own `tests` module (by the default rule; kept in B-14). | [libmodbus plan](targets/libmodbus.md) | M3 |
+| A12 | Labels of the claim set may be drafted by an agent from the source, each citing a file and line, and checked by the reviewer agent on a sample; the owner does not label. | [B-29](plan/backlog.md#b29-labelled-claim-set-v1) | if the sample check finds wrong labels |
+| A13 | The real agent run of M2 uses Claude Code with a facts-only bundle, in a separate session without the repository or libmodbus source. | [B-37](plan/backlog.md#b37-real-agent-run-on-libmodbus-v1) | before B-37 |
 
 ## Decided
 

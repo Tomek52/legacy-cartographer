@@ -911,7 +911,10 @@ plus:
    at least 30 per claim kind and at least 60 false ones. Each label states
    the source file and line it was read from at the pinned libmodbus commit
    or in the fixture; labels are written from the code, never from lcart's
-   output.
+   output. The implementing agent drafts them (assumption A12); the
+   reviewer agent re-reads a random sample of at least 20 against the
+   source, and any wrong label in the sample means the whole kind is
+   checked again.
 2. A data-driven test verifies each claim, prints the confusion matrix per
    kind and overall, and fails below the NFR-009 precision targets; it also
    reports recall of `contradicted` and the unverified rate.
@@ -1059,8 +1062,10 @@ for `handoff` and `ingest`, plus:
 
 ### <a id="b37-real-agent-run-on-libmodbus-v1"></a>**[B-37 v1]** Real agent run on libmodbus, published
 
-M2's last Definition of Done items. The agent and model are chosen by the
-owner.
+M2's last Definition of Done items. The agent is Claude Code, started in
+the bundle directory in a session separate from the one implementing M2,
+with no access to this repository or to the libmodbus source (assumption
+A13); the model is the one that session reports.
 
 Acceptance criteria:
 
