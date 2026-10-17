@@ -131,6 +131,8 @@ const char* to_text(CallKind kind) {
         return "direct";
     case CallKind::indirect:
         return "indirect";
+    case CallKind::may_call:
+        return "may_call";
     }
     std::unreachable();
 }
@@ -273,6 +275,7 @@ struct Snapshot {
     std::vector<FunctionFact> functions;
     std::vector<IncludeFact> includes;
     std::vector<CallFact> calls;
+    std::vector<CallFact> may_calls;
     std::vector<DiagnosticFact> diagnostics;
     std::vector<ModuleDependencyFact> dependencies;
     std::map<FileId, ExportedFile> file_names;
@@ -316,6 +319,7 @@ common::Result<Snapshot> read_snapshot(const FactQuery& facts) {
           read_into(facts.modules(), snapshot.modules), read_into(facts.files(), snapshot.files),
           read_into(facts.functions(), snapshot.functions),
           read_into(facts.includes(), snapshot.includes), read_into(facts.calls(), snapshot.calls),
+          read_into(facts.may_calls(), snapshot.may_calls),
           read_into(facts.diagnostics(), snapshot.diagnostics)}) {
         if (!read) {
             return std::unexpected(read.error());
@@ -433,6 +437,30 @@ std::vector<Record> call_records(const Snapshot& snapshot) {
                 .optional_string("callee", callee)
                 .string("via", call.via)
                 .line());
+    }
+    return records;
+}
+
+std::vector<Record> may_call_records(const Snapshot& snapshot) {
+    std::vector<Record> records;
+    for (const CallFact& call : snapshot.may_calls) {
+        if (!call.callee) {
+            continue; // the schema's CHECK gives every may_call edge a callee
+        }
+        const std::string& file = snapshot.file_name(call.site.file);
+        const std::string& caller = snapshot.usrs.at(call.caller);
+        const std::string& callee = snapshot.usrs.at(*call.callee);
+        records.emplace_back(std::vector<std::string>{file, number_key(call.site.line),
+                                                      number_key(call.site.column), caller, callee,
+                                                      call.via},
+                             JsonObject{"may_call"}
+                                 .string("caller", caller)
+                                 .string("file", file)
+                                 .number("line", call.site.line)
+                                 .number("column", call.site.column)
+                                 .string("callee", callee)
+                                 .string("via", call.via)
+                                 .line());
     }
     return records;
 }
@@ -558,6 +586,7 @@ Status write_jsonl_export(const FactQuery& facts, std::ostream& out) {
     write_sorted(function_records(*snapshot), out);
     write_sorted(include_records(*snapshot), out);
     write_sorted(call_records(*snapshot), out);
+    write_sorted(may_call_records(*snapshot), out);
     write_sorted(module_dependency_records(*snapshot), out);
     write_sorted(diagnostic_records(*snapshot), out);
 

@@ -10,8 +10,9 @@ namespace lcart::facts {
 /// Version of the fact database schema (docs/architecture/data-model.md).
 /// Any change to tables or column meaning increments it.
 /// 2: translation unit and diagnostic paths are spelled like file paths
-/// (B-12).
-inline constexpr int schema_version = 2;
+/// (B-12). 3: call edges keep the field an indirect call goes through, and
+/// field assignments are stored for may_call edges (B-26, ADR-0026).
+inline constexpr int schema_version = 3;
 
 /// Row identifier in the fact database. Distinct types per table, so a
 /// FileId cannot be passed where a FunctionId is expected.
@@ -39,7 +40,11 @@ enum class Linkage : std::uint8_t { internal, external };
 /// `indirect`: a call through a function pointer or similar; the callee is
 /// not known statically, so verification of "A calls B" cannot be negative
 /// for a caller that has indirect calls (docs/specs/claim-schema.md).
-enum class CallKind : std::uint8_t { direct, indirect };
+/// `may_call`: a function that an indirect call through a struct field may
+/// reach, because a static initializer assigns it to that field (FR-015);
+/// never a `calls` confirmation, and never mixed with direct and indirect
+/// calls in a query.
+enum class CallKind : std::uint8_t { direct, indirect, may_call };
 
 // Fact records. Every field has a default member initializer, so a record
 // can be built with designated initializers naming only the fields that matter.
@@ -93,12 +98,26 @@ struct CallFact {
     FunctionId caller{};
     std::optional<FunctionId> callee{}; ///< Empty if and only if CallKind::indirect.
     CallKind kind{CallKind::direct};
-    /// Indirect calls: the called member and what it is read from, as written
-    /// (`backend.recv` for `ctx->backend->recv(...)`); empty otherwise.
+    /// Indirect and may_call edges: the called member and what it is read
+    /// from, as written (`backend.recv` for `ctx->backend->recv(...)`);
+    /// empty otherwise.
     std::string via{};
     SourceLocation site{};
+    /// Indirect and may_call edges through a struct field of function-pointer
+    /// type: Clang's USR of the field (ADR-0026); empty otherwise.
+    std::string field{};
 
     bool operator==(const CallFact&) const = default;
+};
+
+/// A function assigned to a struct field of function-pointer type in a
+/// static initializer, positional or designated (FR-015). Indirect calls
+/// through that field may call it (FactWriter::derive_may_call_edges()).
+struct FieldAssignmentFact {
+    std::string field{}; ///< Clang's USR of the field (ADR-0026).
+    FunctionId function{};
+
+    bool operator==(const FieldAssignmentFact&) const = default;
 };
 
 /// What makes one module depend on another (FR-005 criterion 3).

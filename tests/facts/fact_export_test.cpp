@@ -119,11 +119,17 @@ std::unique_ptr<SqliteFactStore> sample_facts() {
                                .callee = std::nullopt,
                                .kind = CallKind::indirect,
                                .via = "ops.run",
-                               .site = {.file = b_c, .line = 6, .column = 3}}));
+                               .site = {.file = b_c, .line = 6, .column = 3},
+                               .field = "c:@S@ops@FI@run"}));
     expect_ok(
         store->add_call({.caller = g, .callee = f, .site = {.file = b_c, .line = 5, .column = 3}}));
     expect_ok(
         store->add_call({.caller = f, .callee = h, .site = {.file = a_c, .line = 5, .column = 3}}));
+    // g's indirect call may call f and h; g -> h (src -> lib) is no module
+    // dependency (B-26).
+    expect_ok(store->add_field_assignment({.field = "c:@S@ops@FI@run", .function = h}));
+    expect_ok(store->add_field_assignment({.field = "c:@S@ops@FI@run", .function = f}));
+    expect_ok(store->derive_may_call_edges());
     expect_ok(store->derive_module_dependencies());
 
     const auto diagnostic = [&store](const char* unit, const char* file, std::uint32_t line,
@@ -142,13 +148,16 @@ std::unique_ptr<SqliteFactStore> sample_facts() {
     return store;
 }
 
+// Verifies: b26-function-pointer-tables-v1 (criterion 4: `may_call`
+// records of their own after the calls, format_version 2, no module
+// dependency from a may_call edge; ADR-0026).
 TEST(FactExport, WritesEveryRecordKindInTheDocumentedOrder) {
     const auto store = sample_facts();
     std::ostringstream out;
     expect_ok(write_jsonl_export(*store, out));
 
     const std::string expected =
-        R"json({"record":"header","format":"lcart-facts","format_version":1,"translation_units_total":2,"translation_units_parsed":1}
+        R"json({"record":"header","format":"lcart-facts","format_version":2,"translation_units_total":2,"translation_units_parsed":1}
 {"record":"module","name":"lib"}
 {"record":"module","name":"src"}
 {"record":"file","path":"lib/x.c","external":false,"header":false,"module":"lib","sha256":"h-x"}
@@ -169,6 +178,8 @@ TEST(FactExport, WritesEveryRecordKindInTheDocumentedOrder) {
 {"record":"call","caller":"src/a.c#c:a.c@F@f","file":"src/a.c","line":5,"column":3,"kind":"direct","callee":"c:@F@h","via":""}
 {"record":"call","caller":"c:@F@g","file":"src/b.c","line":5,"column":3,"kind":"direct","callee":"src/a.c#c:a.c@F@f","via":""}
 {"record":"call","caller":"c:@F@g","file":"src/b.c","line":6,"column":3,"kind":"indirect","callee":null,"via":"ops.run"}
+{"record":"may_call","caller":"c:@F@g","file":"src/b.c","line":6,"column":3,"callee":"c:@F@h","via":"ops.run"}
+{"record":"may_call","caller":"c:@F@g","file":"src/b.c","line":6,"column":3,"callee":"src/a.c#c:a.c@F@f","via":"ops.run"}
 {"record":"module_dependency","from":"src","to":"lib","via":"call","file":"src/a.c","line":5,"column":3}
 {"record":"diagnostic","translation_unit":"src/a.c","file":"src/a.h","line":3,"severity":"error","message":"bad \"quote\"\n\t)json"
         "\xEF\xBF\xBD"
@@ -226,7 +237,7 @@ TEST(FactExport, EmptyDatabaseHasOnlyTheHeader) {
     expect_ok(write_jsonl_export(*store, out));
     EXPECT_EQ(
         out.str(),
-        R"json({"record":"header","format":"lcart-facts","format_version":1,"translation_units_total":0,"translation_units_parsed":0})json"
+        R"json({"record":"header","format":"lcart-facts","format_version":2,"translation_units_total":0,"translation_units_parsed":0})json"
         "\n");
 }
 

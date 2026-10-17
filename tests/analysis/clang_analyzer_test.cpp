@@ -76,7 +76,9 @@ public:
         coverage_ = value;
         return {};
     }
+    Status add_field_assignment(const FieldAssignmentFact& /*assignment*/) override { return {}; }
     Status derive_module_dependencies() override { return {}; }
+    Status derive_may_call_edges() override { return {}; }
 
     [[nodiscard]] const std::vector<DiagnosticFact>& diagnostics() const { return diagnostics_; }
     [[nodiscard]] const AnalysisCoverage& coverage() const { return coverage_; }
