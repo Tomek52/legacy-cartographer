@@ -13,7 +13,7 @@ or later switches on the traceability gate for its requirements
 ```mermaid
 flowchart LR
     M0["M0<br/>Foundations<br/>~15 h"] --> M1["M1<br/>Fact DB + module map<br/>no LLM<br/>~55 h"]
-    M1 --> M2["M2<br/>Agent handoff +<br/>claim verification<br/>~35 h"]
+    M1 --> M2["M2<br/>Agent handoff +<br/>claim verification<br/>~60 h"]
     M1 --> M3["M3<br/>Characterization<br/>tests<br/>~30 h"]
     M3 --> M4["M4<br/>Fuzzing<br/>libmodbus<br/>~20 h"]
     M3 --> M5["M5<br/>C++20 wrapper<br/>~35 h"]
