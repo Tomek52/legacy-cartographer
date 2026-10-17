@@ -1,0 +1,13 @@
+{
+  "schema": "lcart:claim:v1",
+  "claims": [
+    {
+      "id": "c-0001",
+      "kind": "writes",
+      "subject": { "type": "function", "name": "modbus_set_slave" },
+      "object": { "type": "function", "name": "slave" },
+      "polarity": "affirmed",
+      "text": "modbus_set_slave writes the slave field."
+    }
+  ]
+}

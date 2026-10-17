@@ -1,0 +1,14 @@
+{
+  "schema": "lcart:claim:v1",
+  "claims": [
+    {
+      "id": "c-0001",
+      "kind": "calls",
+      "subject": { "type": "function", "name": "modbus_receive" },
+      "object": { "type": "function", "name": "_modbus_receive_msg" },
+      "polarity": "affirmed",
+      "text": "modbus_receive delegates frame reception to _modbus_receive_msg.",
+      "source": { "document": "modules/core.md", "section": "Receiving requests" }
+    }
+  ]
+}

@@ -73,7 +73,7 @@ building a wrapper on top of it (M3, then M5).
 
 | Target | Input | Milestone |
 |---|---|---|
-| `claim_json_fuzzer` | arbitrary bytes as agent output → `parse_claims` | M2 (stub exists) |
+| `claim_json_fuzzer` | arbitrary bytes as agent output → `parse_claims`, seeded with the parser's test files | M2 (B-25, runs in CI) |
 | `project_config_fuzzer` | arbitrary bytes as `lcart.toml` → `parse_project_config`, then every accepted glob matched | M1 (B-11, runs in CI) |
 | libmodbus frame parsing | arbitrary bytes as a received frame through the seam above | M4 |
 

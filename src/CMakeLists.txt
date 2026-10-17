@@ -55,7 +55,9 @@ target_compile_definitions(lcart_analysis PRIVATE
 target_include_directories(lcart_analysis SYSTEM PRIVATE ${LLVM_INCLUDE_DIRS} ${CLANG_INCLUDE_DIRS})
 separate_arguments(_lcart_llvm_definitions NATIVE_COMMAND "${LLVM_DEFINITIONS}")
 target_compile_definitions(lcart_analysis PRIVATE ${_lcart_llvm_definitions})
-lcart_add_module(claims   DEPS lcart::common nlohmann_json::nlohmann_json)
+lcart_add_module(claims
+    SOURCES claims/src/claim_parser.cpp
+    DEPS lcart::common nlohmann_json::nlohmann_json)
 lcart_add_module(verify   DEPS lcart::claims lcart::facts)
 lcart_add_module(report   SOURCES report/src/module_map.cpp DEPS lcart::verify)
 lcart_add_module(handoff  DEPS lcart::claims lcart::facts)

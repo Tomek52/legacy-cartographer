@@ -1,0 +1,56 @@
+{
+  "schema": "lcart:claim:v1",
+  "claims": [
+    {
+      "id": "c-0001",
+      "kind": "calls",
+      "subject": { "type": "function", "name": "modbus_receive", "file": "src/modbus.c" },
+      "object": { "type": "function", "name": "_modbus_receive_msg" },
+      "polarity": "affirmed",
+      "text": "modbus_receive delegates frame reception to _modbus_receive_msg."
+    },
+    {
+      "id": "c-0002",
+      "kind": "includes",
+      "subject": { "type": "file", "name": "src/modbus-tcp.c" },
+      "object": { "type": "file", "name": "src/modbus-rtu.h" },
+      "polarity": "negated",
+      "text": "modbus-tcp.c does not include modbus-rtu.h.",
+      "source": { "document": "modules/tcp.md" }
+    },
+    {
+      "id": "c-123456",
+      "kind": "depends_on",
+      "subject": { "type": "module", "name": "tcp" },
+      "object": { "type": "module", "name": "core" },
+      "polarity": "affirmed",
+      "text": "The TCP backend builds on the core.",
+      "source": {}
+    },
+    {
+      "id": "c-00004",
+      "kind": "defines",
+      "subject": { "type": "file", "name": "src/modbus.c" },
+      "object": { "type": "function", "name": "modbus_receive" },
+      "polarity": "affirmed",
+      "text": ""
+    },
+    {
+      "id": "c-0005",
+      "kind": "belongs_to",
+      "subject": { "type": "file", "name": "src/modbus-rtu.c" },
+      "object": { "type": "module", "name": "rtu" },
+      "polarity": "affirmed",
+      "text": "modbus-rtu.c is part of the RTU backend.",
+      "source": { "section": "Files" }
+    },
+    {
+      "id": "c-0006",
+      "kind": "belongs_to",
+      "subject": { "type": "function", "name": "modbus_new_rtu", "file": "src/modbus-rtu.c" },
+      "object": { "type": "module", "name": "rtu" },
+      "polarity": "negated",
+      "text": "modbus_new_rtu is not part of the core."
+    }
+  ]
+}

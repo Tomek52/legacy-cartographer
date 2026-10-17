@@ -1,0 +1,13 @@
+{
+  "schema": "lcart:claim:v1",
+  "claims": [
+    {
+      "id": "c-0001",
+      "kind": "calls",
+      "subject": { "type": "function", "name": "a", "file": ["src/a.c"] },
+      "object": { "type": "function", "name": "b" },
+      "polarity": "affirmed",
+      "text": "a calls b."
+    }
+  ]
+}

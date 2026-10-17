@@ -34,7 +34,7 @@ expanded in place; its version is bumped if its meaning changes
 | [B-22](#b22-mermaid-check-in-ci-v1) | ✅ CI check that committed module maps parse as Mermaid | M1 | FR-007 | B-14 | 2 h |
 | [B-23](#b23-libmodbus-hand-check-v1) | ✅ Hand check of the libmodbus functions | M1 | FR-003, FR-004 | B-14 | 2 h |
 | [B-24](#b24-clang-tidy-checks-headers-v1) | ✅ clang-tidy checks the project's headers | M1 | NFR-007 | B-02 | 1 h |
-| [B-25](#b25-claim-parser-v1) | Claim parser and its fuzzer | M2 | FR-009, NFR-010 | – | 5 h |
+| [B-25](#b25-claim-parser-v1) | ✅ Claim parser and its fuzzer | M2 | FR-009, NFR-010 | – | 5 h |
 | [B-26](#b26-function-pointer-tables-v1) | `may_call` edges from function-pointer tables | M2 | FR-015 | – | 8 h |
 | [B-27](#b27-claim-verifier-v1) | Claim verifier | M2 | FR-010 | B-25, B-26 | 6 h |
 | [B-28](#b28-verification-report-v1) | Verification report and `lcart verify` | M2 | FR-010, FR-011 | B-27, B-30 | 4 h |
@@ -815,7 +815,7 @@ bytes that it ignores.
 Acceptance criteria: those of [FR-009](../specs/requirements.md#fr009-structured-claims-v2),
 plus:
 
-1. `parse_claims` implements the [JSON Schema v1](../specs/claim-schema.md#claim-json-schema-v1)
+1. `parse_claims` implements the [JSON Schema v1](../specs/claim-schema.md#claim-json-schema-v2)
    by hand with nlohmann_json (no JSON Schema library: one more dependency
    for one fixed schema), including `additionalProperties: false`, the
    `id` pattern, `maxItems` and every `maxLength`, and then the entity types
@@ -831,6 +831,23 @@ plus:
    example, valid and invalid files from the tests) and a dictionary, and
    runs in CI with the other fuzzers (`scripts/fuzz-smoke.sh`,
    [NFR-010](../specs/requirements.md#nfr010-untrusted-input-v1)).
+
+Result (2026-10-18): `src/claims/src/claim_parser.cpp` checks the schema in
+two passes. A SAX pass of nlohmann_json, after the 4 MiB size check, finds
+syntax errors and stops at the first object or array nested deeper than 4
+levels; only then is the document built (`parse` without exceptions) and
+validated rule by rule, then the entity types per kind and unique IDs. The
+problems travel in `common::Error::message`, one line each as
+`<JSON pointer>: <description>` (`""` for the whole document), so no new
+error type was needed; property names from the input are escaped and cut to
+64 bytes in them. `maxLength` counts characters, not bytes, as JSON Schema
+does. `tests/claims/claim_parser_test.cpp` has a test per rule; its valid
+and invalid files, one of them the schema page's example (a test keeps the
+two equal), are the fuzzer's seed corpus, which `scripts/fuzz-smoke.sh` now
+passes read-only next to a temporary working corpus. 60 s locally
+(`asan-ubsan-system`, `scripts/dod.sh`): 277,555 runs, no finding.
+Duplicate property names in one JSON object (nlohmann_json keeps the last)
+are an [open question](../open-questions.md#open-technical-questions).
 
 ### <a id="b26-function-pointer-tables-v1"></a>**[B-26 v1]** `may_call` edges from function-pointer tables
 
@@ -963,7 +980,7 @@ and criterion 2 of [NFR-002](../specs/requirements.md#nfr002-no-source-egress-by
    the prompt's code block and the output contract from the page, fills in
    the values, and compares with the bundle, so the page and the tool
    cannot drift. `claim-schema.json` is likewise the schema block of the
-   [claim schema](../specs/claim-schema.md#claim-json-schema-v1).
+   [claim schema](../specs/claim-schema.md#claim-json-schema-v2).
 3. Files outside the analysis root are shown as in the facts export
    ([ADR-0016](../adr/0016-facts-export-and-command-line.md#adr0016-paths-outside-root-v1)),
    except that a directive spelled with an absolute path shows only

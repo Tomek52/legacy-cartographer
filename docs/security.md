@@ -169,7 +169,7 @@ to make it *do* something: delete files, run a command, send data to a URL.
 ### T6. Malformed agent or LLM output
 
 - Strict schema validation with size limits
-  ([claim schema](specs/claim-schema.md#claim-json-schema-v1)); the parser is
+  ([claim schema](specs/claim-schema.md#claim-json-schema-v2)); the parser is
   fuzzed ([NFR-010](specs/requirements.md#nfr010-untrusted-input-v1)).
 
 ### T7. Injection into the fact database
