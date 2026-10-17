@@ -11,7 +11,6 @@
 #include <cstddef>
 #include <filesystem>
 #include <fstream>
-#include <iterator>
 #include <sstream>
 #include <string>
 #include <string_view>
@@ -34,9 +33,12 @@ using nlohmann::json;
 }
 
 [[nodiscard]] std::string read_file(const std::filesystem::path& file) {
-    std::ifstream in{file, std::ios::binary};
+    // Not istreambuf_iterator: GCC 14 at -O3 reports -Wnull-dereference in it.
+    const std::ifstream in{file, std::ios::binary};
     EXPECT_TRUE(in.good()) << file;
-    return {std::istreambuf_iterator<char>{in}, std::istreambuf_iterator<char>{}};
+    std::ostringstream text;
+    text << in.rdbuf();
+    return std::move(text).str();
 }
 
 /// A document with one valid `calls` claim, for the tests to break.
