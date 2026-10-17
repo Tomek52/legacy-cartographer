@@ -434,13 +434,21 @@ TEST(ClaimParser, RejectsDuplicateClaimIds) {
 TEST(ClaimParser, EscapesPropertyNamesInPointers) {
     json document = valid_document();
     document["a/b~c"] = 1;
+    document["back\\slash"] = 1;
     document["line\nbreak"] = 1;
     document[std::string(300, 'k')] = 1;
     EXPECT_EQ(
         problems_of_document(document),
         (Problems{"/a~1b~0c: property not allowed by the claim schema",
+                  R"(/back\\slash: property not allowed by the claim schema)",
                   "/" + std::string(64, 'k') + "...: property not allowed by the claim schema",
                   R"(/line\u000abreak: property not allowed by the claim schema)"}));
+}
+
+TEST(ClaimParser, SaysANumberIsOutOfRangeRatherThanASyntaxError) {
+    // 1e999 is valid JSON (RFC 8259) but not representable as a double; the
+    // position is the number's last byte (bytes 7 to 11).
+    EXPECT_EQ(problems_of(R"({"x": 1e999})"), Problems{R"("": number out of range at byte 11)"});
 }
 
 TEST(ClaimParser, RejectsInputOverTheSizeLimitBeforeParsing) {

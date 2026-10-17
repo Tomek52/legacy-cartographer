@@ -26,8 +26,9 @@ inline constexpr std::size_t max_claims_nesting_depth = 4;
 /// The input is untrusted: it comes from a model that has read the analysed
 /// code, including its comments (docs/security.md). Input larger than
 /// max_claims_input_size or nested deeper than max_claims_nesting_depth is
-/// rejected before a document is built, so memory and recursion are bounded
-/// by these constants, not by the input.
+/// rejected before a document is built, so recursion is bounded by a
+/// constant and memory by a fixed multiple of max_claims_input_size (the
+/// problem list included: every problem is reported).
 ///
 /// Errors: ErrorCode::schema_violation, never an exception or a partial
 /// result. Its message lists every problem found, one per line, in the

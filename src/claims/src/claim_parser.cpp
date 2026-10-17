@@ -89,7 +89,8 @@ name_of(const std::array<std::pair<std::string_view, Enum>, Size>& names, Enum v
 
 /// A property name from the input as a JSON pointer reference token
 /// (RFC 6901: `~` is `~0`, `/` is `~1`), with control characters escaped so
-/// it cannot break the one-problem-per-line message, and cut after
+/// it cannot break the one-problem-per-line message (and `\` doubled, so an
+/// escape cannot be mistaken for a key that spells one), and cut after
 /// max_shown_name_bytes at a character boundary.
 [[nodiscard]] std::string pointer_token(std::string_view name) {
     std::string token;
@@ -104,6 +105,8 @@ name_of(const std::array<std::pair<std::string_view, Enum>, Size>& names, Enum v
             token += "~0";
         } else if (c == '/') {
             token += "~1";
+        } else if (c == '\\') {
+            token += "\\\\";
         } else if (byte < 0x20U || byte == 0x7FU) {
             constexpr std::string_view hex = "0123456789abcdef";
             token += "\\u00";
@@ -177,10 +180,16 @@ public:
     bool end_array() { return end(); }
 
     bool parse_error(std::size_t position, const std::string& /*last_token*/,
-                     const Json::exception& /*ex*/) {
+                     const Json::exception& ex) {
         // The position only: nlohmann_json's message quotes the input. It
         // counts from 1, and reports the end of input as one past the last
-        // byte.
+        // byte. Its id 406 is a number too large for a double: valid JSON,
+        // so not called a syntax error.
+        constexpr int number_out_of_range_id = 406;
+        if (ex.id == number_out_of_range_id) {
+            problems_.add("", "number out of range at byte " + std::to_string(position));
+            return false;
+        }
         problems_.add("", position > input_size_
                               ? std::string{"not valid JSON (unexpected end of input)"}
                               : "not valid JSON (syntax error at byte " + std::to_string(position) +

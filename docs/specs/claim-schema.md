@@ -86,7 +86,8 @@ The limits (`maxItems`, `maxLength`) bound the work an adversarial or broken
 model output can cause ([security](../security.md)). Before building a
 document, the parser also rejects input larger than 4 MiB and nesting deeper
 than 4 levels (document, `claims`, claim, entity or `source`: the most the
-schema has), so neither its memory nor its recursion depends on the input.
+schema has), so its recursion is bounded by a constant and its memory by a
+fixed multiple of the size limit.
 
 Example:
 
