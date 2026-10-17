@@ -4,6 +4,7 @@ include(GoogleTest)
 add_executable(lcart_unit_tests
     headers_self_contained_test.cpp
     analysis/module_rules_test.cpp
+    claims/claim_parser_test.cpp
     cli/command_line_test.cpp
     cli/git_exposure_test.cpp
     config/path_glob_test.cpp
@@ -17,7 +18,9 @@ target_link_libraries(lcart_unit_tests PRIVATE
     lcart::analysis lcart::cli lcart::report lcart::handoff lcart::llm
     SQLite::SQLite3 GTest::gtest_main)
 target_compile_definitions(lcart_unit_tests PRIVATE
-    LCART_GOLDEN_DIR="${CMAKE_CURRENT_SOURCE_DIR}/golden")
+    LCART_GOLDEN_DIR="${CMAKE_CURRENT_SOURCE_DIR}/golden"
+    LCART_CLAIMS_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/claims/data"
+    LCART_DOCS_DIR="${PROJECT_SOURCE_DIR}/docs")
 lcart_target_warnings(lcart_unit_tests)
 gtest_discover_tests(lcart_unit_tests PROPERTIES LABELS unit)
 

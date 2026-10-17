@@ -21,7 +21,7 @@ A claim can be **negated** ("`modbus-tcp.c` does not include
 correctness are not claims: they stay prose and the report counts them as
 "not checkable" only if the LLM marks them (out of scope for v1).
 
-## <a id="claim-json-schema-v1"></a>JSON Schema (v1)
+## <a id="claim-json-schema-v2"></a>JSON Schema (v1)
 
 ```json
 {
@@ -77,8 +77,16 @@ correctness are not claims: they stay prose and the report counts them as
 
 Entity types per kind (for example `calls` needs two functions) are checked
 by the parser after schema validation; a mismatch is a `schema_violation`.
+So is a claim ID used twice in one document: claim markers (`[c-NNNN]`) and
+verdicts refer to a claim by its ID. The parser reports every problem it
+finds, each with its JSON pointer (`/claims/3/kind`), and returns no claims
+from a document that has one.
+
 The limits (`maxItems`, `maxLength`) bound the work an adversarial or broken
-model output can cause ([security](../security.md)).
+model output can cause ([security](../security.md)). Before building a
+document, the parser also rejects input larger than 4 MiB and nesting deeper
+than 4 levels (document, `claims`, claim, entity or `source`: the most the
+schema has), so neither its memory nor its recursion depends on the input.
 
 Example:
 

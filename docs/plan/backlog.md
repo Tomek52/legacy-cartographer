@@ -815,7 +815,7 @@ bytes that it ignores.
 Acceptance criteria: those of [FR-009](../specs/requirements.md#fr009-structured-claims-v2),
 plus:
 
-1. `parse_claims` implements the [JSON Schema v1](../specs/claim-schema.md#claim-json-schema-v1)
+1. `parse_claims` implements the [JSON Schema v1](../specs/claim-schema.md#claim-json-schema-v2)
    by hand with nlohmann_json (no JSON Schema library: one more dependency
    for one fixed schema), including `additionalProperties: false`, the
    `id` pattern, `maxItems` and every `maxLength`, and then the entity types
@@ -963,7 +963,7 @@ and criterion 2 of [NFR-002](../specs/requirements.md#nfr002-no-source-egress-by
    the prompt's code block and the output contract from the page, fills in
    the values, and compares with the bundle, so the page and the tool
    cannot drift. `claim-schema.json` is likewise the schema block of the
-   [claim schema](../specs/claim-schema.md#claim-json-schema-v1).
+   [claim schema](../specs/claim-schema.md#claim-json-schema-v2).
 3. Files outside the analysis root are shown as in the facts export
    ([ADR-0016](../adr/0016-facts-export-and-command-line.md#adr0016-paths-outside-root-v1)),
    except that a directive spelled with an absolute path shows only
