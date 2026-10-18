@@ -253,7 +253,8 @@ TEST_F(ClangAnalyzerTest, StripsPluginArgumentsInsideResponseFiles) {
 
 // Verifies: security-malicious-build-input-v1 (T5: a Clang configuration
 // file named in the command does not influence the analysis; its arguments
-// are removed and the removal is reported). ADR-0023.
+// are removed and the removal is reported). Also
+// adr0023-explicit-config-removed-v1.
 TEST_F(ClangAnalyzerTest, IgnoresExplicitConfigFileAndWarns) {
     // A translation unit that only compiles when the config defines
     // FROM_CONFIG; the config would define it, so if the config were read
@@ -293,7 +294,8 @@ TEST_F(ClangAnalyzerTest, IgnoresExplicitConfigFileAndWarns) {
 
 // Verifies: security-malicious-build-input-v1 (T5: a default clang.cfg next
 // to the program named by the command does not influence the analysis;
-// --no-default-config, inserted by the recorder, stops it). ADR-0023.
+// --no-default-config, inserted by the recorder, stops it). Also
+// adr0023-no-default-config-v1.
 TEST_F(ClangAnalyzerTest, IgnoresDefaultConfigFileNextToTheProgram) {
     {
         std::ofstream src{work_dir() / "needs_config.c"};

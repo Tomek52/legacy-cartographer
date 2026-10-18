@@ -141,7 +141,7 @@ Outcome<AnalysisInput> resolve_input(const AnalyzeCommand& command) {
 /// `.<name>.partial.lock` next to it, never on the partial database itself,
 /// so that SQLite's own POSIX locks on the database do not clash with the
 /// run lock on a drive mount (v9fs), where they do clash on the same file
-/// (on ext4 they do not; ADR-0023). An interrupted or failed run leaves the partial database in
+/// (on ext4 they do not; ADR-0024). An interrupted or failed run leaves the partial database in
 /// place for `--resume`; the lock file is never deleted (removing it would
 /// race with a waiting run) and stays, empty, in the output directory.
 class PartialDatabase {
@@ -255,7 +255,7 @@ private:
     }
 
     /// Opens the run lock file `.<name>.partial.lock` and takes the `flock`
-    /// on it (ADR-0023): the whole run is locked on this file, never on the
+    /// on it (ADR-0024): the whole run is locked on this file, never on the
     /// partial database, so that SQLite's own POSIX locks on the database do
     /// not clash with it on a drive mount. Nothing is created or written
     /// through a symbolic link, with the same care as the partial database:
@@ -383,11 +383,11 @@ private:
 
     fs::path target_;
     fs::path file_;
-    /// The run lock file next to the partial database (ADR-0023); never
+    /// The run lock file next to the partial database (ADR-0024); never
     /// deleted. Empty: it carries the `flock`, no data.
     fs::path lock_file_;
     /// Holds the `flock` for the whole run on `lock_file_` (ADR-0019,
-    /// ADR-0023).
+    /// ADR-0024).
     std::unique_ptr<OpenFile> lock_;
     std::unique_ptr<facts::SqliteFactStore> store_;
 };

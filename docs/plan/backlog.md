@@ -48,7 +48,7 @@ expanded in place; its version is bumped if its meaning changes
 | [B-36](#b36-libmodbus-handoff-end-to-end-v1) | libmodbus handoff end to end without network | M2 | NFR-002 | B-31, B-33 | 3 h |
 | [B-37](#b37-real-agent-run-on-libmodbus-v1) | Real agent run on libmodbus, published | M2 | FR-008, NFR-009 | B-29, B-32, B-34, B-35, B-36 | 4 h |
 | [B-38](#b38-resume-detects-edited-sources-v1) | `--resume` detects edited sources | M2 (carry-over) | NFR-004 | – | 5 h |
-| [B-39](#b39-adrs-for-merged-decisions-v1) | ADRs for the decisions of #29, #30 and #31 | M2 (carry-over) | NFR-010, NFR-013 | – | 2 h |
+| [B-39](#b39-adrs-for-merged-decisions-v1) | ✅ ADRs for the decisions of #29, #30 and #31 | M2 (carry-over) | NFR-010, NFR-013 | – | 2 h |
 | [B-40](#b40-msvc-delayed-template-parsing-v1) | MSVC delayed template parsing: decision | M2 (carry-over) | NFR-013 | – | 2 h |
 
 ## M0
@@ -1192,6 +1192,25 @@ Acceptance criteria:
    open questions link to them.
 3. A regression test exists for each decision (or the item names the
    existing one).
+
+Result (2026-10-18): [ADR-0023](../adr/0023-clang-configuration-files-ignored.md)
+records #29 (Clang configuration files ignored),
+[ADR-0024](../adr/0024-run-lock-on-a-separate-file.md) #30 (the run lock on
+`.<name>.partial.lock`) and [ADR-0025](../adr/0025-llvm-targets-registered.md)
+#31 (LLVM targets registered), each Accepted, decided by delegation on
+2026-10-11, with anchored decision rules, and in the ADR index and the
+site navigation. The citations in `docs/security.md` and the argument filter
+and recorder stay ADR-0023; those in `src/cli/src/commands.cpp`,
+`tests/cli/lcart_cli_test.cpp` and three in the how-to became ADR-0024;
+`src/analysis/src/clang_analyzer.cpp`, `tests/analysis/msvc_code_test.cpp`
+and the how-to's Win32 paragraph became ADR-0025. The Decided rows of the
+open questions link to the ADRs. Each decision already had regression
+tests, named in its ADR, so no test was added; the main ones (five) now
+also cite the ADR anchors in their `Verifies:` comments. ADR-0024 amends the run-lock file of
+ADR-0019 and ADR-0025 the "no LLVM targets" statement of ADR-0021 (their
+status lines and index rows say so): with targets registered, a target
+prefix in a program name (`x86_64-w64-mingw32-clang`) is now taken as the
+target, which no test covers; whether to keep it is a new open question.
 
 ### <a id="b40-msvc-delayed-template-parsing-v1"></a>**[B-40 v1]** MSVC delayed template parsing: decision
 

@@ -170,7 +170,8 @@ TEST_F(MsvcCodeTest, ParsesAClExeCommand) {
 // in LLVM's registry to assemble the block, so without registered targets it
 // reports "MS-style inline assembly is not available: Unable to find target
 // for this triple (no targets are registered)" (ParseStmtAsm.cpp, LLVM
-// 20.1.2); lcart registers the targets before it parses (ADR-0023). The
+// 20.1.2); lcart registers the targets before it parses (ADR-0025,
+// adr0025-register-all-targets-once-v1). The
 // function below stands in for the construct: the Windows SDK and the real
 // winnt.h are not available here. arm64 has no MS-style inline assembly at
 // all (clang says "unsupported architecture 'aarch64'"), so it is not tested.

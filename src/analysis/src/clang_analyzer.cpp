@@ -793,7 +793,7 @@ namespace {
 /// inline assembly (`__asm`, used by the Windows SDK's winnt.h for x86 and
 /// arm64) is rejected with "Unable to find target for this triple (no
 /// targets are registered)", because Clang's parser looks the target up in
-/// LLVM's registry to assemble the block (ADR-0023). Registration is
+/// LLVM's registry to assemble the block (ADR-0025). Registration is
 /// idempotent and not thread-safe, so it happens before any worker starts.
 void register_llvm_targets() {
     static std::once_flag registered;

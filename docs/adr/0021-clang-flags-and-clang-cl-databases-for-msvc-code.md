@@ -1,6 +1,6 @@
 # 0021. Clang flags and clang-cl compilation databases for MSVC code
 
-- **Status:** Accepted
+- **Status:** Accepted; the statement that lcart registers no LLVM targets (in [clang-cl commands](#adr0021-clang-cl-commands-v1)) amended by [ADR-0025](0025-llvm-targets-registered.md); the consequence on Clang configuration files resolved by [ADR-0023](0023-clang-configuration-files-ignored.md)
 - **Date:** 2026-10-09
 - **Requirements:** [NFR-013](../specs/requirements.md#nfr013-linux-and-wsl2-v1),
   [B-17](../plan/backlog.md#b17-msvc-code-spike-v2),
