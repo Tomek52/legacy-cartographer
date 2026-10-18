@@ -39,7 +39,7 @@ expanded in place; its version is bumped if its meaning changes
 | [B-27](#b27-claim-verifier-v1) | ✅ Claim verifier | M2 | FR-010 | B-25, B-26 | 6 h |
 | [B-28](#b28-verification-report-v1) | Verification report and `lcart verify` | M2 | FR-010, FR-011 | B-27, B-30 | 4 h |
 | [B-29](#b29-labelled-claim-set-v1) | Labelled claim set and accuracy gate | M2 | NFR-009 | B-27 | 6 h |
-| [B-30](#b30-facts-only-handoff-bundle-v1) | `lcart handoff`: facts-only bundle | M2 | FR-008, NFR-002 | B-26 | 6 h |
+| [B-30](#b30-facts-only-handoff-bundle-v1) | ✅ `lcart handoff`: facts-only bundle | M2 | FR-008, NFR-002 | B-26 | 6 h |
 | [B-31](#b31-include-source-excerpts-v1) | `--include-source` excerpts | M2 | NFR-002, NFR-010 | B-30 | 3 h |
 | [B-32](#b32-agent-permissions-in-bundle-v1) | Agent permission configuration in the bundle | M2 | NFR-010 | B-30 | 2 h |
 | [B-33](#b33-ingest-agent-output-v1) | `lcart ingest`: output contract and annotated documents | M2 | FR-008, FR-011, NFR-010 | B-28, B-30 | 6 h |
@@ -1059,6 +1059,31 @@ and criterion 2 of [NFR-002](../specs/requirements.md#nfr002-no-source-egress-by
 7. The [bundle layout](../specs/handoff-contract.md#claim-handoff-bundle-layout-v2)
    and the prompt are updated for criteria 3, 5 and 6, with their anchors'
    versions bumped.
+
+Result (2026-10-18): `lcart handoff [--db FILE] [--out DIR] [--module NAME]...`
+builds the bundle in memory (`handoff::build_bundle`) and writes it to
+`DIR/handoff/<run-id>/` through a hidden directory, replacing only a
+directory that holds nothing but bundle files; the prompt names
+`../../agent/<run-id>/` as the agent's output directory, so no absolute path
+enters it. [ADR-0028](../adr/0028-handoff-bundle-paths-run-id-and-contract-texts.md)
+records the decisions: CMake extracts the prompt, the agent output section
+and the claim schema from the pages at configure time into a generated
+header (the pages are configure dependencies), and a unit test extracts them
+on its own and compares; absolute include spellings count as
+`<outside-root>/` and the file name before ADR-0016's naming and `#2`
+suffixes, and as `<root>/<path>` for a file under the root; the run ID hashes
+the facts export, the contract version and the options with an own SHA-256
+in `common` (checked against FIPS 180-4 and the hashes LLVM wrote into the
+golden export); the project name is the directory name of the analysis
+root; JSON is written by nlohmann_json with sorted keys and two spaces.
+`--include-source` is refused as a usage error until B-31. The golden
+bundle is `tests/golden/two_modules.handoff/`; the `secret_marker` fixture
+puts a marker in comments, string literals and an `#error` diagnostic, and
+no bundle file contains it. Contract page: layout v2, prompt v2 (rule 5 on
+`may_call` candidates), agent output v2 (the directory PROMPT.md names),
+facts files and paths as new anchored items. Open: the project name from
+`lcart.toml` ([open questions](../open-questions.md)); a relative spelling
+that climbs out of the root is shown as written.
 
 ### <a id="b31-include-source-excerpts-v1"></a>**[B-31 v1]** `--include-source` excerpts
 
