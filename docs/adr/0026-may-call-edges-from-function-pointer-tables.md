@@ -78,7 +78,8 @@ the initializer list decides which field a value initializes. Nested
 structs, unions (their initialized member), base classes and array
 elements count. Not counted: initializers of automatic variables,
 assignments in code, compound literals, a table copied from another
-variable, initializers that depend on a template parameter, functions
+variable, initializers that depend on a template parameter, C++ default
+member initializers (`int (*f)(int) = op;` in the struct), functions
 that are not recorded (outside the root) and initializers located
 outside the root. The field is identified by **Clang's USR of the field**
 (option 1); two structs with the same tag in different source files share

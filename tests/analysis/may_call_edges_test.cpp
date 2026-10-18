@@ -287,7 +287,9 @@ TEST_F(MayCallEdgesTest, ExportListsMayCallEdgesAsTheirOwnKind) {
 
 // Verifies: b26-function-pointer-tables-v1 (criterion 5) and
 // nfr004-deterministic-output-v1: the compilation database in every order
-// gives the same export.
+// gives the same export. Units are analysed in sorted path order (ADR-0019),
+// so this only guards the input order of the database; the order of tables
+// and calls across units is EdgesDoNotDependOnTheOrderOfTranslationUnits.
 TEST_F(MayCallEdgesTest, ExportDoesNotDependOnTheOrderOfTheCompilationDatabase) {
     std::vector<std::string> order = fn_pointers_units();
     std::ranges::sort(order);

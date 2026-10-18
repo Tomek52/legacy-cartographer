@@ -267,6 +267,7 @@ maps onto `CALL_EDGE` and `FIELD_ASSIGNMENT` (B-26,
   function-pointer type (`ctx->backend->send(...)`, `local.recv(...)`,
   `(*p->send)(...)`) keeps that field's USR in `field`; a call through a
   local pointer, a parameter or an array element has an empty `field`.
+  A `direct` edge always has an empty `field` (a `CHECK` constraint).
 - `FIELD_ASSIGNMENT` has one row per field and function that a static
   initializer assigns to it: a function named (`f`, `&f`) in the
   initializer of a variable with static storage duration, positional or
