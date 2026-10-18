@@ -26,7 +26,7 @@ Commands:
   map        write the module map (Markdown + Mermaid), no LLM
   handoff    write a facts-only bundle for an external coding agent
   ingest     validate agent output, verify claims, write report   (planned, M2)
-  verify     verify a claims file against the fact database       (planned, M2)
+  verify     verify a claims file against the fact database, no LLM
   testgen    generate a characterization test skeleton           (planned, M3)
 
 lcart analyze [--config FILE] [--compilation-database FILE|DIR] [--root DIR]
@@ -73,18 +73,24 @@ lcart handoff [--db FILE] [--out DIR] [--module NAME]...
   same run ID, never another directory. --include-source is not available
   yet.
 
+lcart verify <claims.json> [--db FILE] [--out DIR]
+  Verifies a claims file (docs/specs/claim-schema.md) against the fact
+  database and writes DIR/verification-report.md and .json (default DIR:
+  lcart-out). Replaces earlier reports, never another file.
+
 --output - (or --output=-) means standard output.
 
 Exit status: 0 success, 1 failure (including an unreadable file), 2 invalid
-command line or lcart.toml content, 3 not found in the fact database,
-4 ambiguous function name, 5 interrupted (lcart analyze).
+command line, lcart.toml or claims file content, 3 not found in the fact
+database, 4 ambiguous function name, 5 interrupted (lcart analyze),
+6 a claim is contradicted (lcart verify; the reports are written).
 
 Options:
   -h, --help   show this message
   --version    show the tool version
 )";
 
-constexpr std::array planned_commands{"ingest", "verify", "testgen"};
+constexpr std::array planned_commands{"ingest", "testgen"};
 
 /// `--output -`: standard output (ADR-0017).
 constexpr std::string_view standard_output = "-";
@@ -385,6 +391,29 @@ Result<Command> parse_handoff(std::span<const std::string_view> arguments) {
     return handoff;
 }
 
+Result<Command> parse_verify(std::span<const std::string_view> arguments) {
+    static constexpr std::array<std::string_view, 2> value_options{"--db", "--out"};
+    auto parsed = split_arguments(arguments, value_options, {});
+    if (!parsed) {
+        return std::unexpected(parsed.error());
+    }
+    if (parsed->help) {
+        return HelpCommand{};
+    }
+    if (parsed->positional.empty()) {
+        return std::unexpected(usage_error("verify needs a claims file"));
+    }
+    if (parsed->positional.size() > 1) {
+        return std::unexpected(
+            usage_error("unexpected argument '" + parsed->positional[1] + "' for verify"));
+    }
+    VerifyCommand verify;
+    verify.claims = parsed->positional.front();
+    verify.database = path_option(*parsed, "--db").value_or(verify.database);
+    verify.output_dir = path_option(*parsed, "--out").value_or(verify.output_dir);
+    return verify;
+}
+
 } // namespace
 
 Result<Command> parse_command_line(std::span<const std::string_view> arguments) {
@@ -409,6 +438,9 @@ Result<Command> parse_command_line(std::span<const std::string_view> arguments) 
     }
     if (command == "handoff") {
         return parse_handoff(arguments.subspan(1));
+    }
+    if (command == "verify") {
+        return parse_verify(arguments.subspan(1));
     }
     if (std::ranges::find(planned_commands, command) != planned_commands.end()) {
         return std::unexpected(usage_error("'" + std::string{command} +

@@ -1,6 +1,7 @@
 #include "cli/commands.hpp"
 
 #include "analysis/clang_analyzer.hpp"
+#include "claims/claim_parser.hpp"
 #include "cli/git_exposure.hpp"
 #include "common/version.hpp"
 #include "config/project_config.hpp"
@@ -8,6 +9,7 @@
 #include "facts/sqlite_fact_store.hpp"
 #include "handoff/handoff.hpp"
 #include "report/report_writer.hpp"
+#include "verify/claim_verifier.hpp"
 
 #include <algorithm>
 #include <atomic>
@@ -862,16 +864,17 @@ Outcome<void> replace_file(const fs::path& target, const Write& write) {
 }
 
 /// A kind of file lcart writes and may later replace: its name in messages
-/// and how its first line is recognised.
+/// and how its first `head_lines` lines (joined by `\n`) are recognised.
 struct OwnFileKind {
     std::string_view name;
-    bool (*has_first_line)(std::string_view line);
+    bool (*has_head)(std::string_view head);
+    std::size_t head_lines{1};
 };
 
 /// Every module map starts with this line (report::write_module_map).
 constexpr OwnFileKind module_map{
     .name = "module map",
-    .has_first_line = [](std::string_view line) { return line == "# Module map"; },
+    .has_head = [](std::string_view line) { return line == "# Module map"; },
 };
 
 /// Every facts export starts with its header record, whose first two keys
@@ -879,7 +882,7 @@ constexpr OwnFileKind module_map{
 /// holds the format version and the coverage, which vary.
 constexpr OwnFileKind facts_export{
     .name = "facts export",
-    .has_first_line =
+    .has_head =
         [](std::string_view line) {
             return line.starts_with(R"({"record":"header","format":"lcart-facts",)");
         },
@@ -905,15 +908,18 @@ Outcome<void> check_own_output(const fs::path& output, const fs::path& database,
     if (!fs::exists(status)) {
         return {};
     }
-    std::string first_line;
+    std::string head;
     if (fs::is_regular_file(status)) {
         std::ifstream file{output, std::ios::binary};
-        std::getline(file, first_line);
+        std::string line;
+        for (std::size_t i = 0; i < kind.head_lines && std::getline(file, line); ++i) {
+            head += (i == 0 ? "" : "\n") + line;
+        }
         if (!file) {
-            first_line.clear();
+            head.clear();
         }
     }
-    if (first_line.empty() || !kind.has_first_line(first_line)) {
+    if (head.empty() || !kind.has_head(head)) {
         return fail(ExitStatus::failure, output.string() + " exists and is not a " +
                                              std::string{kind.name} +
                                              "; lcart replaces only its own files");
@@ -1054,6 +1060,108 @@ ExitStatus run_handoff(const HandoffCommand& command, std::ostream& out, std::os
     return ExitStatus::success;
 }
 
+// ---- verify ----------------------------------------------------------------
+
+/// The reports `lcart verify` writes into its output directory (ADR-0030).
+constexpr std::string_view markdown_report_name = "verification-report.md";
+constexpr std::string_view json_report_name = "verification-report.json";
+
+/// Every Markdown verification report starts with this line
+/// (report::write_verification_report).
+constexpr OwnFileKind markdown_report{
+    .name = "verification report",
+    .has_head = [](std::string_view line) { return line == "# Verification report"; },
+};
+
+/// The JSON report's keys come in a fixed order, `format` first, so its
+/// first two lines name it (ADR-0030).
+constexpr OwnFileKind json_report{
+    .name = "verification report",
+    .has_head =
+        [](std::string_view head) {
+            return head == "{\n  \"format\": \"lcart-verification-report\",";
+        },
+    .head_lines = 2,
+};
+
+/// The claims file, read only up to one byte past the parser's limit: a
+/// larger file is refused by parse_claims without being read whole.
+Outcome<std::vector<claims::Claim>> read_claims(const fs::path& path) {
+    std::ifstream file{path, std::ios::binary};
+    std::error_code ec;
+    if (!file || fs::is_directory(path, ec)) {
+        return fail(ExitStatus::failure, "cannot read the claims file " + path.string());
+    }
+    std::string text(claims::max_claims_input_size + 1, '\0');
+    file.read(text.data(), static_cast<std::streamsize>(text.size()));
+    if (file.bad()) {
+        return fail(ExitStatus::failure, "cannot read the claims file " + path.string());
+    }
+    text.resize(static_cast<std::size_t>(file.gcount()));
+    auto parsed = claims::parse_claims(text);
+    if (!parsed) {
+        // The content of a file the user gave is invalid, as for lcart.toml
+        // (ADR-0030).
+        return fail(ExitStatus::usage,
+                    "invalid claims file " + path.string() + ":\n" + parsed.error().message);
+    }
+    return std::move(*parsed);
+}
+
+ExitStatus run_verify(const VerifyCommand& command, std::ostream& out, std::ostream& err) {
+    auto claims = read_claims(command.claims);
+    if (!claims) {
+        return report(claims.error(), err);
+    }
+    auto store = open_database(command.database);
+    if (!store) {
+        return report(store.error(), err);
+    }
+    const FactQuery& facts = **store;
+    // lcart verify has no bundle and no agent: contract version null, agent
+    // empty (B-28 criteria 4 and 5).
+    report::VerificationReport verification{.claims = std::move(*claims),
+                                            .verdicts = {},
+                                            .handoff_contract_version = std::nullopt,
+                                            .agent = {}};
+    std::map<verify::VerificationStatus, std::size_t> counts;
+    for (const claims::Claim& claim : verification.claims) {
+        auto verdict = or_failure(verify::verify_claim(claim, facts));
+        if (!verdict) {
+            return report(verdict.error(), err);
+        }
+        ++counts[verdict->status];
+        verification.verdicts.push_back(std::move(*verdict));
+    }
+    std::error_code ec;
+    const fs::path output_dir = fs::absolute(command.output_dir, ec);
+    const fs::path markdown = output_dir / markdown_report_name;
+    const fs::path json = output_dir / json_report_name;
+    // Both are checked before either is written, so a refusal leaves both
+    // as they were.
+    for (const auto& [target, kind] :
+         {std::pair{markdown, &markdown_report}, std::pair{json, &json_report}}) {
+        if (auto allowed = check_own_output(target, command.database, *kind); !allowed) {
+            return report(allowed.error(), err);
+        }
+        warn_if_exposed(target, "the verification report", err);
+    }
+    for (const auto& [target, format] : {std::pair{markdown, report::ReportFormat::markdown},
+                                         std::pair{json, report::ReportFormat::json}}) {
+        auto written = replace_file(target, [&](std::ostream& file) {
+            return or_failure(report::write_verification_report(verification, facts, format, file));
+        });
+        if (!written) {
+            return report(written.error(), err);
+        }
+    }
+    using enum verify::VerificationStatus;
+    out << "verification report in " << markdown.string() << " and " << json.string() << '\n'
+        << verification.claims.size() << " claims: " << counts[confirmed] << " confirmed, "
+        << counts[unverified] << " unverified, " << counts[contradicted] << " contradicted\n";
+    return counts[contradicted] > 0 ? ExitStatus::contradicted : ExitStatus::success;
+}
+
 } // namespace
 
 ExitStatus run(const Command& command, std::ostream& out, std::ostream& err) {
@@ -1078,6 +1186,9 @@ ExitStatus run(const Command& command, std::ostream& out, std::ostream& err) {
         ExitStatus operator()(const MapCommand& map) const { return run_map(map, *out, *err); }
         ExitStatus operator()(const HandoffCommand& handoff) const {
             return run_handoff(handoff, *out, *err);
+        }
+        ExitStatus operator()(const VerifyCommand& verify) const {
+            return run_verify(verify, *out, *err);
         }
     };
     const ExitStatus status = std::visit(Visitor{.out = &out, .err = &err}, command);

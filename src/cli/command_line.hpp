@@ -32,6 +32,9 @@ enum class ExitStatus : std::uint8_t {
     /// `lcart analyze` ended on SIGINT or SIGTERM; the completed translation
     /// units are kept for `--resume` (ADR-0019).
     interrupted = 5,
+    /// `lcart verify` wrote its reports, and at least one claim is
+    /// contradicted (ADR-0030).
+    contradicted = 6,
 };
 
 /// Where outputs go by default (docs/security.md T2): one directory that a
@@ -99,8 +102,18 @@ struct HandoffCommand {
     std::vector<std::string> modules;
 };
 
+/// `lcart verify` (ADR-0030): verifies a hand-written claims file against
+/// the fact database and writes the verification report.
+struct VerifyCommand {
+    std::filesystem::path claims;                     ///< The claims file.
+    std::filesystem::path database{default_database}; ///< `--db`
+    /// `--out`: lcart's output directory; the reports go to
+    /// `<output_dir>/verification-report.md` and `.json`.
+    std::filesystem::path output_dir{default_output_directory};
+};
+
 using Command = std::variant<HelpCommand, VersionCommand, AnalyzeCommand, QueryCommand, MapCommand,
-                             HandoffCommand>;
+                             HandoffCommand, VerifyCommand>;
 
 /// Parses the arguments after the program name. Options take their value
 /// as the next argument or after `=` (`--db x`, `--db=x`); a value that

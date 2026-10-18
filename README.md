@@ -29,8 +29,10 @@ call edges and modules with Clang LibTooling (B-07–B-11); `lcart analyze`,
 (B-13); the libmodbus baseline map, generated in CI without network (B-14);
 parallel analysis that can be interrupted and resumed (B-16); MSVC code under
 WSL2, with a logger that writes the compilation database from an MSBuild
-solution (B-17, [guide](docs/how-to/msvc-under-wsl2.md)). See the
-[roadmap](docs/plan/roadmap.md).
+solution (B-17, [guide](docs/how-to/msvc-under-wsl2.md)). M2 under way:
+the facts-only bundle for an external agent, `lcart handoff` (B-30), and
+`lcart verify`, which checks a claims file against the facts and writes the
+verification report (B-28). See the [roadmap](docs/plan/roadmap.md).
 
 ## Build
 

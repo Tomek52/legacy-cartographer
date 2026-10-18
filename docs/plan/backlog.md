@@ -37,7 +37,7 @@ expanded in place; its version is bumped if its meaning changes
 | [B-25](#b25-claim-parser-v1) | ✅ Claim parser and its fuzzer | M2 | FR-009, NFR-010 | – | 5 h |
 | [B-26](#b26-function-pointer-tables-v1) | ✅ `may_call` edges from function-pointer tables | M2 | FR-015 | – | 8 h |
 | [B-27](#b27-claim-verifier-v1) | ✅ Claim verifier | M2 | FR-010 | B-25, B-26 | 6 h |
-| [B-28](#b28-verification-report-v1) | Verification report and `lcart verify` | M2 | FR-010, FR-011 | B-27, B-30 | 4 h |
+| [B-28](#b28-verification-report-v1) | ✅ Verification report and `lcart verify` | M2 | FR-010, FR-011 | B-27, B-30 | 4 h |
 | [B-29](#b29-labelled-claim-set-v1) | Labelled claim set and accuracy gate | M2 | NFR-009 | B-27 | 6 h |
 | [B-30](#b30-facts-only-handoff-bundle-v1) | ✅ `lcart handoff`: facts-only bundle | M2 | FR-008, NFR-002 | B-26 | 6 h |
 | [B-31](#b31-include-source-excerpts-v1) | `--include-source` excerpts | M2 | NFR-002, NFR-010 | B-30 | 3 h |
@@ -989,6 +989,25 @@ except criterion 2 (B-33), and criterion 3 of
    which has no bundle, writes `null`.
 5. The report's `agent` field is empty for `lcart verify` and filled by
    `--agent` in `lcart ingest` (B-33).
+
+Result (2026-10-18): `lcart verify <claims.json> [--db] [--out]` writes
+`verification-report.md` and `verification-report.json` into the output
+directory and exits 6 when a claim is contradicted; an invalid claims file
+is a usage error (2). The decisions are
+[ADR-0030](../adr/0030-verification-report-and-lcart-verify.md), which
+amends ADR-0016's exit statuses; the JSON format is the new
+[report format](../specs/claim-schema.md#claim-verification-report-format-v1)
+section of the claim schema. Evidence is written as the fact itself with
+file and line, never a row id, and files are named as in a handoff bundle,
+so no absolute path appears; the JSON keys come in a fixed order, `format`
+first, so lcart replaces only its own reports. `lcart verify` writes no
+`VERDICT` rows. `report::write_verification_report`
+(`src/report/src/verification_report.cpp`) is tested in
+`tests/report/verification_report_test.cpp`; the golden reports of the
+`fn_pointers` fixture (`tests/golden/fn_pointers.verify/`) cover every
+status, an entity not found, a negated claim and `may_call` evidence. The
+open question on mapping bundle names back to files in claims stays with
+B-33.
 
 ### <a id="b29-labelled-claim-set-v1"></a>**[B-29 v1]** Labelled claim set and accuracy gate
 

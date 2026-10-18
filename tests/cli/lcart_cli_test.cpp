@@ -1906,4 +1906,126 @@ TEST_F(LcartCliTest, WarnsWhenTheBundleIsInAWorkTreeAndNotIgnored) {
     EXPECT_EQ(ignored.err.find("not ignored"), std::string::npos) << ignored.err;
 }
 
+// ---- verify ------------------------------------------------------------------
+
+/// ADR-0030.
+constexpr int exit_contradicted = 6;
+
+fs::path golden_verify() {
+    return fs::path{LCART_GOLDEN_DIR} / "fn_pointers.verify";
+}
+
+class LcartVerifyTest : public LcartCliTest {
+protected:
+    [[nodiscard]] fs::path fn_pointers_database() const {
+        const fs::path database = work_dir() / "fn_pointers.lcart.db";
+        analyze("fn_pointers", {"core.c", "rtu.c", "tcp.c"}, database);
+        return database;
+    }
+
+    /// `lcart verify <claims> --db <database> --out <work dir>/out`.
+    [[nodiscard]] Outcome verify(const fs::path& claims, const fs::path& database) const {
+        return lcart(
+            {"verify", claims.string(), "--db", database.string(), "--out", out().string()});
+    }
+
+    [[nodiscard]] fs::path out() const { return work_dir() / "out"; }
+
+    /// Verifies the golden claims and expects the golden reports, exit 6
+    /// and the counts on standard output.
+    void expect_golden_reports(const fs::path& database) const {
+        const Outcome verified = verify(golden_verify() / "claims.json", database);
+        EXPECT_EQ(verified.status, exit_contradicted) << verified.err;
+        EXPECT_EQ(read_file(out() / "verification-report.md"),
+                  read_file(golden_verify() / "verification-report.md"));
+        EXPECT_EQ(read_file(out() / "verification-report.json"),
+                  read_file(golden_verify() / "verification-report.json"));
+        EXPECT_NE(verified.out.find("4 confirmed, 1 unverified, 3 contradicted"), std::string::npos)
+            << verified.out;
+        EXPECT_NE(verified.out.find((out() / "verification-report.md").string()), std::string::npos)
+            << verified.out;
+    }
+};
+
+// Verifies: b28-verification-report-v1 (criterion 1: `lcart verify` reads a
+// hand-written claims file and writes both reports, exit 6 when a claim is
+// contradicted; criterion 3: both match golden files, and a second run
+// replaces them with the same bytes; criterion 4: contract version null;
+// criterion 5: agent empty), fr010-verify-claims-v1 (criterion 3: without
+// any LLM), fr011-verification-report-v2, nfr004-deterministic-output-v1,
+// adr0030-command-line-v1 and adr0030-exit-statuses-v1.
+TEST_F(LcartVerifyTest, VerifyWritesTheGoldenReports) {
+    const fs::path database = fn_pointers_database();
+    for (int run = 0; run < 2; ++run) {
+        expect_golden_reports(database);
+    }
+}
+
+// Verifies: b28-verification-report-v1 (criterion 1: exit 0 when no claim
+// is contradicted).
+TEST_F(LcartVerifyTest, VerifyExitsZeroWithoutContradictedClaims) {
+    const fs::path database = fn_pointers_database();
+    const fs::path claims = work_dir() / "claims.json";
+    std::ofstream{claims} << R"({"schema": "lcart:claim:v1", "claims": [
+        {"id": "c-0001", "kind": "calls", "polarity": "affirmed", "text": "",
+         "subject": {"type": "function", "name": "run"},
+         "object": {"type": "function", "name": "apply"}},
+        {"id": "c-0002", "kind": "calls", "polarity": "affirmed", "text": "",
+         "subject": {"type": "function", "name": "transfer"},
+         "object": {"type": "function", "name": "rtu_send"}}]})";
+    const Outcome verified = verify(claims, database);
+    EXPECT_EQ(verified.status, exit_success) << verified.err;
+    EXPECT_NE(verified.out.find("1 confirmed, 1 unverified, 0 contradicted"), std::string::npos)
+        << verified.out;
+}
+
+// Verifies: adr0030-exit-statuses-v1 (an invalid claims file is a usage
+// error listing every problem, an unreadable one a failure; neither writes
+// a report).
+TEST_F(LcartVerifyTest, InvalidOrMissingClaimsFileWritesNoReport) {
+    const fs::path database = fn_pointers_database();
+    const fs::path claims = work_dir() / "claims.json";
+    std::ofstream{claims} << R"({"schema": "lcart:claim:v1", "claims": [{"id": "c-1"}]})";
+    const Outcome invalid = verify(claims, database);
+    EXPECT_EQ(invalid.status, exit_usage);
+    EXPECT_NE(invalid.err.find("/claims/0/id"), std::string::npos) << invalid.err;
+    EXPECT_NE(invalid.err.find("/claims/0/kind"), std::string::npos) << invalid.err;
+    const Outcome missing = verify(work_dir() / "none.json", database);
+    EXPECT_EQ(missing.status, exit_failure);
+    EXPECT_NE(missing.err.find("none.json"), std::string::npos) << missing.err;
+    const Outcome no_database =
+        verify(golden_verify() / "claims.json", work_dir() / "none.lcart.db");
+    EXPECT_EQ(no_database.status, exit_failure);
+    EXPECT_NE(no_database.err.find("no fact database"), std::string::npos) << no_database.err;
+    EXPECT_FALSE(fs::exists(out()));
+}
+
+// Verifies: adr0030-command-line-v1 (lcart replaces only its own reports:
+// a file of another kind under either name stops the run before anything
+// is written).
+TEST_F(LcartVerifyTest, VerifyReplacesOnlyItsOwnReports) {
+    const fs::path database = fn_pointers_database();
+    const fs::path claims = golden_verify() / "claims.json";
+    for (const char* name : {"verification-report.md", "verification-report.json"}) {
+        fs::remove_all(out());
+        fs::create_directories(out());
+        std::ofstream{out() / name} << "{\n  \"format\": \"mine\"\n}\n";
+        expect_refused(
+            {"verify", claims.string(), "--db", database.string(), "--out", out().string()},
+            "lcart replaces only its own files", out() / name, "{\n  \"format\": \"mine\"\n}\n");
+        EXPECT_EQ(std::distance(fs::directory_iterator{out()}, fs::directory_iterator{}), 1)
+            << name;
+    }
+}
+
+TEST_F(LcartVerifyTest, WarnsWhenTheReportIsInAWorkTreeAndNotIgnored) {
+    const fs::path database = fn_pointers_database();
+    const fs::path repo = work_dir() / "repo";
+    fs::create_directories(repo / ".git");
+    const Outcome exposed = lcart({"verify", (golden_verify() / "claims.json").string(), "--db",
+                                   database.string(), "--out", (repo / "lcart-out").string()});
+    EXPECT_EQ(exposed.status, exit_contradicted) << exposed.err;
+    EXPECT_NE(exposed.err.find("not ignored"), std::string::npos) << exposed.err;
+}
+
 } // namespace

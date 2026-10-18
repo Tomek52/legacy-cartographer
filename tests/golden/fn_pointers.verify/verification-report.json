@@ -1,0 +1,312 @@
+{
+  "format": "lcart-verification-report",
+  "format_version": 1,
+  "tool_version": "0.0.1",
+  "fact_schema_version": 3,
+  "handoff_contract_version": null,
+  "agent": "",
+  "coverage": {
+    "translation_units_total": 3,
+    "translation_units_parsed": 3,
+    "complete": true,
+    "error_diagnostics": 0
+  },
+  "counts": {
+    "by_status": {
+      "confirmed": 4,
+      "unverified": 1,
+      "contradicted": 3
+    },
+    "by_kind": {
+      "calls": {
+        "confirmed": 2,
+        "unverified": 1,
+        "contradicted": 2
+      },
+      "includes": {
+        "confirmed": 1,
+        "unverified": 0,
+        "contradicted": 0
+      },
+      "depends_on": {
+        "confirmed": 0,
+        "unverified": 0,
+        "contradicted": 0
+      },
+      "defines": {
+        "confirmed": 0,
+        "unverified": 0,
+        "contradicted": 1
+      },
+      "belongs_to": {
+        "confirmed": 1,
+        "unverified": 0,
+        "contradicted": 0
+      }
+    }
+  },
+  "claims": [
+    {
+      "id": "c-0001",
+      "kind": "calls",
+      "polarity": "affirmed",
+      "subject": {
+        "type": "function",
+        "name": "run",
+        "file": null
+      },
+      "object": {
+        "type": "function",
+        "name": "transfer",
+        "file": null
+      },
+      "text": "run hands the transfer to transfer.",
+      "source": {
+        "document": "modules/root.md",
+        "section": "Main functions"
+      },
+      "status": "confirmed",
+      "reason": "relation_found",
+      "evidence": [
+        {
+          "table": "call_edge",
+          "kind": "direct",
+          "caller": "run",
+          "callee": "transfer",
+          "via": "",
+          "file": "core.c",
+          "line": 20,
+          "column": 28
+        }
+      ]
+    },
+    {
+      "id": "c-0002",
+      "kind": "calls",
+      "polarity": "affirmed",
+      "subject": {
+        "type": "function",
+        "name": "transfer",
+        "file": null
+      },
+      "object": {
+        "type": "function",
+        "name": "tcp_send",
+        "file": null
+      },
+      "text": "transfer sends through tcp_send.",
+      "source": {
+        "document": "modules/root.md",
+        "section": "Main functions"
+      },
+      "status": "unverified",
+      "reason": "indirect_calls_present",
+      "evidence": [
+        {
+          "table": "call_edge",
+          "kind": "indirect",
+          "caller": "transfer",
+          "callee": null,
+          "via": "backend.send",
+          "file": "core.c",
+          "line": 10,
+          "column": 16
+        },
+        {
+          "table": "call_edge",
+          "kind": "indirect",
+          "caller": "transfer",
+          "callee": null,
+          "via": "backend.recv",
+          "file": "core.c",
+          "line": 11,
+          "column": 19
+        },
+        {
+          "table": "call_edge",
+          "kind": "may_call",
+          "caller": "transfer",
+          "callee": "tcp_send",
+          "via": "backend.send",
+          "file": "core.c",
+          "line": 10,
+          "column": 16
+        }
+      ]
+    },
+    {
+      "id": "c-0003",
+      "kind": "calls",
+      "polarity": "negated",
+      "subject": {
+        "type": "function",
+        "name": "rtu_send",
+        "file": "rtu.c"
+      },
+      "object": {
+        "type": "function",
+        "name": "checksum",
+        "file": null
+      },
+      "text": "rtu_send does not compute a checksum itself.",
+      "source": {
+        "document": "modules/root.md",
+        "section": "Backends"
+      },
+      "status": "contradicted",
+      "reason": "relation_found",
+      "evidence": [
+        {
+          "table": "call_edge",
+          "kind": "direct",
+          "caller": "rtu_send",
+          "callee": "checksum",
+          "via": "",
+          "file": "rtu.c",
+          "line": 5,
+          "column": 12
+        }
+      ]
+    },
+    {
+      "id": "c-0004",
+      "kind": "includes",
+      "polarity": "affirmed",
+      "subject": {
+        "type": "file",
+        "name": "tcp.c",
+        "file": null
+      },
+      "object": {
+        "type": "file",
+        "name": "backend.h",
+        "file": null
+      },
+      "text": "tcp.c includes backend.h.",
+      "source": {
+        "document": "",
+        "section": ""
+      },
+      "status": "confirmed",
+      "reason": "relation_found",
+      "evidence": [
+        {
+          "table": "include_edge",
+          "file": "tcp.c",
+          "line": 1,
+          "target": "backend.h"
+        }
+      ]
+    },
+    {
+      "id": "c-0005",
+      "kind": "defines",
+      "polarity": "affirmed",
+      "subject": {
+        "type": "file",
+        "name": "core.c",
+        "file": null
+      },
+      "object": {
+        "type": "function",
+        "name": "rtu_send",
+        "file": null
+      },
+      "text": "core.c defines rtu_send.",
+      "source": {
+        "document": "modules/root.md",
+        "section": "Backends"
+      },
+      "status": "contradicted",
+      "reason": "relation_absent",
+      "evidence": [
+        {
+          "table": "file",
+          "file": "core.c"
+        }
+      ]
+    },
+    {
+      "id": "c-0006",
+      "kind": "calls",
+      "polarity": "affirmed",
+      "subject": {
+        "type": "function",
+        "name": "run",
+        "file": null
+      },
+      "object": {
+        "type": "function",
+        "name": "modbus_flush",
+        "file": null
+      },
+      "text": "run flushes the context with modbus_flush.",
+      "source": {
+        "document": "",
+        "section": ""
+      },
+      "status": "contradicted",
+      "reason": "entity_not_found",
+      "evidence": []
+    },
+    {
+      "id": "c-0007",
+      "kind": "belongs_to",
+      "polarity": "affirmed",
+      "subject": {
+        "type": "file",
+        "name": "rtu.c",
+        "file": null
+      },
+      "object": {
+        "type": "module",
+        "name": "(root)",
+        "file": null
+      },
+      "text": "rtu.c is part of the root module.",
+      "source": {
+        "document": "",
+        "section": ""
+      },
+      "status": "confirmed",
+      "reason": "relation_found",
+      "evidence": [
+        {
+          "table": "file",
+          "file": "rtu.c"
+        }
+      ]
+    },
+    {
+      "id": "c-0008",
+      "kind": "calls",
+      "polarity": "negated",
+      "subject": {
+        "type": "function",
+        "name": "checksum",
+        "file": null
+      },
+      "object": {
+        "type": "function",
+        "name": "apply",
+        "file": null
+      },
+      "text": "checksum calls nothing else.",
+      "source": {
+        "document": "",
+        "section": ""
+      },
+      "status": "confirmed",
+      "reason": "relation_absent",
+      "evidence": [
+        {
+          "table": "function",
+          "function": "checksum",
+          "file": "core.c",
+          "line": 5,
+          "definition": true
+        }
+      ]
+    }
+  ]
+}
