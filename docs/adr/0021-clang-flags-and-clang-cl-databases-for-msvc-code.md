@@ -1,6 +1,6 @@
 # 0021. Clang flags and clang-cl compilation databases for MSVC code
 
-- **Status:** Accepted; the statement that lcart registers no LLVM targets (in [clang-cl commands](#adr0021-clang-cl-commands-v1)) amended by [ADR-0025](0025-llvm-targets-registered.md); the consequence on Clang configuration files resolved by [ADR-0023](0023-clang-configuration-files-ignored.md)
+- **Status:** Accepted; the statement that lcart registers no LLVM targets (in [clang-cl commands](#adr0021-clang-cl-commands-v1)) amended by [ADR-0025](0025-llvm-targets-registered.md); the consequence on Clang configuration files resolved by [ADR-0023](0023-clang-configuration-files-ignored.md); "lcart adds no MSVC flag itself" in its MSVC flags decision, and the consequence on calls in never-instantiated function templates, superseded by [ADR-0027](0027-two-phase-template-parsing-for-msvc-code.md#adr0027-two-phase-by-default-v1) (lcart adds `-fno-delayed-template-parsing`)
 - **Date:** 2026-10-09
 - **Requirements:** [NFR-013](../specs/requirements.md#nfr013-linux-and-wsl2-v1),
   [B-17](../plan/backlog.md#b17-msvc-code-spike-v2),

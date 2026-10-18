@@ -105,6 +105,7 @@ nav:
       - adr/0024-run-lock-on-a-separate-file.md
       - adr/0025-llvm-targets-registered.md
       - adr/0026-may-call-edges-from-function-pointer-tables.md
+      - adr/0027-two-phase-template-parsing-for-msvc-code.md
   - Testing:
       - testing/index.md
       - Strategy: testing/strategy.md
