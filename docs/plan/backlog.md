@@ -941,10 +941,12 @@ verification rules, entity resolution, relation rules and negation are
 v2. A function's `file` only
 disambiguates, because the fact database locates a function at its
 definition only; files match exactly before by suffix; complete coverage
-needs at least one translation unit. "Was parsed" means no error in the
-file or its translation unit and no fatal error anywhere in the analysis
-(after one, Clang reports nothing more while it recovers; found in
-review). A `depends_on` reached only through `may_call` edges is
+needs at least one translation unit. "Was parsed" means that no translation unit
+with an error reaches the file (as main file or through recorded include
+edges, since Clang silently drops calls in other files that use an invalid
+declaration) and that no fatal error occurred anywhere in the analysis
+(after one, Clang reports nothing more while it recovers); both found in
+review. A `depends_on` reached only through `may_call` edges is
 `unverified` / `indirect_calls_present`. `defines` contradicts only for a parsed
 file, as the status semantics ask, and negation does not apply to step 1.
 `verify::verify_claim` (`src/verify/src/claim_verifier.cpp`) returns

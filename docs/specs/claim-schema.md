@@ -152,15 +152,19 @@ evidence; for `coverage_incomplete`, none.
 ### <a id="claim-relation-rules-v2"></a>Step 2: check the relation (affirmed claims)
 
 A file **was parsed** when it is under the analysis root, no translation
-unit of the analysis has a fatal diagnostic, no error is located in the
-file, and it is not the main file of a translation unit with an error.
-Clang's error recovery can drop calls and declarations where it reports an
-error. After a fatal error (a missing `#include`, too many errors) Clang
-goes on parsing the unit but reports no further errors, so the damage it
-recovers from is not recorded anywhere, in any file the unit reaches. The
-include edges recorded for that unit cannot be trusted to say which files
-those are, so any fatal error in the analysis means no file counts as
-parsed. A function's **definition was parsed** when the function is recorded
+unit of the analysis has a fatal diagnostic, and no translation unit with
+an error reaches it: neither as its main file nor through the recorded
+include edges from that main file, transitively. An error is not local to
+where Clang reports it. Clang suppresses follow-on errors at the uses of
+an invalid declaration, so a call in another file of the same unit becomes
+an expression with errors, is not recorded, and no error names that file
+(a parameter of an unknown type in one header silently drops the calls to
+that function in the next). Non-fatal errors do not stop the preprocessor,
+so the include edges say which files such a unit reached. After a fatal
+error (a missing `#include`, too many errors) Clang goes on parsing the
+unit but reports no further errors, and the include edges recorded for that
+unit cannot be trusted either, so any fatal error in the analysis means no
+file counts as parsed. A function's **definition was parsed** when the function is recorded
 as a definition and its file was parsed. A function belongs to the module of
 its file; a function whose file is not recorded is an inconsistent fact
 database, an error rather than a verdict.
