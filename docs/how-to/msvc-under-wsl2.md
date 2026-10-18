@@ -230,13 +230,37 @@ with a one-file project under `/mnt/c`); `--db` on
 the Linux file system is kept here because it is faster. Each translation
 unit Clang cannot parse becomes diagnostics and lowers coverage (ADR-0009).
 
-Templates: before C++20, the MSVC target turns on
-`-fdelayed-template-parsing`, and calls in the body of a function template
-that is never instantiated are not recorded (tried). Adding
-`-fno-delayed-template-parsing` (`clang`) or `/Zc:twoPhase` (clang-cl) to
-the commands records them, but code that only MSVC's lenient template
-parsing accepts may then fail to parse
-([open question](../open-questions.md#open-technical-questions)).
+Templates: before C++20, Clang's default for the MSVC target is delayed
+template parsing, which leaves out the calls of a function template that a
+translation unit does not instantiate. lcart parses with two-phase template
+parsing instead (`-fno-delayed-template-parsing`, the same as clang-cl's
+`/Zc:twoPhase`;
+[ADR-0027](../adr/0027-two-phase-template-parsing-for-msvc-code.md#adr0027-two-phase-by-default-v1)),
+so those calls are recorded, also for templates in headers. What you see
+(tried on `tests/fixtures/msvc_templates`):
+
+- Code that only delayed parsing accepts, such as a template body that uses
+  a class completed only after it, gives an error diagnostic, and its
+  translation unit counts as failed: `analysed 2/3 translation units, 1
+  diagnostics` on the fixture, where delayed parsing gave `3/3, 0`. Clang
+  recovers, so the unit's other functions and calls are still recorded; it
+  stops after 20 errors.
+- To parse such code as the compiler does, name delayed parsing in the
+  commands: `/Zc:twoPhase-` (clang-cl; `/permissive` implies it) or
+  `-fdelayed-template-parsing` (`clang`). lcart keeps it
+  ([ADR-0027](../adr/0027-two-phase-template-parsing-for-msvc-code.md#adr0027-command-chooses-delayed-v1)),
+  and the calls of templates a unit does not instantiate are missing again.
+  For an `"arguments"` database, for example:
+
+    ```bash
+    jq '[.[] | .arguments |= (.[0:1] + ["/Zc:twoPhase-"] + .[1:])]' \
+        compile_commands.json > compile_commands.delayed.json
+    ```
+
+Clang's driver says that "many old Windows SDK versions" need delayed
+parsing; which ones, and whether their headers then fail in lcart, was not
+tried (`TODO: verify`). If the diagnostics of a first analysis point into
+the Windows SDK's headers, name delayed parsing as above.
 
 ## Steps tried in B-17 and on Windows
 
@@ -260,4 +284,6 @@ parsing accepts may then fail to parse
 | The same with `map=` to `/mnt/c/...` | 2 of 2, 0 diagnostics |
 | Real Windows SDK and MSVC headers through `/imsvc` and `/mnt/c` | parse with no diagnostics |
 | No `/imsvc` entries, `INCLUDE` unset | fails: `'cstdio' file not found` |
+| Function templates before C++20 (`msvc_templates` fixture), lcart's default (two-phase) | 2 of 3 units parsed, 1 error diagnostic; 4 calls, including those of templates a unit does not instantiate |
+| The same with `/Zc:twoPhase-`, `/permissive` or `-fdelayed-template-parsing` in the commands | 3 of 3, no diagnostics; 1 call |
 | `/winsysroot`, `/vctoolsdir`, `-isystem`, headers copied to the Linux file system | `TODO: verify` |
