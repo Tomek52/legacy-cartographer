@@ -65,7 +65,8 @@ TEST(Sha256, EveryByteValue) {
     for (int value = 0; value < byte_values; ++value) {
         bytes += static_cast<char>(value);
     }
-    EXPECT_EQ(sha256_hex(bytes), "40aff2e9d2d8922e47afd4648e6967497158785fbd1da870e7110266bf944880");
+    EXPECT_EQ(sha256_hex(bytes),
+              "40aff2e9d2d8922e47afd4648e6967497158785fbd1da870e7110266bf944880");
 }
 
 // The analysis hashes files with LLVM's SHA-256; ours must agree.

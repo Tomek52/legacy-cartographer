@@ -40,8 +40,8 @@ namespace {
 namespace fs = std::filesystem;
 using namespace lcart::facts;
 using lcart::common::ErrorCode;
-using lcart::handoff::Bundle;
 using lcart::handoff::build_bundle;
+using lcart::handoff::Bundle;
 using Json = nlohmann::json;
 
 template <typename T>
@@ -153,13 +153,12 @@ std::unique_ptr<SqliteFactStore> facts_of_two_modules(bool reversed = false) {
     call("c:@F@main", "c:@F@app_run", "app/main.c", 10, 12);
     call("c:@F@legacy_run", "c:@F@app_run", "app/legacy.c", 4, 12);
     constexpr std::string_view send_field = "c:@S@backend@FI@send";
-    expect_ok(store->add_call(
-        {.caller = function("c:@F@core_dispatch"),
-         .callee = std::nullopt,
-         .kind = CallKind::indirect,
-         .via = "backend.send",
-         .site = {.file = file("core/core.c"), .line = 14, .column = 12},
-         .field = std::string{send_field}}));
+    expect_ok(store->add_call({.caller = function("c:@F@core_dispatch"),
+                               .callee = std::nullopt,
+                               .kind = CallKind::indirect,
+                               .via = "backend.send",
+                               .site = {.file = file("core/core.c"), .line = 14, .column = 12},
+                               .field = std::string{send_field}}));
     expect_ok(store->add_field_assignment(
         {.field = std::string{send_field}, .function = function("c:@F@core_send")}));
     expect_ok(store->derive_may_call_edges());
@@ -169,9 +168,9 @@ std::unique_ptr<SqliteFactStore> facts_of_two_modules(bool reversed = false) {
 }
 
 Bundle bundle_of(const FactQuery& facts, std::vector<std::string> modules = {}) {
-    return value_of(build_bundle(facts, {.project_name = "two_modules",
-                                         .modules = std::move(modules),
-                                         .include_source = false}));
+    return value_of(build_bundle(
+        facts,
+        {.project_name = "two_modules", .modules = std::move(modules), .include_source = false}));
 }
 
 std::string file_of(const Bundle& bundle, const std::string& path) {
@@ -215,8 +214,8 @@ std::string section_document(const std::string& text, std::string_view anchor_pr
     }
     const std::size_t title = text.find("</a>", heading) + 4;
     const std::size_t end_of_heading = text.find('\n', heading);
-    std::string body = text.substr(end_of_heading, text.find("\n## ", end_of_heading) -
-                                                        end_of_heading);
+    std::string body =
+        text.substr(end_of_heading, text.find("\n## ", end_of_heading) - end_of_heading);
     while (body.ends_with('\n')) {
         body.pop_back();
     }
@@ -305,7 +304,8 @@ TEST(HandoffBundle, ManifestRecordsContractVersionRunIdAndOptions) {
     EXPECT_EQ(manifest["contract_version"], 1);
     EXPECT_EQ(manifest["format"], "lcart-handoff");
     EXPECT_EQ(manifest["run_id"], bundle.run_id);
-    EXPECT_EQ(manifest["options"], Json::parse(R"({"include_source":false,"modules":["app","core"]})"));
+    EXPECT_EQ(manifest["options"],
+              Json::parse(R"({"include_source":false,"modules":["app","core"]})"));
     EXPECT_EQ(manifest["source_excerpts"], Json::array());
 }
 
@@ -340,10 +340,14 @@ TEST(HandoffBundle, RunIdIsTheHashOfTheExportAndTheOptions) {
             .substr(0, 12);
     };
     const Bundle all = bundle_of(*facts);
-    EXPECT_EQ(all.run_id, run_id_of(R"({"contract_version":1,"options":{"include_source":false,"modules":[]}})"));
+    EXPECT_EQ(
+        all.run_id,
+        run_id_of(R"({"contract_version":1,"options":{"include_source":false,"modules":[]}})"));
     const Bundle core = bundle_of(*facts, {"core"});
-    EXPECT_EQ(core.run_id,
-              run_id_of(R"({"contract_version":1,"options":{"include_source":false,"modules":["core"]}})"));
+    EXPECT_EQ(
+        core.run_id,
+        run_id_of(
+            R"({"contract_version":1,"options":{"include_source":false,"modules":["core"]}})"));
     EXPECT_NE(all.run_id, core.run_id);
 }
 
@@ -390,10 +394,9 @@ TEST(HandoffBundle, ModulesListFilesAndDependencyEdges) {
 TEST(HandoffBundle, FunctionsPerModule) {
     const Json functions = json_of(bundle_of(*facts_of_two_modules()), "facts/functions.json");
     const auto function = [](const char* name, const char* file, int line) {
-        return Json{{"name", name},           {"qualified_name", name},
-                    {"signature", "int (void)"}, {"file", file},
-                    {"line_begin", line},     {"line_end", line + 2},
-                    {"definition", true},     {"linkage", "external"}};
+        return Json{{"name", name},       {"qualified_name", name}, {"signature", "int (void)"},
+                    {"file", file},       {"line_begin", line},     {"line_end", line + 2},
+                    {"definition", true}, {"linkage", "external"}};
     };
     EXPECT_EQ(functions,
               (Json{{"modules",

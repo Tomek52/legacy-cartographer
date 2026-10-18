@@ -135,9 +135,8 @@ public:
         items_.emplace_back(std::move(key), std::move(value));
     }
     [[nodiscard]] Json to_json() && {
-        std::ranges::sort(items_, [](const auto& left, const auto& right) {
-            return left.first < right.first;
-        });
+        std::ranges::sort(
+            items_, [](const auto& left, const auto& right) { return left.first < right.first; });
         Json array = Json::array();
         for (auto& item : items_) {
             array.push_back(std::move(item.second));
@@ -233,8 +232,7 @@ Result<std::set<ModuleId>> selected_modules(const Snapshot& snapshot,
             return std::unexpected(
                 error(ErrorCode::invalid_argument, "--module " + name + " given twice"));
         }
-        const auto module = std::ranges::find(snapshot.modules, name,
-                                                     &facts::ModuleFact::name);
+        const auto module = std::ranges::find(snapshot.modules, name, &facts::ModuleFact::name);
         if (module == snapshot.modules.end()) {
             return std::unexpected(
                 error(ErrorCode::not_found, "no module '" + name + "' in the fact database"));
@@ -357,8 +355,8 @@ Json calls_json(const Snapshot& snapshot, const std::set<ModuleId>& selected) {
                     {"file", site},
                     {"line", call.site.line},
                     {"column", call.site.column}};
-        std::vector<std::string> key{site, number_key(call.site.line),
-                                     number_key(call.site.column), caller.name};
+        std::vector<std::string> key{site, number_key(call.site.line), number_key(call.site.column),
+                                     caller.name};
         std::string callee_usr;
         if (with_callee && call.callee) {
             const facts::FunctionFact& callee = snapshot.function(*call.callee);
@@ -445,10 +443,10 @@ Result<std::string> filled_prompt(std::string_view prompt,
         const std::string_view name = prompt.substr(open + 2, close - open - 2);
         const auto value = values.find(name);
         if (close == std::string_view::npos || value == values.end()) {
-            return std::unexpected(error(ErrorCode::parse_error,
-                                         "the prompt of docs/specs/handoff-contract.md uses "
-                                         "an unknown value {{" +
-                                             std::string{name} + "}}"));
+            return std::unexpected(
+                error(ErrorCode::parse_error, "the prompt of docs/specs/handoff-contract.md uses "
+                                              "an unknown value {{" +
+                                                  std::string{name} + "}}"));
         }
         result += value->second;
         prompt.remove_prefix(close + 2);
@@ -508,8 +506,8 @@ Status check_replaceable(const fs::path& path) {
         const std::string relative = entry->path().lexically_relative(path).generic_string();
         const fs::file_status entry_status = entry->symlink_status(ec);
         const bool known_directory = fs::is_directory(entry_status) && relative == facts_directory;
-        const bool known_file = fs::is_regular_file(entry_status) &&
-                                std::ranges::contains(bundle_file_names, relative);
+        const bool known_file =
+            fs::is_regular_file(entry_status) && std::ranges::contains(bundle_file_names, relative);
         if (ec || (!known_directory && !known_file)) {
             return refuse();
         }
@@ -527,9 +525,9 @@ Status write_files(const Bundle& bundle, const fs::path& directory) {
         const fs::path path = directory / relative;
         fs::create_directories(path.parent_path(), ec);
         if (ec) {
-            return std::unexpected(error(ErrorCode::io_error, "cannot create " +
-                                                                  path.parent_path().string() +
-                                                                  ": " + ec.message()));
+            return std::unexpected(
+                error(ErrorCode::io_error,
+                      "cannot create " + path.parent_path().string() + ": " + ec.message()));
         }
         std::ofstream file{path, std::ios::binary | std::ios::trunc};
         file << content;
