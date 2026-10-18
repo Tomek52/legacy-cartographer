@@ -35,7 +35,7 @@ Rules:
 | [0018](0018-facts-export-replaces-only-exports.md) | Facts export replaces only exports | Accepted |
 | [0019](0019-parallel-resumable-analysis.md) | Parallel, resumable analysis with one writer | Accepted; TU list (one per fact path) and second signal (either kind) amended by 0020; the file of the run lock by 0024 |
 | [0020](0020-unit-list-and-second-signal.md) | One TU per fact path; a second signal of either kind ends lcart | Accepted |
-| [0021](0021-clang-flags-and-clang-cl-databases-for-msvc-code.md) | Clang flags and clang-cl compilation databases for MSVC code | Accepted; "registers no LLVM targets" amended by 0025 (a target prefix in the program name is now used) |
+| [0021](0021-clang-flags-and-clang-cl-databases-for-msvc-code.md) | Clang flags and clang-cl compilation databases for MSVC code | Accepted; "registers no LLVM targets" amended by 0025 (a target prefix in the program name is now used); configuration-file consequence resolved by 0023 |
 | [0022](0022-msbuild-logger-for-compilation-databases.md) | A compilation database from an MSBuild solution: an MSBuild logger | Accepted |
 | [0023](0023-clang-configuration-files-ignored.md) | Clang configuration files are ignored | Accepted (decided by delegation) |
 | [0024](0024-run-lock-on-a-separate-file.md) | The run lock of an analysis is on a separate file | Accepted (decided by delegation) |

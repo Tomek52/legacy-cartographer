@@ -1205,8 +1205,8 @@ and recorder stay ADR-0023; those in `src/cli/src/commands.cpp`,
 `src/analysis/src/clang_analyzer.cpp`, `tests/analysis/msvc_code_test.cpp`
 and the how-to's Win32 paragraph became ADR-0025. The Decided rows of the
 open questions link to the ADRs. Each decision already had regression
-tests, named in its ADR; their `Verifies:` comments now also cite the ADR
-anchors, so no test was added. ADR-0024 amends the run-lock file of
+tests, named in its ADR, so no test was added; the main ones (five) now
+also cite the ADR anchors in their `Verifies:` comments. ADR-0024 amends the run-lock file of
 ADR-0019 and ADR-0025 the "no LLVM targets" statement of ADR-0021 (their
 status lines and index rows say so): with targets registered, a target
 prefix in a program name (`x86_64-w64-mingw32-clang`) is now taken as the

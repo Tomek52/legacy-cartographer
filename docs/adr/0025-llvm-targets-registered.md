@@ -76,7 +76,7 @@ LLVM that lcart links (LLVM 20, ADR-0007).
   fails unless `_WIN32` is defined, failed to parse with `lcart` built from
   the commit before #31 and parsed with `lcart` after it; the same command
   run as `clang` failed with both. `clang` invoked under such a name does
-  the same (`ToolChain.h`). An explicit `--target` in the command still
+  the same. An explicit `--target` in the command still
   wins (tried: the same command with `--target=x86_64-linux-gnu` failed).
   No test covers this yet; whether to keep it is an
   [open question](../open-questions.md#open-technical-questions).
