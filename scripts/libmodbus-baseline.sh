@@ -10,6 +10,8 @@
 #   once the tools are installed; CI runs it under `unshare -n`.
 #
 # Verifies: b14-libmodbus-baseline-v1 (criteria 1-4),
+# b26-function-pointer-tables-v1 (criterion 3),
+# fr015-resolve-function-pointer-tables-v1 (criterion 1),
 # nfr001-works-without-llm-v2 (criterion 2).
 set -euo pipefail
 
@@ -72,3 +74,17 @@ if grep -E '"record":"module_dependency","from":"core","to":"(rtu|tcp)","via":"c
     die "core calls a backend directly"
 fi
 echo "libmodbus-baseline: expected functions and indirect backend calls present"
+
+# B-26 (FR-015 criterion 1): the call through `check_integrity` in
+# _modbus_receive_msg may call the RTU and the TCP implementation, assigned
+# to that field by the backend tables (TCP's by two), and nothing else.
+may_calls=$(grep -F '"record":"may_call","caller":"c:@F@_modbus_receive_msg",' "$export_file" |
+    grep -F '"via":"backend.check_integrity"' |
+    sed -E 's/.*"file":"([^"]*)","line":([0-9]+),"column":([0-9]+),"callee":"([^"]*)".*/\1:\2:\3 \4/' ||
+    true)
+expected_may_calls='src/modbus.c:546:12 src/modbus-rtu.c#c:modbus-rtu.c@F@_modbus_rtu_check_integrity
+src/modbus.c:546:12 src/modbus-tcp.c#c:modbus-tcp.c@F@_modbus_tcp_check_integrity'
+[[ $may_calls == "$expected_may_calls" ]] ||
+    die "may_call edges of _modbus_receive_msg through check_integrity are not the RTU and TCP ones:
+$may_calls"
+echo "libmodbus-baseline: may_call edges through backend.check_integrity as expected"

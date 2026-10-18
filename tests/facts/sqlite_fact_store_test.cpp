@@ -242,6 +242,73 @@ TEST(SqliteFactStore, DerivingModuleDependenciesAgainReplacesThem) {
     EXPECT_EQ(tool_deps[0].name, "core");
 }
 
+constexpr const char* recv_field = "c:@S@backend@FI@recv";
+
+/// The Fixture's facts plus an indirect call from main through
+/// `backend.recv` (main.c 4:5), three functions assigned to that field
+/// (helper_util twice, as by two translation units) and run assigned to
+/// another field; may_call edges not derived yet.
+void add_field_assignments(const Fixture& f) {
+    expect_ok(f.store->add_call({.caller = f.main,
+                                 .callee = std::nullopt,
+                                 .kind = CallKind::indirect,
+                                 .via = "backend.recv",
+                                 .site = {.file = f.main_c, .line = 4, .column = 5},
+                                 .field = recv_field}));
+    for (const FunctionId function : {f.helper_util, f.init, f.helper_util, f.helper_core}) {
+        expect_ok(f.store->add_field_assignment({.field = recv_field, .function = function}));
+    }
+    expect_ok(f.store->add_field_assignment({.field = "c:@S@backend@FI@send", .function = f.run}));
+}
+
+CallFact may_call_from_main(const Fixture& f, FunctionId callee) {
+    return CallFact{.caller = f.main,
+                    .callee = callee,
+                    .kind = CallKind::may_call,
+                    .via = "backend.recv",
+                    .site = {.file = f.main_c, .line = 4, .column = 5},
+                    .field = recv_field};
+}
+
+// Verifies: b26-function-pointer-tables-v1 (criteria 1, 4 and 6: field
+// assignments are stored as written, one per field and function; may_call
+// edges are derived from them on request, one per assigned function, and
+// come from a query of their own).
+TEST(SqliteFactStore, MayCallEdgesFromFieldAssignments) {
+    const Fixture f;
+    add_field_assignments(f);
+    EXPECT_TRUE(value_of(f.store->may_calls()).empty()); // not derived yet
+
+    expect_ok(f.store->derive_may_call_edges());
+    expect_ok(f.store->derive_may_call_edges()); // again: replaces them
+
+    // By site, then callee USR: usr:core.c@helper, usr:init, usr:util.c@helper.
+    const std::vector<CallFact> expected{may_call_from_main(f, f.helper_core),
+                                         may_call_from_main(f, f.init),
+                                         may_call_from_main(f, f.helper_util)};
+    EXPECT_EQ(value_of(f.store->may_calls_from(f.main)), expected);
+    EXPECT_EQ(value_of(f.store->may_calls()), expected);
+    EXPECT_TRUE(value_of(f.store->may_calls_from(f.run)).empty());
+}
+
+// Verifies: b26-function-pointer-tables-v1 (criterion 4: may_call edges are
+// not calls and justify no module dependency).
+TEST(SqliteFactStore, MayCallEdgesAreNeitherCallsNorModuleDependencies) {
+    const Fixture f;
+    add_field_assignments(f);
+    expect_ok(f.store->derive_may_call_edges());
+    expect_ok(f.store->derive_module_dependencies());
+
+    // Calls stay as they were, the indirect one with its field.
+    const std::vector<CallFact> calls = value_of(f.store->calls_from(f.main));
+    ASSERT_EQ(calls.size(), 2U);
+    EXPECT_EQ(calls[1].field, recv_field);
+    EXPECT_TRUE(value_of(f.store->calls_to(f.helper_util)).empty());
+    EXPECT_EQ(value_of(f.store->calls()).size(), 5U);
+    // The edges of ModuleDependenciesKeepTheirEdges, and no more.
+    EXPECT_EQ(value_of(f.store->module_dependency_edges(f.app)).size(), 2U);
+}
+
 TEST(SqliteFactStore, DiagnosticsAndCoverageRoundTrip) {
     Fixture f;
     EXPECT_EQ(value_of(f.store->coverage()).translation_units_total, 0U);

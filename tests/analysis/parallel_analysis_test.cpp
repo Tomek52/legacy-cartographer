@@ -89,12 +89,17 @@ protected:
     /// one name in every unit, a `static inline` function in a header, a
     /// function declared in the header and defined in the first unit, three
     /// programs with their own `main`, and one unit that does not parse.
+    /// Every unit also assigns its own `static` `op` to the field of a table
+    /// that the first unit calls through, so its may_call edges need the
+    /// field assignments of every unit (B-26).
     [[nodiscard]] fs::path write_project() const {
         const fs::path root = work_dir_ / "project";
         fs::create_directories(root / "a");
         fs::create_directories(root / "b");
         std::ofstream{root / "shared.h"} << "#ifndef SHARED_H\n#define SHARED_H\n"
                                             "int common(int value);\n"
+                                            "struct ops {\n    int (*run)(int value);\n};\n"
+                                            "int dispatch(const struct ops *ops);\n"
                                             "static inline int twice(int value) {\n"
                                             "    return 2 * value;\n}\n#endif\n";
         for (std::size_t unit = 0; unit < project_units; ++unit) {
@@ -103,8 +108,11 @@ protected:
                 << "static int helper(void) {\n    return twice(" << unit << ");\n}\n\n"
                 << "int u" << unit << "(void) {\n    return helper() + common(" << unit
                 << ");\n}\n";
+            out << "\nstatic int op(int value) {\n    return value + " << unit << ";\n}\n"
+                << "\nconst struct ops ops" << unit << " = {op};\n";
             if (unit == 0) {
                 out << "\nint common(int value) {\n    return value;\n}\n";
+                out << "\nint dispatch(const struct ops *ops) {\n    return ops->run(0);\n}\n";
             }
             if (unit % 4 == 1) {
                 out << "\nint main(void) {\n    return u" << unit << "();\n}\n";
@@ -351,6 +359,30 @@ TEST_F(ParallelAnalysisTest, ResumedRunExportsWhatAnUninterruptedRunExports) {
     const auto store = open_store(database);
     EXPECT_EQ(export_of(*store), uninterrupted.exported);
     EXPECT_EQ(done_prefix(value_of(store->translation_units())), project_units);
+}
+
+// Verifies: b26-function-pointer-tables-v1 (criterion 6: the field
+// assignments of the units committed before the interruption are stored,
+// so the resumed run derives the may_call edges of an uninterrupted one:
+// `dispatch` may call the `op` of every unit).
+TEST_F(ParallelAnalysisTest, ResumedRunDerivesTheMayCallEdgesOfEveryUnit) {
+    const fs::path root = write_project();
+    const AnalysisRequest base =
+        request(root, write_compilation_database(root, project_files()), 2);
+    const Reference uninterrupted = reference(base);
+    const std::string database = (work_dir() / "facts.lcart.db").string();
+    const AnalysisSummary first = interrupted_run(base, database, 3);
+    ASSERT_TRUE(first.interrupted);
+
+    std::vector<AnalysisProgress> reports;
+    static_cast<void>(resumed_run(base, database, 2, reports));
+    const auto store = open_store(database);
+    const std::vector<CallFact> may_calls = value_of(store->may_calls());
+    EXPECT_EQ(may_calls.size(), project_units);
+    for (const CallFact& call : may_calls) {
+        EXPECT_EQ(call.via, "ops.run");
+    }
+    EXPECT_EQ(export_of(*store), uninterrupted.exported);
 }
 
 // Verifies: nfr005-performance-budget-v3 (criteria 3 and 4: the progress of

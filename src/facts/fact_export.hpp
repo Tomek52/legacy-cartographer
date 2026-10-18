@@ -12,11 +12,13 @@ namespace lcart::facts {
 
 /// Version of the JSON Lines facts export (ADR-0016). Any change to record
 /// kinds, keys, their meaning or the sort order increments it.
-inline constexpr int export_format_version = 1;
+/// 2: `may_call` records (ADR-0026).
+inline constexpr int export_format_version = 2;
 
 /// Writes every fact in `facts` to `out` as JSON Lines, in the format of
-/// ADR-0016: a header line, then modules, files, functions, includes,
-/// calls, module dependencies and diagnostics, each kind in a fixed order.
+/// ADR-0016 as amended by ADR-0026: a header line, then modules, files,
+/// functions, includes, calls, may_call edges, module dependencies and
+/// diagnostics, each kind in a fixed order.
 ///
 /// The output contains no row ids, timestamps, absolute paths or tool
 /// version, so the same analysis input gives the same bytes on every run

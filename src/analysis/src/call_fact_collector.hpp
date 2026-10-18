@@ -27,6 +27,12 @@ public:
     void on_definition(const FunctionEvent& definition, std::span<const BatchFile> files,
                        facts::FunctionId caller);
 
+    /// Records the field assignments of an AST whose function events have
+    /// all been replayed; those naming a function that is not recorded are
+    /// left out. May_call edges are derived from them after the last
+    /// translation unit (FR-015, ADR-0026).
+    void on_field_assignments(std::span<const FieldAssignmentEvent> assignments);
+
     /// The first error from the fact writer, as FileFactCollector::status().
     [[nodiscard]] common::Status status() const { return status_; }
 

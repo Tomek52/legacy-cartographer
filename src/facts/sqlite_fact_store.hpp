@@ -56,9 +56,11 @@ public:
     common::Status add_include(const IncludeFact& include) override;
     common::Result<FunctionId> add_function(const FunctionFact& function) override;
     common::Status add_call(const CallFact& call) override;
+    common::Status add_field_assignment(const FieldAssignmentFact& assignment) override;
     common::Status add_diagnostic(const DiagnosticFact& diagnostic) override;
     common::Status set_coverage(const AnalysisCoverage& coverage) override;
     common::Status derive_module_dependencies() override;
+    common::Status derive_may_call_edges() override;
 
     [[nodiscard]] common::Result<std::optional<ModuleFact>>
     find_module(std::string_view name) const override;
@@ -78,6 +80,9 @@ public:
     calls_from(FunctionId caller) const override;
     [[nodiscard]] common::Result<std::vector<CallFact>> calls_to(FunctionId callee) const override;
     [[nodiscard]] common::Result<std::vector<CallFact>> calls() const override;
+    [[nodiscard]] common::Result<std::vector<CallFact>>
+    may_calls_from(FunctionId caller) const override;
+    [[nodiscard]] common::Result<std::vector<CallFact>> may_calls() const override;
     [[nodiscard]] common::Result<std::vector<IncludeFact>>
     includes_of(FileId includer) const override;
     [[nodiscard]] common::Result<std::vector<IncludeFact>>

@@ -756,7 +756,12 @@ common::Status AnalysisRun::finish() {
     if (summary_.interrupted) {
         return {};
     }
-    // Derived once, after the last unit (ADR-0019).
+    // Derived once, after the last unit (ADR-0019): the field assignments
+    // of every unit, committed with it, resolve the indirect calls of any
+    // unit (ADR-0026).
+    if (auto derived = out_->derive_may_call_edges(); !derived) {
+        return derived;
+    }
     if (auto derived = out_->derive_module_dependencies(); !derived) {
         return derived;
     }

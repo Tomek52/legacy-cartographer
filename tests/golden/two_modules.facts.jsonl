@@ -1,4 +1,4 @@
-{"record":"header","format":"lcart-facts","format_version":1,"translation_units_total":3,"translation_units_parsed":3}
+{"record":"header","format":"lcart-facts","format_version":2,"translation_units_total":3,"translation_units_parsed":3}
 {"record":"module","name":"app"}
 {"record":"module","name":"core"}
 {"record":"file","path":"app/app.h","external":false,"header":true,"module":"app","sha256":"e3cf35f02e930d661de4201b25445434ae644789e55bf037d2ced14b4ed04fe1"}

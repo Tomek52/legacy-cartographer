@@ -328,6 +328,13 @@ public:
     [[nodiscard]] lcart::common::Result<std::vector<CallFact>> calls() const override {
         return inner_->calls();
     }
+    [[nodiscard]] lcart::common::Result<std::vector<CallFact>>
+    may_calls_from(FunctionId caller) const override {
+        return inner_->may_calls_from(caller);
+    }
+    [[nodiscard]] lcart::common::Result<std::vector<CallFact>> may_calls() const override {
+        return inner_->may_calls();
+    }
     [[nodiscard]] lcart::common::Result<std::vector<IncludeFact>>
     includes_of(FileId includer) const override {
         return inner_->includes_of(includer);

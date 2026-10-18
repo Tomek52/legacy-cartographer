@@ -35,7 +35,7 @@ expanded in place; its version is bumped if its meaning changes
 | [B-23](#b23-libmodbus-hand-check-v1) | ✅ Hand check of the libmodbus functions | M1 | FR-003, FR-004 | B-14 | 2 h |
 | [B-24](#b24-clang-tidy-checks-headers-v1) | ✅ clang-tidy checks the project's headers | M1 | NFR-007 | B-02 | 1 h |
 | [B-25](#b25-claim-parser-v1) | ✅ Claim parser and its fuzzer | M2 | FR-009, NFR-010 | – | 5 h |
-| [B-26](#b26-function-pointer-tables-v1) | `may_call` edges from function-pointer tables | M2 | FR-015 | – | 8 h |
+| [B-26](#b26-function-pointer-tables-v1) | ✅ `may_call` edges from function-pointer tables | M2 | FR-015 | – | 8 h |
 | [B-27](#b27-claim-verifier-v1) | Claim verifier | M2 | FR-010 | B-25, B-26 | 6 h |
 | [B-28](#b28-verification-report-v1) | Verification report and `lcart verify` | M2 | FR-010, FR-011 | B-27, B-30 | 4 h |
 | [B-29](#b29-labelled-claim-set-v1) | Labelled claim set and accuracy gate | M2 | NFR-009 | B-27 | 6 h |
@@ -884,6 +884,34 @@ plus:
    the fact database's `schema_version` is bumped and the
    [data model](../architecture/data-model.md#arch-data-model-call-edges-v1)
    updated.
+
+Result (2026-10-18): each worker records, per translation unit, the
+functions that initializers of variables with static storage duration
+assign to struct fields of function-pointer type (Clang's semantic form of
+the initializer list, so positional and designated alike, also nested,
+in arrays and in function-local `static` tables), and keeps the field
+with every indirect call through one; fields are identified by Clang's
+USR. The writer stores the assignments as `FIELD_ASSIGNMENT` rows with
+the unit's facts, and after the last unit `derive_may_call_edges()`
+turns every indirect call through a field into one `may_call` edge per
+function assigned to that field, before module dependencies, which still
+count direct calls only, so `lcart map` and the committed libmodbus map do
+not change. `FactQuery::may_calls_from()` and `may_calls()` return them;
+the facts export lists them as `may_call` records after the calls, with
+`format_version` 2 (the golden file's header changed, nothing else); the
+fact database's schema version is 3. The decisions (field identity,
+what counts as an assignment, resolution after the last unit, export) are
+[ADR-0026](../adr/0026-may-call-edges-from-function-pointer-tables.md),
+which amends ADR-0016; the rules are on the
+[data model](../architecture/data-model.md#arch-data-model-may-call-edges-v1)
+page. The `fn_pointers` fixture gained `tcp.c` (a designated table that
+assigns only `send`) and a call through a local pointer; existing line and
+column expectations are unchanged. On libmodbus v3.2.0 the 36 calls
+through `ctx->backend` get 74 `may_call` edges, and
+`scripts/libmodbus-baseline.sh` checks that the one through
+`check_integrity` in `_modbus_receive_msg` (`src/modbus.c` 546:12) reaches
+exactly `_modbus_rtu_check_integrity` and `_modbus_tcp_check_integrity`.
+Calls through `set_rts`, assigned in code, get none.
 
 ### <a id="b27-claim-verifier-v1"></a>**[B-27 v1]** Claim verifier
 

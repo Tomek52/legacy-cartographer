@@ -20,7 +20,7 @@ using common::ErrorCode;
 using common::Result;
 using common::Status;
 
-// Physical form of docs/architecture/data-model.md, schema_version 2.
+// Physical form of docs/architecture/data-model.md, schema_version 3.
 // STRICT tables (SQLite >= 3.37) reject values of the wrong type instead of
 // converting them. MODULE_DEPENDENCY is materialised by B-11; until then
 // module_dependencies() derives it from the edges.
@@ -98,10 +98,18 @@ CREATE TABLE call_edge (
     file_id   INTEGER NOT NULL REFERENCES file (id),
     line      INTEGER NOT NULL,
     col       INTEGER NOT NULL,
-    CHECK ((kind = 'indirect') = (callee_id IS NULL))
+    field     TEXT NOT NULL,
+    CHECK ((kind = 'indirect') = (callee_id IS NULL)),
+    CHECK (kind <> 'direct' OR field = '')
 ) STRICT;
 CREATE INDEX call_edge_caller ON call_edge (caller_id);
 CREATE INDEX call_edge_callee ON call_edge (callee_id);
+
+CREATE TABLE field_assignment (
+    field       TEXT NOT NULL,
+    function_id INTEGER NOT NULL REFERENCES function (id),
+    PRIMARY KEY (field, function_id)
+) STRICT;
 
 CREATE TABLE module_dependency (
     from_module_id INTEGER NOT NULL REFERENCES module (id),
@@ -399,6 +407,8 @@ const char* to_text(CallKind kind) {
         return "direct";
     case CallKind::indirect:
         return "indirect";
+    case CallKind::may_call:
+        return "may_call";
     }
     std::unreachable();
 }
@@ -409,6 +419,9 @@ Result<CallKind> call_kind_from(std::string_view text) {
     }
     if (text == "indirect") {
         return CallKind::indirect;
+    }
+    if (text == "may_call") {
+        return CallKind::may_call;
     }
     return std::unexpected(corrupt_value("call kind", text));
 }
@@ -487,7 +500,7 @@ constexpr std::string_view function_columns =
     "SELECT f.id, f.usr, f.name, f.qualified_name, f.signature, f.file_id, f.line_begin,"
     " f.line_end, f.is_definition, f.linkage FROM function f";
 constexpr std::string_view call_columns =
-    "SELECT c.caller_id, c.callee_id, c.kind, c.via, c.file_id, c.line, c.col"
+    "SELECT c.caller_id, c.callee_id, c.kind, c.via, c.file_id, c.line, c.col, c.field"
     " FROM call_edge c JOIN file ON file.id = c.file_id";
 constexpr std::string_view include_columns =
     "SELECT e.includer_id, e.included_id, e.spelled, e.line, e.is_system"
@@ -503,7 +516,8 @@ Result<CallFact> read_call(const Statement& row) {
         .callee = row.optional_id<FunctionId>(1),
         .kind = *kind,
         .via = row.text(3),
-        .site = {.file = row.id<FileId>(4), .line = row.uint32(5), .column = row.uint32(6)}};
+        .site = {.file = row.id<FileId>(4), .line = row.uint32(5), .column = row.uint32(6)},
+        .field = row.text(7)};
 }
 
 Result<IncludeFact> read_include(const Statement& row) {
@@ -735,10 +749,18 @@ Result<FunctionId> SqliteFactStore::add_function(const FunctionFact& function) {
 
 Status SqliteFactStore::add_call(const CallFact& call) {
     return execute(database_,
-                   "INSERT INTO call_edge (caller_id, callee_id, kind, via, file_id, line, col)"
-                   " VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+                   "INSERT INTO call_edge (caller_id, callee_id, kind, via, file_id, line, col,"
+                   " field) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
                    call.caller, call.callee, to_text(call.kind), call.via, call.site.file,
-                   call.site.line, call.site.column);
+                   call.site.line, call.site.column, call.field);
+}
+
+Status SqliteFactStore::add_field_assignment(const FieldAssignmentFact& assignment) {
+    // A table in a header is seen by every translation unit including it.
+    return execute(database_,
+                   "INSERT INTO field_assignment (field, function_id) VALUES (?1, ?2)"
+                   " ON CONFLICT DO NOTHING",
+                   assignment.field, assignment.function);
 }
 
 Status SqliteFactStore::add_diagnostic(const DiagnosticFact& diagnostic) {
@@ -821,7 +843,7 @@ Result<std::vector<FunctionFact>> SqliteFactStore::functions() const {
                                     read_function);
 }
 
-// may_call edges (FR-015, M2) are a separate query, never mixed with calls.
+// may_call edges (FR-015) are separate queries, never mixed with calls.
 
 Result<std::vector<CallFact>> SqliteFactStore::calls_from(FunctionId caller) const {
     return select_all<CallFact>(database_,
@@ -844,6 +866,28 @@ Result<std::vector<CallFact>> SqliteFactStore::calls() const {
                                 std::string{call_columns} +
                                     " WHERE c.kind IN ('direct', 'indirect')"
                                     " ORDER BY file.path, c.line, c.col, c.id",
+                                read_call);
+}
+
+// The callee's USR, not its id, orders the edges of one call, so the order
+// does not depend on the order in which translation units were analysed.
+constexpr std::string_view may_call_order = " ORDER BY file.path, c.line, c.col, callee.usr, c.id";
+
+Result<std::vector<CallFact>> SqliteFactStore::may_calls_from(FunctionId caller) const {
+    return select_all<CallFact>(database_,
+                                std::string{call_columns} +
+                                    " JOIN function callee ON callee.id = c.callee_id"
+                                    " WHERE c.caller_id = ?1 AND c.kind = 'may_call'" +
+                                    std::string{may_call_order},
+                                read_call, caller);
+}
+
+Result<std::vector<CallFact>> SqliteFactStore::may_calls() const {
+    return select_all<CallFact>(database_,
+                                std::string{call_columns} +
+                                    " JOIN function callee ON callee.id = c.callee_id"
+                                    " WHERE c.kind = 'may_call'" +
+                                    std::string{may_call_order},
                                 read_call);
 }
 
@@ -894,6 +938,28 @@ INSERT INTO module_dependency (from_module_id, to_module_id, via, edge_id)
     JOIN function callee ON callee.id = c.callee_id
     JOIN file callee_file ON callee_file.id = callee.file_id
     WHERE c.kind = 'direct' AND caller_file.module_id <> callee_file.module_id;
+COMMIT;
+)sql";
+    if (auto derived = execute_constant(database_, derive_sql); !derived) {
+        rollback(database_);
+        return derived;
+    }
+    return {};
+}
+
+Status SqliteFactStore::derive_may_call_edges() {
+    // One edge per indirect call through a field and function assigned to
+    // that field, whichever translation unit assigned it (FR-015,
+    // ADR-0026). Inserted in call, then callee order, so row ids follow the
+    // order of the analysis, like those of the other edges.
+    constexpr const char* derive_sql = R"sql(
+BEGIN;
+DELETE FROM call_edge WHERE kind = 'may_call';
+INSERT INTO call_edge (caller_id, callee_id, kind, via, file_id, line, col, field)
+    SELECT c.caller_id, a.function_id, 'may_call', c.via, c.file_id, c.line, c.col, c.field
+    FROM call_edge c JOIN field_assignment a ON a.field = c.field
+    WHERE c.kind = 'indirect' AND c.field <> ''
+    ORDER BY c.id, a.function_id;
 COMMIT;
 )sql";
     if (auto derived = execute_constant(database_, derive_sql); !derived) {
