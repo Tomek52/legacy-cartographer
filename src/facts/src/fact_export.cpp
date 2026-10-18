@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <iterator>
 #include <map>
 #include <optional>
@@ -159,91 +160,6 @@ const char* to_text(DiagnosticSeverity severity) {
     std::unreachable();
 }
 
-/// How a file appears in the export (ADR-0016).
-struct ExportedFile {
-    std::string key;
-    bool is_external{};
-};
-
-/// Export names of all files: the stored path for a file under the root;
-/// for an external file, the spelling of the first directive (by includer
-/// path, then line, then spelling) that includes it, with `#2`, `#3`, ...
-/// appended if an earlier external file has that name already. An
-/// external file that no directive names falls back to its file name.
-std::map<FileId, ExportedFile> exported_files(const std::vector<FileFact>& files,
-                                              const std::vector<IncludeFact>& includes) {
-    std::map<FileId, ExportedFile> exported;
-    std::map<FileId, const FileFact*> external;
-    for (const FileFact& file : files) {
-        if (file.is_external) {
-            external.emplace(file.id, &file);
-        } else {
-            exported.emplace(file.id, ExportedFile{.key = file.path, .is_external = false});
-        }
-    }
-
-    // Every directive naming each external file, sorted: the first one
-    // gives the name, the rest break ties between files that one directive
-    // reached in different translation units (different -I).
-    using Directive = std::tuple<std::string, std::uint32_t, std::string>;
-    std::map<FileId, std::vector<Directive>> directives;
-    for (const IncludeFact& include : includes) {
-        if (!include.included || !external.contains(*include.included)) {
-            continue;
-        }
-        const auto includer = exported.find(include.includer);
-        if (includer == exported.end()) {
-            continue; // directives in external files are not recorded
-        }
-        directives[*include.included].emplace_back(includer->second.key, include.line,
-                                                   include.spelled);
-    }
-
-    // Names are handed out in an order that does not depend on row ids
-    // (insertion order): by first directive, then by all directives, then
-    // by content hash; only files equal in all of these fall back to their
-    // absolute path. Files no directive names come last, by file name.
-    struct Candidate {
-        bool unnamed{};
-        std::vector<Directive> directives;
-        std::string name;
-        std::string sha256;
-        std::string path;
-        FileId id{};
-    };
-    std::vector<Candidate> order;
-    for (const auto& [id, file] : external) {
-        Candidate candidate{.unnamed = true,
-                            .directives = {},
-                            .name = file->path.substr(file->path.find_last_of('/') + 1),
-                            .sha256 = file->content_sha256,
-                            .path = file->path,
-                            .id = id};
-        if (auto found = directives.find(id); found != directives.end()) {
-            std::ranges::sort(found->second);
-            candidate.unnamed = false;
-            candidate.name = std::get<2>(found->second.front());
-            candidate.directives = std::move(found->second);
-        }
-        order.push_back(std::move(candidate));
-    }
-    std::ranges::sort(order, [](const Candidate& left, const Candidate& right) {
-        return std::tie(left.unnamed, left.directives, left.name, left.sha256, left.path) <
-               std::tie(right.unnamed, right.directives, right.name, right.sha256, right.path);
-    });
-
-    std::set<std::string> taken;
-    for (const Candidate& candidate : order) {
-        std::string key = candidate.name;
-        for (int suffix = 2; taken.contains(key); ++suffix) {
-            key = candidate.name + '#' + std::to_string(suffix);
-        }
-        taken.insert(key);
-        exported.emplace(candidate.id, ExportedFile{.key = std::move(key), .is_external = true});
-    }
-    return exported;
-}
-
 /// One line of the export and the key it is sorted by within its kind.
 using Record = std::pair<std::vector<std::string>, std::string>;
 
@@ -283,7 +199,7 @@ struct Snapshot {
     std::map<ModuleId, std::string> module_names;
     std::map<FunctionId, std::string> usrs;
 
-    [[nodiscard]] const std::string& file_name(FileId id) const { return file_names.at(id).key; }
+    [[nodiscard]] const std::string& file_name(FileId id) const { return file_names.at(id).name; }
 
     /// A stored path of a diagnostic: a recorded file's export name, a
     /// root-relative path as it is, and an absolute path of a file that is
@@ -333,7 +249,9 @@ common::Result<Snapshot> read_snapshot(const FactQuery& facts) {
         std::ranges::move(*edges, std::back_inserter(snapshot.dependencies));
         snapshot.module_names.emplace(module.id, module.name);
     }
-    snapshot.file_names = exported_files(snapshot.files, snapshot.includes);
+    snapshot.file_names =
+        exported_file_names(snapshot.files, snapshot.includes,
+                            [](std::string_view spelled) { return std::string{spelled}; });
     for (const FileFact& file : snapshot.files) {
         snapshot.file_names_by_stored_path.emplace(file.path, snapshot.file_name(file.id));
     }
@@ -358,9 +276,9 @@ std::vector<Record> file_records(const Snapshot& snapshot) {
             sha256 = file.content_sha256;
         }
         records.emplace_back(
-            std::vector<std::string>{exported.is_external ? "1" : "0", exported.key},
+            std::vector<std::string>{exported.is_external ? "1" : "0", exported.name},
             JsonObject{"file"}
-                .string("path", exported.key)
+                .string("path", exported.name)
                 .boolean("external", exported.is_external)
                 .boolean("header", file.is_header)
                 .optional_string("module", module)
@@ -398,7 +316,7 @@ std::vector<Record> include_records(const Snapshot& snapshot) {
         std::optional<bool> target_external;
         if (include.included) {
             const ExportedFile& exported = snapshot.file_names.at(*include.included);
-            target = exported.key;
+            target = exported.name;
             target_external = exported.is_external;
         }
         const std::string& file = snapshot.file_name(include.includer);
@@ -566,6 +484,81 @@ std::string json_string(std::string_view text) {
     }
     out += '"';
     return out;
+}
+
+std::map<FileId, ExportedFile>
+exported_file_names(const std::vector<FileFact>& files, const std::vector<IncludeFact>& includes,
+                    const std::function<std::string(std::string_view)>& spelling) {
+    std::map<FileId, ExportedFile> exported;
+    std::map<FileId, const FileFact*> external;
+    for (const FileFact& file : files) {
+        if (file.is_external) {
+            external.emplace(file.id, &file);
+        } else {
+            exported.emplace(file.id, ExportedFile{.name = file.path, .is_external = false});
+        }
+    }
+
+    // Every directive naming each external file, sorted: the first one
+    // gives the name, the rest break ties between files that one directive
+    // reached in different translation units (different -I).
+    using Directive = std::tuple<std::string, std::uint32_t, std::string>;
+    std::map<FileId, std::vector<Directive>> directives;
+    for (const IncludeFact& include : includes) {
+        if (!include.included || !external.contains(*include.included)) {
+            continue;
+        }
+        const auto includer = exported.find(include.includer);
+        if (includer == exported.end()) {
+            continue; // directives in external files are not recorded
+        }
+        directives[*include.included].emplace_back(includer->second.name, include.line,
+                                                   spelling(include.spelled));
+    }
+
+    // Names are handed out in an order that does not depend on row ids
+    // (insertion order): by first directive, then by all directives, then
+    // by content hash; only files equal in all of these fall back to their
+    // absolute path. Files no directive names come last, by file name.
+    struct Candidate {
+        bool unnamed{};
+        std::vector<Directive> directives;
+        std::string name;
+        std::string sha256;
+        std::string path;
+        FileId id{};
+    };
+    std::vector<Candidate> order;
+    for (const auto& [id, file] : external) {
+        Candidate candidate{.unnamed = true,
+                            .directives = {},
+                            .name = file->path.substr(file->path.find_last_of('/') + 1),
+                            .sha256 = file->content_sha256,
+                            .path = file->path,
+                            .id = id};
+        if (auto found = directives.find(id); found != directives.end()) {
+            std::ranges::sort(found->second);
+            candidate.unnamed = false;
+            candidate.name = std::get<2>(found->second.front());
+            candidate.directives = std::move(found->second);
+        }
+        order.push_back(std::move(candidate));
+    }
+    std::ranges::sort(order, [](const Candidate& left, const Candidate& right) {
+        return std::tie(left.unnamed, left.directives, left.name, left.sha256, left.path) <
+               std::tie(right.unnamed, right.directives, right.name, right.sha256, right.path);
+    });
+
+    std::set<std::string> taken;
+    for (const Candidate& candidate : order) {
+        std::string key = candidate.name;
+        for (int suffix = 2; taken.contains(key); ++suffix) {
+            key = candidate.name + '#' + std::to_string(suffix);
+        }
+        taken.insert(key);
+        exported.emplace(candidate.id, ExportedFile{.name = std::move(key), .is_external = true});
+    }
+    return exported;
 }
 
 Status write_jsonl_export(const FactQuery& facts, std::ostream& out) {
