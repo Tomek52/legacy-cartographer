@@ -25,6 +25,8 @@ struct Id {
 using FileId = Id<struct FileTag>;
 using FunctionId = Id<struct FunctionTag>;
 using ModuleId = Id<struct ModuleTag>;
+using IncludeId = Id<struct IncludeTag>;
+using CallId = Id<struct CallTag>;
 
 /// 1-based line and column, as reported by Clang.
 struct SourceLocation {
@@ -70,6 +72,7 @@ struct FileFact {
 };
 
 struct IncludeFact {
+    IncludeId id{};
     FileId includer{};
     std::optional<FileId> included{}; ///< Empty when the header was not found.
     std::string spelled{};            ///< As written in the directive.
@@ -95,6 +98,7 @@ struct FunctionFact {
 };
 
 struct CallFact {
+    CallId id{};
     FunctionId caller{};
     std::optional<FunctionId> callee{}; ///< Empty if and only if CallKind::indirect.
     CallKind kind{CallKind::direct};

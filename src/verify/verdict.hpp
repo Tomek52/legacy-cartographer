@@ -26,12 +26,42 @@ enum class VerdictReason : std::uint8_t {
     indirect_calls_present,
 };
 
+/// A table of the fact database (docs/architecture/data-model.md) whose
+/// rows a verdict can cite.
+enum class FactTable : std::uint8_t { module, file, function, include_edge, call_edge };
+
+/// One fact a verdict rests on: a row of a fact table. Row ids are per
+/// table, so a reference names both (ADR-0029).
+struct FactRef {
+    FactTable table{FactTable::file};
+    std::int64_t id{};
+
+    auto operator<=>(const FactRef&) const = default;
+};
+
 struct Verdict {
     std::string claim_id;
     VerificationStatus status{VerificationStatus::unverified};
     VerdictReason reason{VerdictReason::coverage_incomplete};
-    /// Fact database row ids supporting the verdict, for the report.
-    std::vector<std::int64_t> evidence;
+    /// The facts the verdict rests on, in the order of the queries they come
+    /// from (docs/specs/claim-schema.md, relation rules):
+    /// - relation_found: the relation's facts (direct calls, include
+    ///   directives, the edges behind a module dependency, the defining
+    ///   function), or for `belongs_to` the subject (and a function's file).
+    /// - relation_absent: the subject (a function stands for its
+    ///   definition), and for `belongs_to` a function's file too.
+    /// - indirect_calls_present: for `calls`, the subject's indirect calls,
+    ///   then its may_call edges to the object; for `depends_on`, the
+    ///   may_call edges from functions of the subject module to functions of
+    ///   the object module.
+    /// - entity_ambiguous: the candidates.
+    /// - entity_not_found: empty. There is no fact to cite; the evidence is
+    ///   the analysis coverage (every translation unit parsed), which the
+    ///   report shows once for all verdicts.
+    /// - coverage_incomplete: empty.
+    std::vector<FactRef> evidence;
+
+    bool operator==(const Verdict&) const = default;
 };
 
 /// Stable lowercase name, used in JSON reports and the claim schema.

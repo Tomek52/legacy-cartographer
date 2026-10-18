@@ -111,39 +111,89 @@ Example:
 (Function names taken from libmodbus v3.2.0 `src/modbus.c`; whether the call
 is direct is for the verifier to decide.)
 
-## <a id="claim-verification-rules-v1"></a>Verification rules
+## <a id="claim-verification-rules-v2"></a>Verification rules
 
 Verification is a pure function of the claim and the fact database. It is
 deterministic and needs no LLM.
 
-### <a id="claim-entity-resolution-v1"></a>Step 1: resolve entities
+### <a id="claim-entity-resolution-v2"></a>Step 1: resolve entities
 
-- **function:** by name; if `file` is given, only functions defined or
-  declared in that file. Several matches → `unverified` / `entity_ambiguous`.
-- **file:** by path relative to the analysis root; a unique path suffix
-  match is accepted (`modbus.c` → `src/modbus.c`). Several → ambiguous.
+The subject is resolved first, then the object; the first entity that does
+not resolve decides the verdict.
+
+- **file:** by path as the fact database records it (relative to the
+  analysis root; absolute for a file outside it). An exact match wins;
+  otherwise the files whose path ends with `/` and the name
+  (`modbus.c` → `src/modbus.c`, but not `libmodbus.c`). Several → `unverified` /
+  `entity_ambiguous`.
+- **function:** by (unqualified) name. The fact database locates each
+  function at one file only: its definition, else its first declaration
+  ([function facts](../architecture/data-model.md#arch-data-model-function-facts-v2)).
+  If `file` is given, it keeps the functions of that name located in a file
+  that `file` matches as a file entity would (exact, else suffix, every
+  match). If none is located there, `file` keeps all of them, because the
+  declaration it may name (a header) is not recorded: `file` only
+  disambiguates. Several → `unverified` / `entity_ambiguous`.
 - **module:** by exact name.
 - **Not found:** if analysis coverage is complete, `contradicted` /
   `entity_not_found` (the LLM named something that does not exist, a typical
   hallucination). If coverage is incomplete, `unverified` /
-  `coverage_incomplete`.
+  `coverage_incomplete`. Coverage is **complete** when at least one
+  translation unit was analysed and every one was parsed; a database without
+  coverage counts as incomplete.
+- These outcomes are the same for both polarities ([negation](#claim-negation-rule-v2)
+  does not apply to them): a claim that names something that does not exist
+  is wrong whichever way it is put.
 
-### <a id="claim-relation-rules-v1"></a>Step 2: check the relation (affirmed claims)
+Evidence: for `entity_ambiguous`, the candidates; for `entity_not_found`,
+no fact, since there is none to cite: the coverage the report shows is the
+evidence; for `coverage_incomplete`, none.
+
+### <a id="claim-relation-rules-v2"></a>Step 2: check the relation (affirmed claims)
+
+A file **was parsed** when it is under the analysis root and no
+diagnostic of the analysis is an error or a fatal error. An error is not
+local to where Clang reports it: Clang suppresses follow-on errors at the
+uses of an invalid declaration, so a call in another file of the same unit
+becomes an expression with errors, is not recorded, and no error names that
+file (a parameter of an unknown type in one header silently drops the calls
+to that function in the next). After a fatal error (a missing `#include`,
+too many errors) Clang goes on parsing the unit but reports no further
+errors at all. So error recovery can drop facts silently in any file a unit
+with an error reached, and the recorded include edges cannot bound that
+set: a unit whose main file is outside the root has none, and the
+directives of headers outside the root are not recorded, so a header they
+include is reached without an edge. Therefore any error in the analysis means no
+file counts as parsed, and absent `calls`, `includes` and `defines`
+relations are `unverified` until the analysis is clean (narrowing this is
+an [open question](../open-questions.md#open-technical-questions)). A
+function's **definition was parsed** when the function is recorded
+as a definition and its file was parsed. A function belongs to the module of
+its file; a function whose file is not recorded is an inconsistent fact
+database, an error rather than a verdict.
 
 | Kind | Relation found | Relation absent |
 |---|---|---|
-| `calls` | `confirmed` | `contradicted` if subject's definition was parsed and has no indirect calls; `unverified` / `indirect_calls_present` if it has indirect calls (incl. `may_call` edges, [FR-015](requirements.md#fr015-resolve-function-pointer-tables-v1)); `unverified` / `coverage_incomplete` if the definition was not parsed |
-| `includes` | `confirmed` | `contradicted` if subject was parsed; else `unverified` |
-| `depends_on` | `confirmed` (evidence: the edges) | `contradicted` if coverage is complete; else `unverified` |
-| `defines` | `confirmed` | `contradicted` |
-| `belongs_to` | `confirmed` | `contradicted` |
+| `calls` | a direct call from subject to object: `confirmed` (evidence: those calls) | `unverified` / `coverage_incomplete` if the subject's definition was not parsed; else `unverified` / `indirect_calls_present` if it has indirect calls (incl. `may_call` edges, [FR-015](requirements.md#fr015-resolve-function-pointer-tables-v1); evidence: its indirect calls and its `may_call` edges to the object); else `contradicted` (evidence: the subject) |
+| `includes` | an include directive in subject resolving to object: `confirmed` (evidence: those directives) | `contradicted` if subject was parsed (evidence: the subject); else `unverified` / `coverage_incomplete` |
+| `depends_on` | the module dependency: `confirmed` (evidence: the include directives and calls that justify it) | `unverified` / `indirect_calls_present` if a function of subject has a `may_call` edge to a function of object (evidence: those edges); else `contradicted` if coverage is complete (evidence: the subject); else `unverified` / `coverage_incomplete` |
+| `defines` | object recorded as a definition located in subject: `confirmed` (evidence: the object) | `contradicted` if subject was parsed (evidence: the subject); else `unverified` / `coverage_incomplete` |
+| `belongs_to` | subject's module is object: `confirmed` | `contradicted`; evidence either way: the subject, and for a function also its file |
 
-### <a id="claim-negation-rule-v1"></a>Step 3: negation
+The reason is `relation_found` or `relation_absent` unless the table names
+another. `may_call` edges never make a `calls` or `depends_on` relation
+found (they are no module dependencies,
+[ADR-0026](../adr/0026-may-call-edges-from-function-pointer-tables.md)). Evidence
+names rows of the fact database, each with its table
+([ADR-0029](../adr/0029-verdict-evidence-names-its-fact-table.md)).
 
-For a negated claim, `confirmed` and `contradicted` swap; `unverified` stays.
-Exception: a negated `calls` whose relation is absent but the subject has
-indirect calls is `unverified`, because the call may still happen through a
-pointer.
+### <a id="claim-negation-rule-v2"></a>Step 3: negation
+
+For a negated claim, the `confirmed` and `contradicted` of step 2 swap,
+with the same reason and evidence; `unverified` stays. So a negated `calls`
+whose relation is absent but the subject has indirect calls is
+`unverified`, because the call may still happen through a pointer. Step 1's
+outcomes do not swap.
 
 ### <a id="claim-status-semantics-v1"></a>What the statuses promise
 

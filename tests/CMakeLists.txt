@@ -12,6 +12,7 @@ add_executable(lcart_unit_tests
     facts/fact_export_test.cpp
     facts/sqlite_fact_store_test.cpp
     report/module_map_test.cpp
+    verify/claim_verifier_test.cpp
     verify/verification_status_test.cpp)
 # SQLite directly: the schema-version tests tamper with a database.
 target_link_libraries(lcart_unit_tests PRIVATE
@@ -33,8 +34,9 @@ add_executable(lcart_analysis_tests
     analysis/may_call_edges_test.cpp
     analysis/modules_test.cpp
     analysis/msvc_code_test.cpp
-    analysis/parallel_analysis_test.cpp)
-target_link_libraries(lcart_analysis_tests PRIVATE lcart::analysis GTest::gtest_main)
+    analysis/parallel_analysis_test.cpp
+    verify/claim_verifier_analysis_test.cpp)
+target_link_libraries(lcart_analysis_tests PRIVATE lcart::analysis lcart::verify GTest::gtest_main)
 target_compile_definitions(lcart_analysis_tests PRIVATE
     LCART_FIXTURES_DIR="${CMAKE_CURRENT_SOURCE_DIR}/fixtures")
 lcart_target_warnings(lcart_analysis_tests)

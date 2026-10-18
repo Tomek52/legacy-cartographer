@@ -50,4 +50,4 @@ The docs describe at least one tested way to get it (B-17).
 - If Clang cannot parse a part of an MSVC code base, those translation units
   become diagnostics and lower coverage; the verifier then answers
   `unverified` instead of `contradicted` for claims that depend on them
-  ([claim schema](../specs/claim-schema.md#claim-entity-resolution-v1)).
+  ([claim schema](../specs/claim-schema.md#claim-entity-resolution-v2)).

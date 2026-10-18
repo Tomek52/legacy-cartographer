@@ -172,7 +172,7 @@ Acceptance criteria:
 When claims are produced or supplied by the user (`lcart verify <claims.json>`),
 the tool shall assign each claim the status `confirmed`, `unverified` or
 `contradicted` with a reason and the supporting fact IDs, following the
-[verification rules](claim-schema.md#claim-verification-rules-v1).
+[verification rules](claim-schema.md#claim-verification-rules-v2).
 
 Acceptance criteria:
 

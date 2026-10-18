@@ -42,3 +42,4 @@ Rules:
 | [0025](0025-llvm-targets-registered.md) | LLVM targets are registered before the first parse | Accepted (decided by delegation) |
 | [0026](0026-may-call-edges-from-function-pointer-tables.md) | may_call edges from function-pointer tables | Accepted |
 | [0027](0027-two-phase-template-parsing-for-msvc-code.md) | Two-phase template parsing for MSVC code | Accepted |
+| [0029](0029-verdict-evidence-names-its-fact-table.md) | Verdict evidence names its fact table | Accepted |

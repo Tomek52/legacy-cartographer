@@ -2,7 +2,9 @@
 // documented order, schema version check, bound parameters, in-memory only)
 // and the storage side of fr002-record-files-and-includes-v1,
 // fr003-record-functions-v1 (one row per USR, definition wins) and
-// fr004-record-call-edges-v1 (indirect edges keep their member name).
+// fr004-record-call-edges-v1 (indirect edges keep their member name);
+// adr0029-ids-of-includes-and-calls-v1 (include and call facts carry their
+// row ids).
 #include "facts/sqlite_fact_store.hpp"
 
 #include <gtest/gtest.h>
@@ -169,6 +171,10 @@ TEST(SqliteFactStore, CallsFromInSiteOrderWithIndirectEdges) {
     Fixture f;
     auto calls = value_of(f.store->calls_from(f.run));
     ASSERT_EQ(calls.size(), 3U);
+    // Row ids follow insertion order: the indirect call was the third.
+    EXPECT_EQ(calls[0].id, CallId{3});
+    EXPECT_EQ(calls[1].id, CallId{2});
+    EXPECT_EQ(calls[2].id, CallId{1});
     EXPECT_EQ(calls[0].kind, CallKind::indirect); // line 22, column 2
     EXPECT_FALSE(calls[0].callee.has_value());
     EXPECT_EQ(calls[0].via, "recv");
@@ -183,6 +189,9 @@ TEST(SqliteFactStore, IncludesInLineOrderWithUnresolvedTarget) {
     Fixture f;
     auto includes = value_of(f.store->includes_of(f.main_c));
     ASSERT_EQ(includes.size(), 3U);
+    EXPECT_EQ(includes[0].id, IncludeId{2}); // added second, on line 1
+    EXPECT_EQ(includes[1].id, IncludeId{1});
+    EXPECT_EQ(includes[2].id, IncludeId{3});
     EXPECT_EQ(includes[0].included, f.core_h);
     EXPECT_FALSE(includes[0].is_system);
     EXPECT_EQ(includes[1].included, f.stdio_h);
@@ -261,8 +270,9 @@ void add_field_assignments(const Fixture& f) {
     expect_ok(f.store->add_field_assignment({.field = "c:@S@backend@FI@send", .function = f.run}));
 }
 
-CallFact may_call_from_main(const Fixture& f, FunctionId callee) {
-    return CallFact{.caller = f.main,
+CallFact may_call_from_main(const Fixture& f, FunctionId callee, CallId id) {
+    return CallFact{.id = id,
+                    .caller = f.main,
                     .callee = callee,
                     .kind = CallKind::may_call,
                     .via = "backend.recv",
@@ -283,9 +293,11 @@ TEST(SqliteFactStore, MayCallEdgesFromFieldAssignments) {
     expect_ok(f.store->derive_may_call_edges()); // again: replaces them
 
     // By site, then callee USR: usr:core.c@helper, usr:init, usr:util.c@helper.
-    const std::vector<CallFact> expected{may_call_from_main(f, f.helper_core),
-                                         may_call_from_main(f, f.init),
-                                         may_call_from_main(f, f.helper_util)};
+    // Ids after the five calls, in callee id order (init, helper_util,
+    // helper_core): deriving again reuses them.
+    const std::vector<CallFact> expected{may_call_from_main(f, f.helper_core, CallId{8}),
+                                         may_call_from_main(f, f.init, CallId{6}),
+                                         may_call_from_main(f, f.helper_util, CallId{7})};
     EXPECT_EQ(value_of(f.store->may_calls_from(f.main)), expected);
     EXPECT_EQ(value_of(f.store->may_calls()), expected);
     EXPECT_TRUE(value_of(f.store->may_calls_from(f.run)).empty());
