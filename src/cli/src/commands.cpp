@@ -1039,7 +1039,10 @@ ExitStatus run_handoff(const HandoffCommand& command, std::ostream& out, std::os
         return handoff_failure(bundle.error(), err);
     }
     std::error_code ec;
-    const fs::path output_dir = fs::absolute(command.output_dir, ec);
+    fs::path output_dir = fs::absolute(command.output_dir, ec);
+    if (ec) {
+        output_dir = command.output_dir; // still names the directory, relative to here
+    }
     warn_if_exposed(handoff::bundle_directory(output_dir, bundle->run_id), "the handoff bundle",
                     err, true);
     const auto written = handoff::write_bundle(*bundle, output_dir);

@@ -643,8 +643,10 @@ Result<BundleManifest> write_bundle(const Bundle& bundle, const fs::path& output
     }
     const bool replacing = fs::exists(fs::symlink_status(directory, ec));
     ec.clear(); // set when nothing is there
+    bool moved_away = false;
     if (replacing) {
         fs::rename(directory, previous, ec);
+        moved_away = !ec;
     }
     if (!ec) {
         fs::rename(partial, directory, ec);
@@ -652,6 +654,11 @@ Result<BundleManifest> write_bundle(const Bundle& bundle, const fs::path& output
     if (ec) {
         const std::string message =
             "cannot move the new bundle to " + directory.string() + ": " + ec.message();
+        if (moved_away) {
+            // Put the earlier bundle back, or the next run would delete it
+            // as the leftover of a crashed run.
+            fs::rename(previous, directory, ec);
+        }
         fs::remove_all(partial, ec); // best effort; the run has failed already
         return std::unexpected(error(ErrorCode::io_error, message));
     }

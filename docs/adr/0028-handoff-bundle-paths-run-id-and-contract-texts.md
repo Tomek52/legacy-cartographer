@@ -160,3 +160,6 @@ available yet.
 - Changing the prompt or the agent output on the page changes `lcart` at
   the next build; the contract version in `handoff.hpp` must then be
   bumped by hand (the page says so).
+  B-30 moves the prompt and agent output anchors to v2 yet
+  keeps contract version 1: no bundle was written before B-30, so v1 is
+  defined by the texts as they stand at this decision.

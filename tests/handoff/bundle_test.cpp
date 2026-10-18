@@ -654,4 +654,18 @@ TEST_F(HandoffBundleWrite, RefusesADirectoryWithOtherFiles) {
     EXPECT_EQ(read_file(directory / "facts" / "notes.txt"), "mine\n");
 }
 
+TEST_F(HandoffBundleWrite, RefusesABundleDirectoryThatIsASymlink) {
+    const Bundle bundle = bundle_of(*facts_of_two_modules());
+    const fs::path directory = lcart::handoff::bundle_directory(out(), bundle.run_id);
+    const fs::path elsewhere = out() / "elsewhere";
+    fs::create_directories(elsewhere);
+    std::ofstream{elsewhere / "PROMPT.md"} << "mine\n";
+    fs::create_directories(directory.parent_path());
+    fs::create_directory_symlink(elsewhere, directory);
+    const auto written = lcart::handoff::write_bundle(bundle, out());
+    ASSERT_FALSE(written.has_value());
+    EXPECT_EQ(written.error().code, ErrorCode::io_error);
+    EXPECT_EQ(read_file(elsewhere / "PROMPT.md"), "mine\n");
+    EXPECT_TRUE(fs::is_symlink(directory));
+}
 } // namespace
