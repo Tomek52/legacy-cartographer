@@ -1,0 +1,39 @@
+{
+  "modules": [
+    {
+      "depends_on": [
+        {
+          "edges": [
+            {
+              "column": null,
+              "file": "app/app.h",
+              "line": 4,
+              "via": "include"
+            },
+            {
+              "column": 28,
+              "file": "app/main.c",
+              "line": 6,
+              "via": "call"
+            }
+          ],
+          "module": "core"
+        }
+      ],
+      "files": [
+        "app/app.h",
+        "app/legacy.c",
+        "app/main.c"
+      ],
+      "name": "app"
+    },
+    {
+      "depends_on": [],
+      "files": [
+        "core/core.c",
+        "core/core.h"
+      ],
+      "name": "core"
+    }
+  ]
+}

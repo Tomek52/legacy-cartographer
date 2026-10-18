@@ -1,0 +1,60 @@
+{
+  "includes": [
+    {
+      "file": "app/app.h",
+      "line": 4,
+      "spelled": "core/core.h",
+      "system": false,
+      "target": "core/core.h",
+      "target_external": false
+    },
+    {
+      "file": "app/legacy.c",
+      "line": 1,
+      "spelled": "app.h",
+      "system": false,
+      "target": "app/app.h",
+      "target_external": false
+    },
+    {
+      "file": "app/main.c",
+      "line": 1,
+      "spelled": "app.h",
+      "system": false,
+      "target": "app/app.h",
+      "target_external": false
+    },
+    {
+      "file": "app/main.c",
+      "line": 3,
+      "spelled": "stdio.h",
+      "system": true,
+      "target": "stdio.h",
+      "target_external": true
+    },
+    {
+      "file": "core/core.c",
+      "line": 1,
+      "spelled": "core.h",
+      "system": false,
+      "target": "core/core.h",
+      "target_external": false
+    },
+    {
+      "file": "core/core.c",
+      "line": 3,
+      "spelled": "string.h",
+      "system": true,
+      "target": "string.h",
+      "target_external": true
+    },
+    {
+      "file": "core/core.h",
+      "line": 4,
+      "spelled": "stddef.h",
+      "system": true,
+      "target": "stddef.h",
+      "target_external": true
+    }
+  ]
+}

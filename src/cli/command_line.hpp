@@ -9,6 +9,7 @@
 #include <string>
 #include <string_view>
 #include <variant>
+#include <vector>
 
 namespace lcart::cli {
 
@@ -88,7 +89,18 @@ struct MapCommand {
     std::optional<std::filesystem::path> output{default_map};
 };
 
-using Command = std::variant<HelpCommand, VersionCommand, AnalyzeCommand, QueryCommand, MapCommand>;
+/// `lcart handoff` (ADR-0028): a facts-only bundle for an external agent.
+struct HandoffCommand {
+    std::filesystem::path database{default_database}; ///< `--db`
+    /// `--out`: lcart's output directory; the bundle goes to
+    /// `<output_dir>/handoff/<run-id>/`.
+    std::filesystem::path output_dir{default_output_directory};
+    /// `--module`, in the order given, each once; empty: all modules.
+    std::vector<std::string> modules;
+};
+
+using Command = std::variant<HelpCommand, VersionCommand, AnalyzeCommand, QueryCommand, MapCommand,
+                             HandoffCommand>;
 
 /// Parses the arguments after the program name. Options take their value
 /// as the next argument or after `=` (`--db x`, `--db=x`); a value that

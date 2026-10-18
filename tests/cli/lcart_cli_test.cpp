@@ -25,7 +25,9 @@
 #include <fcntl.h>
 #include <filesystem>
 #include <fstream>
+#include <map>
 #include <optional>
+#include <pwd.h>
 #include <spawn.h>
 #include <sstream>
 #include <string>
@@ -1682,6 +1684,226 @@ TEST_F(LcartResumeTest, ResumeOfACompletedAnalysisWritesTheDatabase) {
     EXPECT_FALSE(fs::exists(resume_case().partial));
     EXPECT_EQ(query(resume_case().database, {"export"}).out,
               read_file(fs::path{LCART_GOLDEN_DIR} / "two_modules.facts.jsonl"));
+}
+
+// ---- handoff -----------------------------------------------------------------
+
+/// Every regular file under `directory`: path relative to it ('/') to content.
+std::map<std::string, std::string> tree_of(const fs::path& directory) {
+    std::map<std::string, std::string> tree;
+    for (const fs::directory_entry& entry : fs::recursive_directory_iterator{directory}) {
+        if (entry.is_regular_file()) {
+            tree.emplace(entry.path().lexically_relative(directory).generic_string(),
+                         read_file(entry.path()));
+        }
+    }
+    return tree;
+}
+
+/// Expects none of `texts` in any file of `tree`.
+void expect_none_in(const std::map<std::string, std::string>& tree,
+                    const std::vector<std::string>& texts) {
+    for (const auto& [path, content] : tree) {
+        for (const std::string& text : texts) {
+            EXPECT_EQ(content.find(text), std::string::npos) << text << " in " << path;
+        }
+    }
+}
+
+/// The one bundle directory under `out`/handoff.
+fs::path only_bundle(const fs::path& out) {
+    std::vector<fs::path> bundles;
+    for (const fs::directory_entry& entry : fs::directory_iterator{out / "handoff"}) {
+        bundles.push_back(entry.path());
+    }
+    EXPECT_EQ(bundles.size(), 1U);
+    return bundles.empty() ? fs::path{} : bundles.front();
+}
+
+/// lcart's message names the bundle and the agent's output directory.
+void expect_bundle_named_in(const std::string& message, const fs::path& out) {
+    const fs::path bundle = only_bundle(out);
+    EXPECT_NE(message.find("handoff bundle in " + bundle.string()), std::string::npos) << message;
+    EXPECT_NE(message.find((out / "agent" / bundle.filename()).string()), std::string::npos)
+        << message;
+}
+
+/// The user name and home directory of this process, as path parts that
+/// must not reach a bundle (getpwuid_r: no environment, thread-safe).
+std::vector<std::string> user_paths() {
+    std::vector<std::string> paths;
+    passwd entry{};
+    passwd* found = nullptr;
+    constexpr std::size_t buffer_size = 16384;
+    std::vector<char> buffer(buffer_size);
+    if (getpwuid_r(getuid(), &entry, buffer.data(), buffer.size(), &found) != 0 ||
+        found == nullptr) {
+        return paths;
+    }
+    if (const std::string_view home{entry.pw_dir}; home.size() > 1) {
+        paths.emplace_back(home);
+    }
+    paths.push_back("/" + std::string{entry.pw_name} + "/");
+    return paths;
+}
+
+fs::path golden_bundles() {
+    return fs::path{LCART_GOLDEN_DIR} / "two_modules.handoff";
+}
+
+// Verifies: b30-facts-only-handoff-bundle-v1 (criterion 1: the golden bundle
+// of two_modules byte for byte, run ID as directory name; a second run
+// replaces it with the same bytes), fr008-generate-documentation-v2
+// (criterion 1), nfr004-deterministic-output-v1, adr0028-command-line-v1.
+TEST_F(LcartCliTest, HandoffWritesTheGoldenBundle) {
+    const fs::path database = two_modules_database();
+    const fs::path out = work_dir() / "out";
+    const auto golden = tree_of(golden_bundles());
+    ASSERT_FALSE(golden.empty());
+    for (int run = 0; run < 2; ++run) {
+        const Outcome handoff =
+            lcart({"handoff", "--db", database.string(), "--out", out.string()});
+        ASSERT_EQ(handoff.status, exit_success) << handoff.err;
+        EXPECT_EQ(tree_of(out / "handoff"), golden);
+        expect_bundle_named_in(handoff.out, out);
+    }
+}
+
+// Verifies: b30-facts-only-handoff-bundle-v1 (criterion 4),
+// nfr002-no-source-egress-by-default-v2 (criterion 2): comments, string
+// literals and diagnostics of the analysed code stay out of the bundle,
+// although the marker is in the fact database.
+TEST_F(LcartCliTest, HandoffBundleHoldsNoCommentStringOrDiagnosticText) {
+    const std::string marker = "LCART-SECRET-MARKER-7d3f";
+    ASSERT_NE(read_file(fixture("secret_marker") / "marker.c").find(marker), std::string::npos);
+    const fs::path database = work_dir() / "marker.lcart.db";
+    analyze("secret_marker", {"marker.c", "marker_error.c"}, database);
+    EXPECT_NE(query(database, {"export"}).out.find(marker), std::string::npos);
+
+    const fs::path out = work_dir() / "out";
+    const Outcome handoff = lcart({"handoff", "--db", database.string(), "--out", out.string()});
+    ASSERT_EQ(handoff.status, exit_success) << handoff.err;
+    const auto bundle = tree_of(out / "handoff");
+    EXPECT_EQ(bundle.size(), 9U);
+    expect_none_in(bundle, {marker, "Ignore previous"});
+    EXPECT_NE(bundle.at(only_bundle(out).filename().string() + "/facts/functions.json")
+                  .find("marker_greeting"),
+              std::string::npos);
+}
+
+// Verifies: b30-facts-only-handoff-bundle-v1 (criterion 3: a file from a
+// temporary directory, included by a relative and by an absolute spelling),
+// claim-handoff-bundle-paths-v1, adr0028-paths-outside-root-v1.
+TEST_F(LcartCliTest, HandoffShowsNoAbsolutePathUserNameOrHomeDirectory) {
+    const fs::path root = work_dir() / "proj";
+    const fs::path outside = work_dir() / "outside";
+    fs::create_directories(root);
+    fs::create_directories(outside);
+    std::ofstream{outside / "relative.h"} << "int relative_value(void);\n";
+    std::ofstream{outside / "absolute.h"} << "int absolute_value(void);\n";
+    std::ofstream{root / "main.c"} << "#include \"../outside/relative.h\"\n#include \""
+                                   << (outside / "absolute.h").string()
+                                   << "\"\nint main(void) { return relative_value(); }\n";
+    const fs::path database = work_dir() / "outside.lcart.db";
+    const Outcome analysed =
+        lcart({"analyze", "--root", root.string(), "--compilation-database",
+               write_compilation_database(root, {"main.c"}).string(), "--db", database.string()});
+    ASSERT_EQ(analysed.status, exit_success) << analysed.err;
+    // The facts export, by ADR-0016, shows the absolute spelling.
+    EXPECT_NE(query(database, {"export"}).out.find(outside.string()), std::string::npos);
+
+    const fs::path out = work_dir() / "out";
+    const Outcome handoff = lcart({"handoff", "--db", database.string(), "--out", out.string()});
+    ASSERT_EQ(handoff.status, exit_success) << handoff.err;
+    const auto bundle = tree_of(out / "handoff");
+    const std::string includes =
+        bundle.at(only_bundle(out).filename().string() + "/facts/includes.json");
+    EXPECT_NE(includes.find(R"("spelled": "../outside/relative.h")"), std::string::npos)
+        << includes;
+    EXPECT_NE(includes.find(R"("target": "<outside-root>/absolute.h")"), std::string::npos)
+        << includes;
+
+    std::vector<std::string> leaks = user_paths();
+    leaks.insert(leaks.end(), {work_dir().string(), outside.string(), "/tmp/"});
+    expect_none_in(bundle, leaks);
+}
+
+// Verifies: b30-facts-only-handoff-bundle-v1 (criterion 6, from a real
+// analysis of the fn_pointers fixture).
+TEST_F(LcartCliTest, HandoffListsMayCallEdgesApart) {
+    const fs::path database = work_dir() / "fn_pointers.lcart.db";
+    analyze("fn_pointers", {"core.c", "rtu.c", "tcp.c"}, database);
+    const fs::path out = work_dir() / "out";
+    const Outcome handoff = lcart({"handoff", "--db", database.string(), "--out", out.string()});
+    ASSERT_EQ(handoff.status, exit_success) << handoff.err;
+    const std::string calls = read_file(only_bundle(out) / "facts" / "calls.json");
+    const std::size_t may_call = calls.find(R"("may_call": [)");
+    ASSERT_NE(may_call, std::string::npos) << calls;
+    EXPECT_NE(calls.find(R"("callee": "tcp_send")", may_call), std::string::npos) << calls;
+    EXPECT_LT(calls.find(R"("indirect": [)"), may_call);
+}
+
+// Verifies: adr0028-command-line-v1 (exit statuses; --module; --include-source
+// refused until B-31; only an earlier bundle is replaced; the T2 warning).
+TEST_F(LcartCliTest, HandoffOfUnknownModuleIsNotFound) {
+    const fs::path database = two_modules_database();
+    const fs::path out = work_dir() / "out";
+    const Outcome run =
+        lcart({"handoff", "--db", database.string(), "--out", out.string(), "--module", "nope"});
+    EXPECT_EQ(run.status, exit_not_found) << run.err;
+    EXPECT_NE(run.err.find("nope"), std::string::npos) << run.err;
+    EXPECT_FALSE(fs::exists(out));
+}
+
+TEST_F(LcartCliTest, HandoffOfOneModule) {
+    const fs::path database = two_modules_database();
+    const fs::path out = work_dir() / "out";
+    const Outcome run =
+        lcart({"handoff", "--db", database.string(), "--out", out.string(), "--module", "core"});
+    ASSERT_EQ(run.status, exit_success) << run.err;
+    const std::string manifest = read_file(only_bundle(out) / "MANIFEST.json");
+    EXPECT_NE(manifest.find("\"modules\": [\n      \"core\"\n    ]"), std::string::npos)
+        << manifest;
+    EXPECT_NE(only_bundle(out).filename(),
+              fs::directory_iterator{golden_bundles()}->path().filename());
+}
+
+TEST_F(LcartCliTest, HandoffUsageErrorsAndMissingDatabase) {
+    const Outcome source = lcart({"handoff", "--include-source"});
+    EXPECT_EQ(source.status, exit_usage);
+    EXPECT_NE(source.err.find("--include-source is not available yet"), std::string::npos)
+        << source.err;
+    const Outcome missing = lcart({"handoff", "--db", (work_dir() / "none.lcart.db").string()});
+    EXPECT_EQ(missing.status, exit_failure);
+    EXPECT_NE(missing.err.find("no fact database"), std::string::npos) << missing.err;
+    EXPECT_FALSE(fs::exists(work_dir() / "lcart-out"));
+}
+
+TEST_F(LcartCliTest, HandoffReplacesOnlyItsOwnBundle) {
+    const fs::path database = two_modules_database();
+    const fs::path out = work_dir() / "out";
+    const std::vector<std::string> arguments{"handoff", "--db", database.string(), "--out",
+                                             out.string()};
+    ASSERT_EQ(lcart(arguments).status, exit_success);
+    const fs::path notes = only_bundle(out) / "notes.md";
+    std::ofstream{notes} << "mine\n";
+    expect_refused(arguments, "lcart replaces only its own files", notes, "mine\n");
+}
+
+TEST_F(LcartCliTest, WarnsWhenTheBundleIsInAWorkTreeAndNotIgnored) {
+    const fs::path database = two_modules_database();
+    const fs::path repo = work_dir() / "repo";
+    fs::create_directories(repo / ".git");
+    const std::vector<std::string> arguments{"handoff", "--db", database.string(), "--out",
+                                             (repo / "lcart-out").string()};
+    const Outcome exposed = lcart(arguments);
+    EXPECT_EQ(exposed.status, exit_success) << exposed.err;
+    EXPECT_NE(exposed.err.find("not ignored"), std::string::npos) << exposed.err;
+
+    std::ofstream{repo / ".gitignore"} << "lcart-out/\n";
+    const Outcome ignored = lcart(arguments);
+    EXPECT_EQ(ignored.status, exit_success) << ignored.err;
+    EXPECT_EQ(ignored.err.find("not ignored"), std::string::npos) << ignored.err;
 }
 
 } // namespace

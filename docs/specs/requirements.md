@@ -144,7 +144,7 @@ Acceptance criteria:
 2. `lcart ingest` on a recorded agent output (committed test data) produces
    the expected annotated documents and report.
 3. `lcart ingest` rejects output that breaks the
-   [output contract](handoff-contract.md#claim-agent-output-v1) (missing file,
+   [output contract](handoff-contract.md#claim-agent-output-v2) (missing file,
    extra file, marker without claim, claim without marker) and lists every
    problem.
 4. Every annotated document states that it is LLM-generated, names the agent

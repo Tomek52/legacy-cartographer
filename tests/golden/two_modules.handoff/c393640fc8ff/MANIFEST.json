@@ -1,0 +1,44 @@
+{
+  "contract_version": 1,
+  "files": [
+    {
+      "path": "CONTRACT.md",
+      "sha256": "e76a2df84e01aad68c1e9812c1fe0304ced2571d5a485eb7dc89c27c10635af4"
+    },
+    {
+      "path": "PROMPT.md",
+      "sha256": "915d864a1fb8e36df688b5ee11b2b8a89ca52a6365c600133ba3af3ff715f160"
+    },
+    {
+      "path": "claim-schema.json",
+      "sha256": "c812d4cb76c845a8c73271e991465b18a96e1221b8fb064b3db834167800c9b1"
+    },
+    {
+      "path": "facts/calls.json",
+      "sha256": "41aa272b520f38a8d91674e51bdce996e4032517934499457ebe39f740d25e68"
+    },
+    {
+      "path": "facts/functions.json",
+      "sha256": "984f1676127d7782e4d2a26ffcc1396b068efadbf6b31a78e5eba703e23f600d"
+    },
+    {
+      "path": "facts/includes.json",
+      "sha256": "2880c8d0914ab5bb65251aadb6f2de49a14b1050f56f337be98b069f36dc10db"
+    },
+    {
+      "path": "facts/modules.json",
+      "sha256": "ece071b218fdc66d2ac046550d550cf872d269efffb8fc1e52b463042f46613b"
+    },
+    {
+      "path": "facts/project.json",
+      "sha256": "ad8c79a5f5fb501fc103d1a12b372e3c187d94dcec2340692be1bcb5f8ea71cd"
+    }
+  ],
+  "format": "lcart-handoff",
+  "options": {
+    "include_source": false,
+    "modules": []
+  },
+  "run_id": "c393640fc8ff",
+  "source_excerpts": []
+}

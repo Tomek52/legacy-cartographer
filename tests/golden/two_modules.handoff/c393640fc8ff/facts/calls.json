@@ -1,0 +1,33 @@
+{
+  "direct": [
+    {
+      "callee": "app_run",
+      "callee_file": "app/main.c",
+      "caller": "legacy_run",
+      "caller_file": "app/legacy.c",
+      "column": 12,
+      "file": "app/legacy.c",
+      "line": 4
+    },
+    {
+      "callee": "core_length",
+      "callee_file": "core/core.c",
+      "caller": "app_run",
+      "caller_file": "app/main.c",
+      "column": 28,
+      "file": "app/main.c",
+      "line": 6
+    },
+    {
+      "callee": "app_run",
+      "callee_file": "app/main.c",
+      "caller": "main",
+      "caller_file": "app/main.c",
+      "column": 12,
+      "file": "app/main.c",
+      "line": 10
+    }
+  ],
+  "indirect": [],
+  "may_call": []
+}

@@ -106,9 +106,10 @@ path, and so no user name or home directory, appears in a bundle; a relative
 spelling that climbs out of the root is shown as written
 ([ADR-0028](../adr/0028-handoff-bundle-paths-run-id-and-contract-texts.md#adr0028-paths-outside-root-v1)).
 
-## <a id="claim-agent-output-v1"></a>Agent output (contract v1)
+## <a id="claim-agent-output-v2"></a>Agent output (contract v1)
 
-The agent writes, and only writes, into `lcart-out/agent/<run-id>/`:
+The agent writes, and only writes, into the output directory that
+PROMPT.md names (`lcart-out/agent/<run-id>/` by default):
 
 | File | Content |
 |---|---|

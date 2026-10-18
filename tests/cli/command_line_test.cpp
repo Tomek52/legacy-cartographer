@@ -8,6 +8,7 @@
 
 #include <array>
 #include <initializer_list>
+#include <string>
 #include <string_view>
 #include <variant>
 #include <vector>
@@ -187,7 +188,36 @@ TEST(CommandLine, UnknownCommandsAndQueries) {
     expect_usage_error({"query"}, "query");
     expect_usage_error({"query", "everything"}, "everything");
     // Planned commands are named as such.
-    expect_usage_error({"handoff"}, "not available yet");
+    expect_usage_error({"ingest"}, "not available yet");
+}
+
+// Verifies: b30-facts-only-handoff-bundle-v1 (criterion 1: `lcart handoff
+// [--db] [--out] [--module NAME]...`), adr0028-command-line-v1.
+TEST(CommandLine, HandoffDefaults) {
+    const auto handoff = parsed_as<HandoffCommand>({"handoff"});
+    EXPECT_EQ(handoff.database, "lcart-out/facts.lcart.db");
+    EXPECT_EQ(handoff.output_dir, "lcart-out");
+    EXPECT_TRUE(handoff.modules.empty());
+    EXPECT_TRUE(std::holds_alternative<HelpCommand>(*parse({"handoff", "--help"})));
+}
+
+TEST(CommandLine, HandoffOptionsAndRepeatedModules) {
+    const auto handoff = parsed_as<HandoffCommand>(
+        {"handoff", "--db=x.lcart.db", "--out", "out", "--module", "rtu", "--module=core"});
+    EXPECT_EQ(handoff.database, "x.lcart.db");
+    EXPECT_EQ(handoff.output_dir, "out");
+    EXPECT_EQ(handoff.modules, (std::vector<std::string>{"rtu", "core"}));
+}
+
+TEST(CommandLine, HandoffRejectsBadArguments) {
+    expect_usage_error({"handoff", "extra"}, "extra");
+    expect_usage_error({"handoff", "--output", "x"}, "--output");
+    expect_usage_error({"handoff", "--out", "a", "--out", "b"}, "twice");
+    expect_usage_error({"handoff", "--module", "core", "--module", "core"},
+                       "--module core given twice");
+    expect_usage_error({"handoff", "--module"}, "--module needs a value");
+    // B-31 adds it; until then it is refused, never ignored.
+    expect_usage_error({"handoff", "--include-source"}, "--include-source is not available yet");
 }
 
 // Verifies: b16-resumable-analysis-v2 (the command line of ADR-0019:

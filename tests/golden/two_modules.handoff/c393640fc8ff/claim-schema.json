@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "lcart:claim:v1",
+  "title": "Claims emitted for one generated section",
+  "type": "object",
+  "required": ["schema", "claims"],
+  "additionalProperties": false,
+  "properties": {
+    "schema": { "const": "lcart:claim:v1" },
+    "claims": {
+      "type": "array",
+      "maxItems": 500,
+      "items": { "$ref": "#/$defs/claim" }
+    }
+  },
+  "$defs": {
+    "entity": {
+      "type": "object",
+      "required": ["type", "name"],
+      "additionalProperties": false,
+      "properties": {
+        "type": { "enum": ["function", "file", "module"] },
+        "name": { "type": "string", "minLength": 1, "maxLength": 512 },
+        "file": { "type": "string", "maxLength": 1024 }
+      }
+    },
+    "claim": {
+      "type": "object",
+      "required": ["id", "kind", "subject", "object", "polarity", "text"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string", "pattern": "^c-[0-9]{4,6}$" },
+        "kind": { "enum": ["calls", "includes", "depends_on", "defines", "belongs_to"] },
+        "subject": { "$ref": "#/$defs/entity" },
+        "object": { "$ref": "#/$defs/entity" },
+        "polarity": { "enum": ["affirmed", "negated"] },
+        "text": { "type": "string", "maxLength": 2000 },
+        "source": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "document": { "type": "string" },
+            "section": { "type": "string" }
+          }
+        }
+      }
+    }
+  }
+}

@@ -1109,7 +1109,7 @@ and criterion 2 of [FR-011](../specs/requirements.md#fr011-verification-report-v
 plus:
 
 1. `lcart ingest <dir> --bundle <bundle-dir> --agent "<name, model>" [--db] [--out]` checks the
-   [output contract](../specs/handoff-contract.md#claim-agent-output-v1),
+   [output contract](../specs/handoff-contract.md#claim-agent-output-v2),
    lists every problem and ingests nothing if there is one. Recorded agent
    outputs, one valid and one per kind of problem, are committed test data.
 2. The output directory is untrusted: symbolic links, files over a size
