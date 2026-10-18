@@ -178,8 +178,8 @@ TEST_F(ClaimVerifierAnalysisTest, RecoveryExprFixtureHidesADroppedCall) {
     EXPECT_EQ(diagnostics[0].translation_unit, "main.c");
 }
 
-// Verifies: claim-relation-rules-v2 (a unit with an error reaches the file
-// through its include edges: not parsed), on the recovery_expr fixture.
+// Verifies: claim-relation-rules-v2 (after any error in the analysis no file
+// counts as parsed), on the recovery_expr fixture.
 TEST_F(ClaimVerifierAnalysisTest, NoFalseVerdictAfterAnErrorInAnIncludedHeader) {
     const auto store = analyze("recovery_expr", {"main.c", "other.c"}, "-I.");
     ASSERT_NE(store, nullptr);

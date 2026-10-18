@@ -565,8 +565,8 @@ TEST(ClaimVerifierCalls, AbsentWithDefinitionReachedAfterAFatalErrorIsCoverageIn
 }
 
 TEST(ClaimVerifierCalls, AbsentAfterAFatalErrorInAnyUnitIsCoverageIncomplete) {
-    // run is in src/core.c, which the failed unit does not include; its
-    // include edges cannot be trusted, so no definition counts as parsed.
+    // run is in src/core.c, which the failed unit does not include; after
+    // any error in the analysis no definition counts as parsed.
     const FatalInHeader f;
     EXPECT_EQ(
         verify(claim(ClaimKind::calls, function_named("run"), function_named("init")), f.p.facts),
