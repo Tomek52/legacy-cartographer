@@ -106,6 +106,7 @@ nav:
       - adr/0025-llvm-targets-registered.md
       - adr/0026-may-call-edges-from-function-pointer-tables.md
       - adr/0027-two-phase-template-parsing-for-msvc-code.md
+      - adr/0028-handoff-bundle-paths-run-id-and-contract-texts.md
       - adr/0029-verdict-evidence-names-its-fact-table.md
   - Testing:
       - testing/index.md

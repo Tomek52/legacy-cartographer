@@ -90,10 +90,10 @@ comments and strings too.
   mitigation and the reason the verifier exists.
 - The prompt marks all bundle content as data and tells the agent to ignore
   and report instructions found in it
-  ([prompt](specs/handoff-contract.md#claim-handoff-prompt-v1)). This reduces
+  ([prompt](specs/handoff-contract.md#claim-handoff-prompt-v2)). This reduces
   but does not prevent injection.
 - `lcart ingest` treats the agent's output as untrusted: only the files in
-  the [output contract](specs/handoff-contract.md#claim-agent-output-v1) are
+  the [output contract](specs/handoff-contract.md#claim-agent-output-v2) are
   read, claims are schema-validated with size limits, nothing is executed.
 - Generated Markdown is published with raw HTML disabled or escaped, so
   injected HTML or scripts cannot run in the documentation site (TODO:

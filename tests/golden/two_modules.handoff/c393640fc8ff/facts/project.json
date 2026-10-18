@@ -1,0 +1,9 @@
+{
+  "coverage": {
+    "parsed": 3,
+    "total": 3
+  },
+  "fact_schema_version": 3,
+  "name": "two_modules",
+  "tool_version": "0.0.1"
+}

@@ -6,6 +6,7 @@
 #include "config/project_config.hpp"
 #include "facts/fact_export.hpp"
 #include "facts/sqlite_fact_store.hpp"
+#include "handoff/handoff.hpp"
 #include "report/report_writer.hpp"
 
 #include <algorithm>
@@ -72,9 +73,10 @@ ExitStatus report(const Failure& failure, std::ostream& err) {
 // ---- analyze ---------------------------------------------------------------
 
 /// Security T2 (ADR-0016): warns on `err` if git could pick up the output
-/// file `path`; `what` names it in the message.
-void warn_if_exposed(const fs::path& path, std::string_view what, std::ostream& err) {
-    if (const auto work_tree = unignored_git_work_tree(path, false)) {
+/// file (or directory) `path`; `what` names it in the message.
+void warn_if_exposed(const fs::path& path, std::string_view what, std::ostream& err,
+                     bool is_directory = false) {
+    if (const auto work_tree = unignored_git_work_tree(path, is_directory)) {
         err << "lcart: warning: " << path.string() << " is inside the git work tree "
             << work_tree->string() << " and not ignored; " << what
             << " is as sensitive as the analysed code (docs/security.md, T2): add it to"
@@ -995,6 +997,63 @@ ExitStatus run_map(const MapCommand& command, std::ostream& out, std::ostream& e
     return ExitStatus::success;
 }
 
+// ---- handoff ---------------------------------------------------------------
+
+/// The exit status of a failed `lcart handoff` (ADR-0016, ADR-0028).
+ExitStatus handoff_status(common::ErrorCode code) {
+    switch (code) {
+    case common::ErrorCode::not_found:
+        return ExitStatus::not_found;
+    case common::ErrorCode::invalid_argument:
+        return ExitStatus::usage;
+    case common::ErrorCode::io_error:
+    case common::ErrorCode::parse_error:
+    case common::ErrorCode::incompatible_database:
+    case common::ErrorCode::egress_denied:
+    case common::ErrorCode::provider_error:
+    case common::ErrorCode::schema_violation:
+        return ExitStatus::failure;
+    }
+    std::unreachable();
+}
+
+ExitStatus handoff_failure(const common::Error& error, std::ostream& err) {
+    return report({.status = handoff_status(error.code), .message = error.message}, err);
+}
+
+ExitStatus run_handoff(const HandoffCommand& command, std::ostream& out, std::ostream& err) {
+    auto store = open_database(command.database);
+    if (!store) {
+        return report(store.error(), err);
+    }
+    // The META key `lcart analyze` records the root under (data model).
+    const auto root = (*store)->meta("analysis_root");
+    if (!root) {
+        return handoff_failure(root.error(), err);
+    }
+    const auto bundle =
+        handoff::build_bundle(**store, {.project_name = handoff::project_name(root->value_or("")),
+                                        .modules = command.modules,
+                                        .include_source = false});
+    if (!bundle) {
+        return handoff_failure(bundle.error(), err);
+    }
+    std::error_code ec;
+    fs::path output_dir = fs::absolute(command.output_dir, ec);
+    if (ec) {
+        output_dir = command.output_dir; // still names the directory, relative to here
+    }
+    warn_if_exposed(handoff::bundle_directory(output_dir, bundle->run_id), "the handoff bundle",
+                    err, true);
+    const auto written = handoff::write_bundle(*bundle, output_dir);
+    if (!written) {
+        return handoff_failure(written.error(), err);
+    }
+    out << "handoff bundle in " << written->directory.string() << "\nthe agent writes into "
+        << (output_dir / "agent" / bundle->run_id).string() << '\n';
+    return ExitStatus::success;
+}
+
 } // namespace
 
 ExitStatus run(const Command& command, std::ostream& out, std::ostream& err) {
@@ -1017,6 +1076,9 @@ ExitStatus run(const Command& command, std::ostream& out, std::ostream& err) {
             return run_query(query, *out, *err);
         }
         ExitStatus operator()(const MapCommand& map) const { return run_map(map, *out, *err); }
+        ExitStatus operator()(const HandoffCommand& handoff) const {
+            return run_handoff(handoff, *out, *err);
+        }
     };
     const ExitStatus status = std::visit(Visitor{.out = &out, .err = &err}, command);
     // Results that did not reach their reader (a full disk, a closed pipe)

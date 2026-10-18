@@ -8,6 +8,7 @@
 #include "cli/commands.hpp"
 #include "cli/git_exposure.hpp"
 #include "common/result.hpp"
+#include "common/sha256.hpp"
 #include "common/version.hpp"
 #include "config/path_glob.hpp"
 #include "config/project_config.hpp"

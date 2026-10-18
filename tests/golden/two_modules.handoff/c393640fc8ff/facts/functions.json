@@ -1,0 +1,54 @@
+{
+  "modules": [
+    {
+      "functions": [
+        {
+          "definition": true,
+          "file": "app/legacy.c",
+          "line_begin": 3,
+          "line_end": 5,
+          "linkage": "external",
+          "name": "legacy_run",
+          "qualified_name": "legacy_run",
+          "signature": "int (void)"
+        },
+        {
+          "definition": true,
+          "file": "app/main.c",
+          "line_begin": 5,
+          "line_end": 7,
+          "linkage": "external",
+          "name": "app_run",
+          "qualified_name": "app_run",
+          "signature": "int (const char *)"
+        },
+        {
+          "definition": true,
+          "file": "app/main.c",
+          "line_begin": 9,
+          "line_end": 11,
+          "linkage": "external",
+          "name": "main",
+          "qualified_name": "main",
+          "signature": "int (void)"
+        }
+      ],
+      "name": "app"
+    },
+    {
+      "functions": [
+        {
+          "definition": true,
+          "file": "core/core.c",
+          "line_begin": 5,
+          "line_end": 7,
+          "linkage": "external",
+          "name": "core_length",
+          "qualified_name": "core_length",
+          "signature": "size_t (const char *)"
+        }
+      ],
+      "name": "core"
+    }
+  ]
+}

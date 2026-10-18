@@ -24,7 +24,7 @@ Commands:
   analyze    build the fact database from compile_commands.json
   query      print facts from the fact database, or export them all
   map        write the module map (Markdown + Mermaid), no LLM
-  handoff    write a bundle for an external coding agent          (planned, M2)
+  handoff    write a facts-only bundle for an external coding agent
   ingest     validate agent output, verify claims, write report   (planned, M2)
   verify     verify a claims file against the fact database       (planned, M2)
   testgen    generate a characterization test skeleton           (planned, M3)
@@ -64,6 +64,15 @@ lcart map [--db FILE] [--output FILE]
   never another file or the database; --output - writes to standard
   output.
 
+lcart handoff [--db FILE] [--out DIR] [--module NAME]...
+  Writes a bundle for an external coding agent (docs/specs/handoff-contract.md)
+  to DIR/handoff/<run-id>/ (default DIR: lcart-out): facts only, never source
+  code, comments or string literals. The prompt in it tells the agent to
+  write into DIR/agent/<run-id>/. --module limits the bundle to the named
+  modules; it may be given more than once. Replaces an earlier bundle of the
+  same run ID, never another directory. --include-source is not available
+  yet.
+
 --output - (or --output=-) means standard output.
 
 Exit status: 0 success, 1 failure (including an unreadable file), 2 invalid
@@ -75,7 +84,7 @@ Options:
   --version    show the tool version
 )";
 
-constexpr std::array planned_commands{"handoff", "ingest", "verify", "testgen"};
+constexpr std::array planned_commands{"ingest", "verify", "testgen"};
 
 /// `--output -`: standard output (ADR-0017).
 constexpr std::string_view standard_output = "-";
@@ -88,15 +97,18 @@ Error usage_error(std::string message) {
 struct ParsedArguments {
     bool help{};
     std::map<std::string, std::string, std::less<>> values; ///< option -> value
+    /// Options that may be given more than once -> their values, in order.
+    std::map<std::string, std::vector<std::string>, std::less<>> repeated;
     std::vector<std::string> flags;
     std::vector<std::string> positional;
 };
 
 /// Records the value of the option at `arguments[index]`, given after `=` or
 /// as the next argument unless that starts with `-` (then `index` moves
-/// past it).
+/// past it). A `repeatable` option collects its values; any other may be
+/// given once.
 common::Status add_value(ParsedArguments& parsed, std::span<const std::string_view> arguments,
-                         std::size_t& index) {
+                         std::size_t& index, bool repeatable) {
     const std::string_view argument = arguments[index];
     const std::size_t equals = argument.find('=');
     const std::string name{argument.substr(0, equals)};
@@ -115,6 +127,10 @@ common::Status add_value(ParsedArguments& parsed, std::span<const std::string_vi
     if (value.empty()) {
         return std::unexpected(usage_error(name + " needs a value"));
     }
+    if (repeatable) {
+        parsed.repeated[name].emplace_back(value);
+        return {};
+    }
     if (!parsed.values.emplace(name, std::string{value}).second) {
         return std::unexpected(usage_error(name + " given twice"));
     }
@@ -122,10 +138,12 @@ common::Status add_value(ParsedArguments& parsed, std::span<const std::string_vi
 }
 
 /// Splits `arguments` into options and positional arguments. `value_options`
-/// take a value, `flag_options` none.
+/// take a value, `flag_options` none, `repeatable_options` a value each time
+/// they are given.
 Result<ParsedArguments> split_arguments(std::span<const std::string_view> arguments,
                                         std::span<const std::string_view> value_options,
-                                        std::span<const std::string_view> flag_options) {
+                                        std::span<const std::string_view> flag_options,
+                                        std::span<const std::string_view> repeatable_options = {}) {
     ParsedArguments parsed;
     bool options_ended = false;
     for (std::size_t i = 0; i < arguments.size(); ++i) {
@@ -154,10 +172,11 @@ Result<ParsedArguments> split_arguments(std::span<const std::string_view> argume
             parsed.flags.emplace_back(name);
             continue;
         }
-        if (std::ranges::find(value_options, name) == value_options.end()) {
+        const bool repeatable = std::ranges::contains(repeatable_options, name);
+        if (!repeatable && std::ranges::find(value_options, name) == value_options.end()) {
             return std::unexpected(usage_error("unknown option '" + std::string{name} + "'"));
         }
-        if (auto added = add_value(parsed, arguments, i); !added) {
+        if (auto added = add_value(parsed, arguments, i, repeatable); !added) {
             return std::unexpected(added.error());
         }
     }
@@ -333,6 +352,39 @@ Result<Command> parse_map(std::span<const std::string_view> arguments) {
     return map;
 }
 
+Result<Command> parse_handoff(std::span<const std::string_view> arguments) {
+    static constexpr std::array<std::string_view, 2> value_options{"--db", "--out"};
+    // Recognised only to refuse it: B-31 adds source excerpts.
+    static constexpr std::array<std::string_view, 1> flag_options{"--include-source"};
+    static constexpr std::array<std::string_view, 1> repeatable_options{"--module"};
+    auto parsed = split_arguments(arguments, value_options, flag_options, repeatable_options);
+    if (!parsed) {
+        return std::unexpected(parsed.error());
+    }
+    if (parsed->help) {
+        return HelpCommand{};
+    }
+    if (!parsed->flags.empty()) {
+        return std::unexpected(usage_error("--include-source is not available yet (planned, M2)"));
+    }
+    if (!parsed->positional.empty()) {
+        return std::unexpected(
+            usage_error("unexpected argument '" + parsed->positional.front() + "' for handoff"));
+    }
+    HandoffCommand handoff;
+    handoff.database = path_option(*parsed, "--db").value_or(handoff.database);
+    handoff.output_dir = path_option(*parsed, "--out").value_or(handoff.output_dir);
+    if (const auto modules = parsed->repeated.find("--module"); modules != parsed->repeated.end()) {
+        for (const std::string& module : modules->second) {
+            if (std::ranges::contains(handoff.modules, module)) {
+                return std::unexpected(usage_error("--module " + module + " given twice"));
+            }
+            handoff.modules.push_back(module);
+        }
+    }
+    return handoff;
+}
+
 } // namespace
 
 Result<Command> parse_command_line(std::span<const std::string_view> arguments) {
@@ -354,6 +406,9 @@ Result<Command> parse_command_line(std::span<const std::string_view> arguments) 
     }
     if (command == "map") {
         return parse_map(arguments.subspan(1));
+    }
+    if (command == "handoff") {
+        return parse_handoff(arguments.subspan(1));
     }
     if (std::ranges::find(planned_commands, command) != planned_commands.end()) {
         return std::unexpected(usage_error("'" + std::string{command} +
