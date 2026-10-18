@@ -58,7 +58,9 @@ target_compile_definitions(lcart_analysis PRIVATE ${_lcart_llvm_definitions})
 lcart_add_module(claims
     SOURCES claims/src/claim_parser.cpp
     DEPS lcart::common nlohmann_json::nlohmann_json)
-lcart_add_module(verify   DEPS lcart::claims lcart::facts)
+lcart_add_module(verify
+    SOURCES verify/src/claim_verifier.cpp
+    DEPS lcart::claims lcart::facts)
 lcart_add_module(report   SOURCES report/src/module_map.cpp DEPS lcart::verify)
 lcart_add_module(handoff  DEPS lcart::claims lcart::facts)
 lcart_add_module(llm      DEPS lcart::common)  # built-in providers, M6 (ADR-0006)
