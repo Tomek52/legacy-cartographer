@@ -101,6 +101,9 @@ nav:
       - adr/0020-unit-list-and-second-signal.md
       - adr/0021-clang-flags-and-clang-cl-databases-for-msvc-code.md
       - adr/0022-msbuild-logger-for-compilation-databases.md
+      - adr/0023-clang-configuration-files-ignored.md
+      - adr/0024-run-lock-on-a-separate-file.md
+      - adr/0025-llvm-targets-registered.md
   - Testing:
       - testing/index.md
       - Strategy: testing/strategy.md

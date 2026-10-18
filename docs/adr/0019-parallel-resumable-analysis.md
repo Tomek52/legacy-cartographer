@@ -1,6 +1,6 @@
 # 0019. Parallel, resumable analysis with one writer
 
-- **Status:** Accepted; the TU list (one TU per fact path) and the handler for a second signal (of either kind) amended by [ADR-0020](0020-unit-list-and-second-signal.md)
+- **Status:** Accepted; the TU list (one TU per fact path) and the handler for a second signal (of either kind) amended by [ADR-0020](0020-unit-list-and-second-signal.md); the file that carries the run's `flock` amended by [ADR-0024](0024-run-lock-on-a-separate-file.md)
 - **Date:** 2026-10-04
 - **Requirements:** [NFR-005](../specs/requirements.md#nfr005-performance-budget-v3),
   [NFR-004](../specs/requirements.md#nfr004-deterministic-output-v1),

@@ -32,8 +32,9 @@ system:
   file, and on the drive mount (file system type v9fs) that clashed with
   SQLite's own POSIX locks on the same file (on the Linux file system they do
   not clash). lcart now takes the run lock on a separate file
-  (`.<name>.partial.lock` next to the partial database; ADR-0023), so the
-  default database works on `/mnt/c` too. Tried (2026-10-11, clang 20.1.2): a
+  (`.<name>.partial.lock` next to the partial database;
+  [ADR-0024](../adr/0024-run-lock-on-a-separate-file.md#adr0024-run-lock-on-separate-file-v1)),
+  so the default database works on `/mnt/c` too. Tried (2026-10-11, clang 20.1.2): a
   one-file project under `/mnt/c` (confirmed v9fs) analysed with the default
   database — it failed with `database is locked` before the change and
   succeeded after it; `--db` on the Linux file system worked both times.
@@ -114,7 +115,7 @@ The Win32 configuration gives `--target=i686-pc-windows-msvc` commands. With
 Unable to find target for this triple`), because `lcart` registered no LLVM
 targets; `clang-cl` parsed the same files. `lcart` now registers the targets
 that its LLVM provides before it parses
-(ADR-0023),
+([ADR-0025](../adr/0025-llvm-targets-registered.md#adr0025-register-all-targets-once-v1)),
 and the tests parse a function with MS-style inline assembly for the x86 and
 x86_64 Windows targets. The real Windows SDK with the Win32 configuration was
 not tried again (`TODO: verify`); until it is, check the Win32 result of a
@@ -224,7 +225,8 @@ lcart query export --db ~/facts/project.lcart.db | grep '"record":"diagnostic"' 
 On the sample solution this printed `analysed 2/2 translation units, 0
 diagnostics` (tried: root on `/mnt/c`, database on the Linux file system,
 database from step 2 with `map=`). The default database under the root works
-too since ADR-0023 (tried with a one-file project under `/mnt/c`); `--db` on
+too since [ADR-0024](../adr/0024-run-lock-on-a-separate-file.md) (tried
+with a one-file project under `/mnt/c`); `--db` on
 the Linux file system is kept here because it is faster. Each translation
 unit Clang cannot parse becomes diagnostics and lowers coverage (ADR-0009).
 
@@ -248,7 +250,7 @@ parsing accepts may then fail to parse
 | `cl.exe /c -MD ...` | parses since B-17 (`-MD` used to be dropped by a LibTooling adjuster) |
 | `/clang:-fplugin=...`, `-clang:-fplugin=...`, `/clang:-Xclang /clang:-load ...` | removed with a warning since B-17; the plugin was not loaded before either |
 | Root at a path like `/mnt/c/...` on the Linux file system | stored paths relative to the root |
-| Root on a real drvfs mount (`/mnt/c`), database in the default `lcart-out/` | before ADR-0023: fails `database is locked`; after: 2 of 2 translation units, 0 diagnostics (tried with a one-file project) |
+| Root on a real drvfs mount (`/mnt/c`), database in the default `lcart-out/` | before ADR-0024: fails `database is locked`; after: 2 of 2 translation units, 0 diagnostics (tried with a one-file project) |
 | Root on a real drvfs mount, `--db` on the Linux file system | 2 of 2 translation units, 0 diagnostics; facts equal to those of a root on the Linux file system |
 | Compilation database from an MSBuild solution: text log (`-v:detailed`) | not usable: relative paths, no system include directories, localized text |
 | Compilation database from an MSBuild solution: the logger of step 2 (Build Tools 2022, x64, `-m:4`, a replayed `.binlog`, a precompiled header) | works; output identical for `-m:4` and serial |

@@ -153,7 +153,9 @@ to make it *do* something: delete files, run a command, send data to a URL.
   itself never loads `-load` plugins (only `clang`'s own cc1 entry point
   does, ADR-0021), so the filter is defence in depth. Clang configuration
   files, whose arguments the driver would read past this filter, are stopped
-  too (ADR-0023): the filter removes `--config=<file>` and the separate
+  too
+  ([ADR-0023](adr/0023-clang-configuration-files-ignored.md#adr0023-explicit-config-removed-v1)):
+  the filter removes `--config=<file>` and the separate
   `--config <file>` (plain or passed through clang-cl), and the recorder
   inserts `--no-default-config` right after the program name of every
   command so the driver never reads a default `clang.cfg` or
