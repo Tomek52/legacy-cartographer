@@ -63,7 +63,9 @@ lcart_add_module(verify
     DEPS lcart::claims lcart::facts)
 lcart_add_module(report
     SOURCES report/src/markdown_text.cpp report/src/module_map.cpp
-    DEPS lcart::verify)
+            report/src/verification_report.cpp
+    DEPS lcart::verify lcart::handoff
+    PRIVATE_DEPS nlohmann_json::nlohmann_json)
 # The bundle's prompt, output contract and claim schema are the texts on
 # the specification pages, extracted at configure time (ADR-0028).
 include("${PROJECT_SOURCE_DIR}/cmake/HandoffContractTexts.cmake")

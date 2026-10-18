@@ -210,6 +210,53 @@ wrong statement), so the rules prefer `unverified` whenever the evidence is
 incomplete. Accuracy is measured as described in the
 [testing strategy](../testing/strategy.md#testing-verifier-accuracy-v1).
 
+## <a id="claim-verification-report-format-v1"></a>Verification report (format 1)
+
+`lcart verify` (and `lcart ingest`, B-33) writes the verdicts as
+`verification-report.json` and `verification-report.md`
+([FR-011](requirements.md#fr011-verification-report-v2),
+[ADR-0030](../adr/0030-verification-report-and-lcart-verify.md#adr0030-report-format-v1)).
+Neither has a generation time: identical input gives identical bytes.
+
+The JSON report has these keys, in this order, every key always present:
+
+| Key | Content |
+|---|---|
+| `format` | `"lcart-verification-report"` |
+| `format_version` | `1`; any change to keys, their meaning or their order increments it |
+| `tool_version` | lcart's version |
+| `fact_schema_version` | the fact database's schema version |
+| `handoff_contract_version` | the contract version of the bundle the claims answer; `null` for `lcart verify` |
+| `agent` | the agent and model as the user stated them (`lcart ingest --agent`); `""` for `lcart verify` |
+| `coverage` | `translation_units_total`, `translation_units_parsed`, `complete` (at least one unit, every one parsed: [entity resolution](#claim-entity-resolution-v2)), `error_diagnostics` (errors and fatal errors: with any, no file [was parsed](#claim-relation-rules-v2)) |
+| `counts` | `by_status`: `confirmed`, `unverified`, `contradicted` and their counts; `by_kind`: the five claim kinds in the order of [claim kinds](#claim-kinds-v1), each with the three counts |
+| `claims` | every claim, in the order of the claims file: `id`, `kind`, `polarity`, `subject` and `object` (`type`, `name`, `file` or `null`), `text`, `source` (`document`, `section`, `""` if not given), then the verdict: `status`, `reason`, `evidence` |
+
+`evidence` lists the facts a verdict rests on, in the verdict's order
+([ADR-0029](../adr/0029-verdict-evidence-names-its-fact-table.md#adr0029-fact-references-v1)),
+each as the fact itself rather than a row id. `table` comes first, then:
+
+| `table` | Keys |
+|---|---|
+| `module` | `module` (its name) |
+| `file` | `file` |
+| `function` | `function` (its name), `file`, `line` (first line), `definition` |
+| `include_edge` | `file` (the including file), `line`, `target` (`null` if unresolved) |
+| `call_edge` | `kind` (`direct`, `indirect`, `may_call`), `caller`, `callee` (`null` for an indirect call), `via`, `file`, `line`, `column` (the call site) |
+
+Files are named as in a handoff bundle
+([bundle paths](handoff-contract.md#claim-handoff-bundle-paths-v1)): no
+absolute path appears. `entity_not_found` has no evidence; the coverage is
+its evidence.
+
+The Markdown report starts with `# Verification report` and a table of
+the versions and the agent, then `## Counts` (per kind and status, and a
+row `all`), `## Contradicted claims` and `## Unverified claims` (each claim
+with its statement, text, source, reason and evidence as `file:line`, or
+`file:line:column` for a call), and `## Coverage`. Confirmed claims are
+only counted. Every name, path and text is a code span, so a claim's text
+cannot add Markdown or HTML.
+
 ## Out of scope for v1
 
 - Transitive claims ("A eventually calls B"). Candidate for v2 with a path as
