@@ -31,7 +31,7 @@ enum class VerdictReason : std::uint8_t {
 enum class FactTable : std::uint8_t { module, file, function, include_edge, call_edge };
 
 /// One fact a verdict rests on: a row of a fact table. Row ids are per
-/// table, so a reference names both (ADR-0027).
+/// table, so a reference names both (ADR-0029).
 struct FactRef {
     FactTable table{FactTable::file};
     std::int64_t id{};

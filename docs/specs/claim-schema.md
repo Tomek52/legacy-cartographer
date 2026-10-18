@@ -169,7 +169,7 @@ its file was parsed. A function belongs to the module of its file.
 The reason is `relation_found` or `relation_absent` unless the table names
 another. `may_call` edges never make a `calls` relation found. Evidence
 names rows of the fact database, each with its table
-([ADR-0027](../adr/0027-verdict-evidence-names-its-fact-table.md)).
+([ADR-0029](../adr/0029-verdict-evidence-names-its-fact-table.md)).
 
 ### <a id="claim-negation-rule-v2"></a>Step 3: negation
 

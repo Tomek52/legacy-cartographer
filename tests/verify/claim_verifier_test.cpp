@@ -3,7 +3,7 @@
 // b27-claim-verifier-v1 (criteria 1-3), claim-entity-resolution-v2,
 // claim-relation-rules-v2, claim-negation-rule-v2,
 // fr015-resolve-function-pointer-tables-v1 (criterion 2: may_call edges
-// never confirm a `calls` claim), adr0027-fact-references-v1.
+// never confirm a `calls` claim), adr0029-fact-references-v1.
 // Criterion 4 of B-27 runs on a real analysis: claim_verifier_analysis_test.cpp.
 #include "verify/claim_verifier.hpp"
 

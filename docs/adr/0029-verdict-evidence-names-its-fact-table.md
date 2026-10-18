@@ -1,4 +1,4 @@
-# 0027. Verdict evidence names its fact table
+# 0029. Verdict evidence names its fact table
 
 - **Status:** Accepted
 - **Date:** 2026-10-18
@@ -38,7 +38,7 @@ include directives and call edges (`IncludeFact`, `CallFact`); only
 
 ## Decision
 
-<a id="adr0027-fact-references-v1"></a>**Fact references.**
+<a id="adr0029-fact-references-v1"></a>**Fact references.**
 `Verdict::evidence` is a list of `verify::FactRef`: a `FactTable`
 (`module`, `file`, `function`, `include_edge`, `call_edge`, the tables of
 the data model) and the row id in that table (option 1). The evidence of
@@ -46,7 +46,7 @@ each reason is listed in `src/verify/verdict.hpp` and follows the claim
 schema; its order is that of the queries it comes from, so it is
 deterministic.
 
-<a id="adr0027-ids-of-includes-and-calls-v1"></a>**Ids of include
+<a id="adr0029-ids-of-includes-and-calls-v1"></a>**Ids of include
 directives and call edges.** `IncludeFact` and `CallFact` get an `id`
 (`IncludeId`, `CallId`), filled by every `FactQuery` method and ignored by
 `FactWriter`, as for files, functions and modules. `may_call` edges are

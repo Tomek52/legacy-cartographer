@@ -946,7 +946,7 @@ file, as the status semantics ask, and negation does not apply to step 1.
 `verify::verify_claim` (`src/verify/src/claim_verifier.cpp`) returns
 `common::Result<Verdict>`, so a database that cannot be read is an error.
 Evidence is a list of typed references (table and row id,
-[ADR-0027](../adr/0027-verdict-evidence-names-its-fact-table.md)), for
+[ADR-0029](../adr/0029-verdict-evidence-names-its-fact-table.md)), for
 which include directives and call edges now carry their ids.
 `tests/verify/claim_verifier_test.cpp` checks every cell and resolution
 outcome against a `FactQuery` fake (each also failed against a stub
