@@ -1029,7 +1029,7 @@ and criterion 2 of [NFR-002](../specs/requirements.md#nfr002-no-source-egress-by
 (criterion 1 is [B-36](#b36-libmodbus-handoff-end-to-end-v1)), plus:
 
 1. `lcart handoff [--db] [--out] [--module NAME]...` writes the
-   [bundle layout](../specs/handoff-contract.md#claim-handoff-bundle-layout-v1)
+   [bundle layout](../specs/handoff-contract.md#claim-handoff-bundle-layout-v2)
    with the run ID as specified; a golden bundle for the `two_modules`
    fixture is committed and compared byte for byte.
 2. `PROMPT.md` and `CONTRACT.md` are generated from the
@@ -1056,7 +1056,7 @@ and criterion 2 of [NFR-002](../specs/requirements.md#nfr002-no-source-egress-by
 6. `facts/calls.json` lists `may_call` edges ([B-26](#b26-function-pointer-tables-v1))
    apart from direct and indirect calls, and prompt rule 5 says they are
    candidates, not calls.
-7. The [bundle layout](../specs/handoff-contract.md#claim-handoff-bundle-layout-v1)
+7. The [bundle layout](../specs/handoff-contract.md#claim-handoff-bundle-layout-v2)
    and the prompt are updated for criteria 3, 5 and 6, with their anchors'
    versions bumped.
 

@@ -140,7 +140,7 @@ Acceptance criteria:
 
 1. For a fixture fact database, the bundle equals a committed golden
    bundle byte for byte, and its `PROMPT.md` matches the
-   [prompt in the contract](handoff-contract.md#claim-handoff-prompt-v1).
+   [prompt in the contract](handoff-contract.md#claim-handoff-prompt-v2).
 2. `lcart ingest` on a recorded agent output (committed test data) produces
    the expected annotated documents and report.
 3. `lcart ingest` rejects output that breaks the
