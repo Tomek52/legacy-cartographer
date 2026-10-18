@@ -94,7 +94,7 @@ as the other end of an edge.
 | `includes.json` | `includes`, by file, then line: `file`, `line`, `spelled`, `system`, `target` (`null` if unresolved), `target_external` |
 
 Functions are named by their name and the file of their definition, else
-of their first declaration, as in the [claim schema](claim-schema.md#claim-entity-resolution-v1).
+of their first declaration, as in the [claim schema](claim-schema.md#claim-entity-resolution-v2).
 
 <a id="claim-handoff-bundle-paths-v1"></a>**Paths.** Files under the
 analysis root appear by their path relative to it. A file outside the root
