@@ -23,14 +23,14 @@ files in path order: `lenient.cc`, `library.cc`, `user.cc`.
   `relay` and its calls are recorded from this unit (ADR-0013).
 - `user.cc`: `use_relay` (line 3) calls `relay(3)`, which instantiates it;
   calls to a template's instantiation are not recorded (FR-003).
-- `lenient.cc`: declares `helper` itself (no `helpers.h`); the function template `width_of` (line 5) reads a member of
-  `Widget` (line 5), a class completed only on line 7, and calls `helper`
+- `lenient.cc`: declares `helper` itself (no `helpers.h`); the function
+  template `width_of` (line 5) reads a member of `Widget` (line 5), a class completed only on line 7, and calls `helper`
   (line 5, column 85). With delayed parsing Clang accepts it, since the body
   is never parsed; with two-phase parsing it reports "member access into
   incomplete type 'const Widget'" (line 5) and the unit fails. Whether MSVC
   without `/permissive-` or `/Zc:twoPhase` accepts it was not tried on
-  Windows; it is listed as not verified in `docs/open-questions.md`. `lenient_entry` (line 9)
-  calls `helper` (line 9, column 30).
+  Windows; it is listed as not verified in `docs/open-questions.md`.
+  `lenient_entry` (line 9) calls `helper` (line 9, column 30).
 
 Measured with lcart (clang 20.1.2), each `.cc` file with `cl.exe /c
 /std:c++17` or `clang --target=x86_64-pc-windows-msvc -std=c++17 -c`:

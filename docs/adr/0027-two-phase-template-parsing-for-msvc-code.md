@@ -97,7 +97,8 @@ program name of every compile command it parses, next to
 `--no-default-config`, except in a `-cc1` command (cc1 does not accept the
 flag). The flag is accepted by the `clang` driver and in clang-cl mode, and
 it does not change the cc1 command for other targets or for C++20 and
-later (checked with `clang-20 -###`). lcart adds no configuration key for
+later (checked with `clang-20 -###`); for C under an MSVC target it drops
+`-fdelayed-template-parsing`, which has no effect on C. lcart adds no configuration key for
 it.
 
 <a id="adr0027-command-chooses-delayed-v1"></a>**The command can choose

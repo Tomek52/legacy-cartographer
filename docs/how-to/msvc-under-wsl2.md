@@ -250,7 +250,9 @@ so those calls are recorded, also for templates in headers. What you see
   `-fdelayed-template-parsing` (`clang`). lcart keeps it
   ([ADR-0027](../adr/0027-two-phase-template-parsing-for-msvc-code.md#adr0027-command-chooses-delayed-v1)),
   and the calls of templates a unit does not instantiate are missing again.
-  For an `"arguments"` database, for example:
+  For an `"arguments"` database of `cl.exe` or clang-cl commands, for
+  example (for `clang` commands insert `-fdelayed-template-parsing`
+  instead: the `clang` driver reads `/Zc:twoPhase-` as an input file):
 
     ```bash
     jq '[.[] | .arguments |= (.[0:1] + ["/Zc:twoPhase-"] + .[1:])]' \

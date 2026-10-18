@@ -733,7 +733,8 @@ TranslationUnitBatch TranslationUnitRecorder::record(const ParseJob& job) {
     // -fdelayed-template-parsing, /Zc:twoPhase- or /permissive in the command
     // still wins (the driver takes the last of the pair). Accepted by the
     // `clang` driver and in clang-cl mode, and a no-op for other targets and
-    // for C++20 (verified on clang-20 20.1.2); cc1 does not accept it.
+    // for C++20 (verified on clang-20 20.1.2; for C under an MSVC target it
+    // drops a flag that has no effect there); cc1 does not accept it.
     tool.appendArgumentsAdjuster([](const clang::tooling::CommandLineArguments& arguments,
                                     llvm::StringRef /*filename*/) {
         clang::tooling::CommandLineArguments adjusted = arguments;
