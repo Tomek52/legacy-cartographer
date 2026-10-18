@@ -6,11 +6,13 @@ add_executable(lcart_unit_tests
     analysis/module_rules_test.cpp
     claims/claim_parser_test.cpp
     cli/command_line_test.cpp
+    common/sha256_test.cpp
     cli/git_exposure_test.cpp
     config/path_glob_test.cpp
     config/project_config_test.cpp
     facts/fact_export_test.cpp
     facts/sqlite_fact_store_test.cpp
+    handoff/bundle_test.cpp
     report/module_map_test.cpp
     verify/claim_verifier_test.cpp
     verify/verification_status_test.cpp)
@@ -21,6 +23,7 @@ target_link_libraries(lcart_unit_tests PRIVATE
 target_compile_definitions(lcart_unit_tests PRIVATE
     LCART_GOLDEN_DIR="${CMAKE_CURRENT_SOURCE_DIR}/golden"
     LCART_CLAIMS_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/claims/data"
+    LCART_FIXTURES_DIR="${CMAKE_CURRENT_SOURCE_DIR}/fixtures"
     LCART_DOCS_DIR="${PROJECT_SOURCE_DIR}/docs")
 lcart_target_warnings(lcart_unit_tests)
 gtest_discover_tests(lcart_unit_tests PROPERTIES LABELS unit)

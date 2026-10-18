@@ -23,7 +23,7 @@ function(lcart_add_module name)
     endif()
 endfunction()
 
-lcart_add_module(common)
+lcart_add_module(common SOURCES common/src/sha256.cpp)
 target_compile_definitions(lcart_common INTERFACE LCART_VERSION="${PROJECT_VERSION}")
 
 # SQLite stays private to facts: other modules see only FactWriter/FactQuery.
@@ -62,7 +62,15 @@ lcart_add_module(verify
     SOURCES verify/src/claim_verifier.cpp
     DEPS lcart::claims lcart::facts)
 lcart_add_module(report   SOURCES report/src/module_map.cpp DEPS lcart::verify)
-lcart_add_module(handoff  DEPS lcart::claims lcart::facts)
+# The bundle's prompt, output contract and claim schema are the texts on
+# the specification pages, extracted at configure time (ADR-0028).
+include("${PROJECT_SOURCE_DIR}/cmake/HandoffContractTexts.cmake")
+lcart_generate_handoff_texts("${CMAKE_CURRENT_BINARY_DIR}/generated/handoff/contract_texts.hpp")
+lcart_add_module(handoff
+    SOURCES handoff/src/handoff.cpp
+    DEPS lcart::claims lcart::facts
+    PRIVATE_DEPS nlohmann_json::nlohmann_json)
+target_include_directories(lcart_handoff PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/generated")
 lcart_add_module(llm      DEPS lcart::common)  # built-in providers, M6 (ADR-0006)
 # Command-line parsing and the commands, as a library so tests can call
 # them without starting the executable.
