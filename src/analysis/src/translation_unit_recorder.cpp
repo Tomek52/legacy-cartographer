@@ -725,16 +725,26 @@ TranslationUnitBatch TranslationUnitRecorder::record(const ParseJob& job) {
     // `-cc1` right after the program name, so the flag is not inserted there;
     // ClangTool drives such commands anyway, and an explicit --config is still
     // removed by the filter above.
-    tool.appendArgumentsAdjuster(
-        [](const clang::tooling::CommandLineArguments& arguments, llvm::StringRef /*filename*/) {
-            clang::tooling::CommandLineArguments adjusted = arguments;
-            if (adjusted.size() >= 2 && adjusted[1] == "-cc1") {
-                return adjusted;
-            }
-            const auto after_program = adjusted.begin() + (adjusted.empty() ? 0 : 1);
-            adjusted.insert(after_program, "--no-default-config");
+    //
+    // -fno-delayed-template-parsing goes in the same place: for an MSVC
+    // target before C++20 the driver defaults to delayed template parsing,
+    // which leaves the calls of templates a unit never instantiates out of
+    // the facts (ADR-0027). Placed before the command's own arguments, so a
+    // -fdelayed-template-parsing, /Zc:twoPhase- or /permissive in the command
+    // still wins (the driver takes the last of the pair). Accepted by the
+    // `clang` driver and in clang-cl mode, and a no-op for other targets and
+    // for C++20 (verified on clang-20 20.1.2; for C under an MSVC target it
+    // drops a flag that has no effect there); cc1 does not accept it.
+    tool.appendArgumentsAdjuster([](const clang::tooling::CommandLineArguments& arguments,
+                                    llvm::StringRef /*filename*/) {
+        clang::tooling::CommandLineArguments adjusted = arguments;
+        if (adjusted.size() >= 2 && adjusted[1] == "-cc1") {
             return adjusted;
-        });
+        }
+        const auto after_program = adjusted.begin() + (adjusted.empty() ? 0 : 1);
+        adjusted.insert(after_program, {"--no-default-config", "-fno-delayed-template-parsing"});
+        return adjusted;
+    });
 
     CollectingDiagnosticConsumer consumer{job.translation_unit, files_, root_prefixes_};
     tool.setDiagnosticConsumer(&consumer);

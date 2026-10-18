@@ -49,7 +49,7 @@ expanded in place; its version is bumped if its meaning changes
 | [B-37](#b37-real-agent-run-on-libmodbus-v1) | Real agent run on libmodbus, published | M2 | FR-008, NFR-009 | B-29, B-32, B-34, B-35, B-36 | 4 h |
 | [B-38](#b38-resume-detects-edited-sources-v1) | `--resume` detects edited sources | M2 (carry-over) | NFR-004 | – | 5 h |
 | [B-39](#b39-adrs-for-merged-decisions-v1) | ✅ ADRs for the decisions of #29, #30 and #31 | M2 (carry-over) | NFR-010, NFR-013 | – | 2 h |
-| [B-40](#b40-msvc-delayed-template-parsing-v1) | MSVC delayed template parsing: decision | M2 (carry-over) | NFR-013 | – | 2 h |
+| [B-40](#b40-msvc-delayed-template-parsing-v1) | ✅ MSVC delayed template parsing: decision | M2 (carry-over) | NFR-013 | – | 2 h |
 
 ## M0
 
@@ -1258,3 +1258,20 @@ Acceptance criteria:
 2. Tests on the new fixture show the decided behaviour; the how-to says
    what users see.
 3. The open-questions row is removed.
+
+Result (2026-10-18): [ADR-0027](../adr/0027-two-phase-template-parsing-for-msvc-code.md)
+decides "always": lcart inserts `-fno-delayed-template-parsing` right after
+the program name of every driver command (not `-cc1`), so a command that
+names `/Zc:twoPhase-`, `/permissive` or `-fdelayed-template-parsing` keeps
+delayed parsing; no configuration key. Measured on the new fixture
+`tests/fixtures/msvc_templates` (3 units, `cl.exe` and `clang` commands,
+`-std=c++17`): delayed parsing 3 of 3 units, 0 diagnostics, 1 call;
+two-phase 2 of 3 units, 1 error diagnostic, 4 calls, the same 6 functions.
+The failed unit (`lenient.cc`) keeps its functions and calls, since Clang
+recovers. Delayed parsing also made the calls of a header template depend
+on which units are analysed. `MsvcTemplatesTest` in
+`tests/analysis/msvc_code_test.cpp` checks both rules; `msvc_constructs` is
+unchanged. The how-to says what users see and how to choose delayed parsing
+in the database; the open-questions row is replaced by a decided row and a
+`TODO: verify` row for old Windows SDK headers and MSVC itself, which could
+not be tried without Windows.

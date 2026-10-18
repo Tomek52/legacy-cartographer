@@ -7,6 +7,7 @@
 
 #include <gtest/gtest.h>
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
@@ -365,6 +366,128 @@ TEST_F(MsbuildDatabaseTest, SystemIncludeDirectoriesMustBeInTheDatabase) {
     const AnalysisSummary summary = analyze_database(write_database(true), solution_dir());
     EXPECT_EQ(summary.translation_units_parsed, 0U);
     EXPECT_EQ(summary.diagnostics, 2U);
+}
+
+// lcart parses MSVC code with two-phase template parsing unless the command
+// asks for delayed parsing (ADR-0027). The msvc_templates fixture's README
+// lists the functions and calls, with the line and column of each.
+class MsvcTemplatesTest : public MsvcCodeTest {
+protected:
+    static fs::path templates_dir() { return fixture_dir().parent_path() / "msvc_templates"; }
+
+    /// Analyses library.cc, user.cc and lenient.cc, each with `arguments`
+    /// (a JSON array body without the file name).
+    [[nodiscard]] AnalysisSummary analyze_templates(const std::string& arguments) {
+        const fs::path database = work_dir() / "compile_commands.json";
+        {
+            std::ofstream out{database};
+            out << "[";
+            const char* separator = "";
+            for (const char* file : {"library.cc", "user.cc", "lenient.cc"}) {
+                out << separator << R"({"directory": ")" << templates_dir().string()
+                    << R"(", "arguments": [)" << arguments << R"(, ")" << file << R"("], "file": ")"
+                    << file << "\"}";
+                separator = ",\n";
+            }
+            out << "]\n";
+        }
+        return analyze_database(database, templates_dir());
+    }
+
+    /// The stored diagnostics as "file:line: message".
+    [[nodiscard]] std::vector<std::string> stored_diagnostics() const {
+        std::vector<std::string> result;
+        const auto diagnostics = store().diagnostics();
+        if (!diagnostics) {
+            ADD_FAILURE() << diagnostics.error().message;
+            return result;
+        }
+        for (const DiagnosticFact& diagnostic : *diagnostics) {
+            result.push_back(diagnostic.file + ':' + std::to_string(diagnostic.line) + ": " +
+                             diagnostic.message);
+        }
+        return result;
+    }
+
+    /// The calls of the templates when they are parsed in two phases.
+    /// never_instantiated is instantiated nowhere; relay is defined in a
+    /// header and recorded from library.cc, which sorts first and does not
+    /// instantiate it, although user.cc does.
+    void expect_template_calls() const {
+        EXPECT_EQ(calls("never_instantiated"), (std::vector<Call>{{"helper", 5, 64}}));
+        EXPECT_EQ(calls("relay"), (std::vector<Call>{{"helper", 5, 51}}));
+        EXPECT_EQ(calls("use_relay"), std::vector<Call>{});
+    }
+
+    /// Under two-phase parsing lenient.cc fails; the two other units parse.
+    void expect_lenient_unit_failed(const AnalysisSummary& summary) const {
+        EXPECT_EQ(summary.translation_units_parsed, 2U);
+        EXPECT_EQ(summary.diagnostics, 1U);
+        EXPECT_EQ(stored_diagnostics(),
+                  (std::vector<std::string>{
+                      "lenient.cc:5: member access into incomplete type 'const Widget'"}));
+    }
+
+    /// Clang recovers: the failed unit's calls are still recorded.
+    void expect_lenient_unit_calls() const {
+        EXPECT_EQ(calls("width_of"), (std::vector<Call>{{"helper", 5, 85}}));
+        EXPECT_EQ(calls("lenient_entry"), (std::vector<Call>{{"helper", 9, 30}}));
+    }
+
+    static void expect_all_units_parsed(const AnalysisSummary& summary) {
+        EXPECT_EQ(summary.translation_units_parsed, 3U);
+        EXPECT_EQ(summary.diagnostics, 0U);
+    }
+
+    /// Delayed parsing: only the call outside the templates is recorded.
+    void expect_no_template_calls() const {
+        EXPECT_EQ(calls("never_instantiated"), std::vector<Call>{});
+        EXPECT_EQ(calls("relay"), std::vector<Call>{});
+        EXPECT_EQ(calls("width_of"), std::vector<Call>{});
+        EXPECT_EQ(calls("lenient_entry"), (std::vector<Call>{{"helper", 9, 30}}));
+    }
+};
+
+/// A clang-cl command and a `clang` driver command, both before C++20,
+/// where Clang's MSVC default is delayed template parsing.
+constexpr std::array<std::string_view, 2> pre_cxx20_template_commands{
+    R"("cl.exe", "/c", "/nologo", "/std:c++17")",
+    R"("clang", "--target=x86_64-pc-windows-msvc", "-std=c++17", "-c")",
+};
+
+// Verifies: b40-msvc-delayed-template-parsing-v1 (criterion 2)
+TEST_F(MsvcTemplatesTest, RecordsCallsInTemplatesThatAreNeverInstantiated) {
+    for (const std::string_view command : pre_cxx20_template_commands) {
+        SCOPED_TRACE(command);
+        const AnalysisSummary summary = analyze_templates(std::string{command});
+        expect_template_calls();
+        EXPECT_EQ(summary.translation_units_parsed, 2U);
+    }
+}
+
+// Verifies: b40-msvc-delayed-template-parsing-v1 (criterion 2)
+TEST_F(MsvcTemplatesTest, ATemplateOnlyDelayedParsingAcceptsFailsItsUnitButKeepsItsFacts) {
+    for (const std::string_view command : pre_cxx20_template_commands) {
+        SCOPED_TRACE(command);
+        expect_lenient_unit_failed(analyze_templates(std::string{command}));
+        expect_lenient_unit_calls();
+    }
+}
+
+// Verifies: b40-msvc-delayed-template-parsing-v1 (criterion 2)
+TEST_F(MsvcTemplatesTest, DelayedTemplateParsingNamedInTheCommandWins) {
+    // lcart inserts its flag right after the program name, so the command's
+    // own choice comes later and wins (ADR-0027). /permissive implies
+    // /Zc:twoPhase- (LLVM 20.1.2 clang/lib/Driver/ToolChains/MSVC.cpp).
+    for (const char* command :
+         {R"("cl.exe", "/c", "/nologo", "/std:c++17", "/Zc:twoPhase-")",
+          R"("cl.exe", "/c", "/nologo", "/std:c++17", "/permissive")",
+          R"("clang", "--target=x86_64-pc-windows-msvc", "-std=c++17", "-c", )"
+          R"("-fdelayed-template-parsing")"}) {
+        SCOPED_TRACE(command);
+        expect_all_units_parsed(analyze_templates(command));
+        expect_no_template_calls();
+    }
 }
 
 } // namespace
