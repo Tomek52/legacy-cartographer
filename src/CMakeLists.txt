@@ -61,7 +61,11 @@ lcart_add_module(claims
 lcart_add_module(verify
     SOURCES verify/src/claim_verifier.cpp
     DEPS lcart::claims lcart::facts)
-lcart_add_module(report   SOURCES report/src/module_map.cpp DEPS lcart::verify)
+lcart_add_module(report
+    SOURCES report/src/markdown_text.cpp report/src/module_map.cpp
+            report/src/verification_report.cpp
+    DEPS lcart::verify lcart::handoff
+    PRIVATE_DEPS nlohmann_json::nlohmann_json)
 # The bundle's prompt, output contract and claim schema are the texts on
 # the specification pages, extracted at configure time (ADR-0028).
 include("${PROJECT_SOURCE_DIR}/cmake/HandoffContractTexts.cmake")
@@ -76,6 +80,6 @@ lcart_add_module(llm      DEPS lcart::common)  # built-in providers, M6 (ADR-000
 # them without starting the executable.
 lcart_add_module(cli
     SOURCES cli/src/command_line.cpp cli/src/commands.cpp cli/src/git_exposure.cpp
-    DEPS lcart::analysis lcart::config lcart::facts lcart::handoff lcart::report)
+    DEPS lcart::analysis lcart::config lcart::facts lcart::handoff lcart::report lcart::verify)
 
 add_subdirectory(cli)

@@ -14,6 +14,7 @@ add_executable(lcart_unit_tests
     facts/sqlite_fact_store_test.cpp
     handoff/bundle_test.cpp
     report/module_map_test.cpp
+    report/verification_report_test.cpp
     verify/claim_verifier_test.cpp
     verify/verification_status_test.cpp)
 # SQLite directly: the schema-version tests tamper with a database.

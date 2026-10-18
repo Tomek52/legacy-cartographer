@@ -2,6 +2,7 @@
 
 #include "claims/claim.hpp"
 #include "common/result.hpp"
+#include "facts/fact_export.hpp"
 #include "facts/fact_store.hpp"
 
 #include <filesystem>
@@ -49,6 +50,16 @@ struct BundleManifest {
     std::vector<std::filesystem::path> files_written;
     std::vector<std::string> source_files_included; ///< Empty unless include_source.
 };
+
+/// The names a bundle gives `files` (ADR-0028): those of the facts export
+/// (facts::exported_file_names), except that a directive spelled with an
+/// absolute path counts as `<outside-root>/` and its last path component,
+/// so no absolute path appears. `includes` are the directives of `files`;
+/// every includer must be one of `files`. The verification report names
+/// files the same way (ADR-0030).
+[[nodiscard]] std::map<facts::FileId, facts::ExportedFile>
+file_names_in_bundle(const std::vector<facts::FileFact>& files,
+                     const std::vector<facts::IncludeFact>& includes);
 
 /// The project name for a bundle (ADR-0028): the last path component of
 /// `analysis_root` (as stored in the fact database), or `project` if it

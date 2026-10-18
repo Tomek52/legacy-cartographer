@@ -6,7 +6,9 @@
 #include "verify/verdict.hpp"
 
 #include <cstdint>
+#include <optional>
 #include <ostream>
+#include <string>
 #include <vector>
 
 namespace lcart::report {
@@ -16,6 +18,12 @@ enum class ReportFormat : std::uint8_t { markdown, json };
 struct VerificationReport {
     std::vector<claims::Claim> claims;
     std::vector<verify::Verdict> verdicts; ///< Same order as `claims`.
+    /// The handoff contract version of the bundle the claims answer; empty
+    /// for `lcart verify`, which has no bundle.
+    std::optional<int> handoff_contract_version;
+    /// The agent and model as the user stated them (`lcart ingest
+    /// --agent`, B-33); empty for `lcart verify`.
+    std::string agent;
 };
 
 /// Writes the module map (FR-007) to `out`: Markdown with a coverage line,
@@ -33,8 +41,8 @@ struct VerificationReport {
 [[nodiscard]] common::Status write_module_map(const facts::FactQuery& facts, std::ostream& out);
 
 /// Writes the verification report (FR-011).
-// TODO(M2): implement both formats.
-common::Status write_verification_report(const VerificationReport& report, ReportFormat format,
-                                         std::ostream& out);
+[[nodiscard]] common::Status write_verification_report(const VerificationReport& report,
+                                                       const facts::FactQuery& facts,
+                                                       ReportFormat format, std::ostream& out);
 
 } // namespace lcart::report

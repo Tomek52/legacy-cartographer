@@ -203,8 +203,7 @@ Result<Snapshot> read_snapshot(const facts::FactQuery& facts) {
         snapshot.dependencies.emplace(module.id, std::move(*edges));
         snapshot.module_names.emplace(module.id, module.name);
     }
-    snapshot.file_names =
-        facts::exported_file_names(snapshot.files, snapshot.includes, bundle_spelling);
+    snapshot.file_names = file_names_in_bundle(snapshot.files, snapshot.includes);
     for (const facts::FileFact& file : snapshot.files) {
         if (file.module) {
             snapshot.file_modules.emplace(file.id, *file.module);
@@ -540,6 +539,12 @@ Status write_files(const Bundle& bundle, const fs::path& directory) {
 }
 
 } // namespace
+
+std::map<facts::FileId, facts::ExportedFile>
+file_names_in_bundle(const std::vector<facts::FileFact>& files,
+                     const std::vector<facts::IncludeFact>& includes) {
+    return facts::exported_file_names(files, includes, bundle_spelling);
+}
 
 std::string project_name(std::string_view analysis_root) {
     const fs::path root{analysis_root};

@@ -1,0 +1,73 @@
+{
+  "schema": "lcart:claim:v1",
+  "claims": [
+    {
+      "id": "c-0001",
+      "kind": "calls",
+      "subject": { "type": "function", "name": "run" },
+      "object": { "type": "function", "name": "transfer" },
+      "polarity": "affirmed",
+      "text": "run hands the transfer to transfer.",
+      "source": { "document": "modules/root.md", "section": "Main functions" }
+    },
+    {
+      "id": "c-0002",
+      "kind": "calls",
+      "subject": { "type": "function", "name": "transfer" },
+      "object": { "type": "function", "name": "tcp_send" },
+      "polarity": "affirmed",
+      "text": "transfer sends through tcp_send.",
+      "source": { "document": "modules/root.md", "section": "Main functions" }
+    },
+    {
+      "id": "c-0003",
+      "kind": "calls",
+      "subject": { "type": "function", "name": "rtu_send", "file": "rtu.c" },
+      "object": { "type": "function", "name": "checksum" },
+      "polarity": "negated",
+      "text": "rtu_send does not compute a checksum itself.",
+      "source": { "document": "modules/root.md", "section": "Backends" }
+    },
+    {
+      "id": "c-0004",
+      "kind": "includes",
+      "subject": { "type": "file", "name": "tcp.c" },
+      "object": { "type": "file", "name": "backend.h" },
+      "polarity": "affirmed",
+      "text": "tcp.c includes backend.h."
+    },
+    {
+      "id": "c-0005",
+      "kind": "defines",
+      "subject": { "type": "file", "name": "core.c" },
+      "object": { "type": "function", "name": "rtu_send" },
+      "polarity": "affirmed",
+      "text": "core.c defines rtu_send.",
+      "source": { "document": "modules/root.md", "section": "Backends" }
+    },
+    {
+      "id": "c-0006",
+      "kind": "calls",
+      "subject": { "type": "function", "name": "run" },
+      "object": { "type": "function", "name": "modbus_flush" },
+      "polarity": "affirmed",
+      "text": "run flushes the context with modbus_flush."
+    },
+    {
+      "id": "c-0007",
+      "kind": "belongs_to",
+      "subject": { "type": "file", "name": "rtu.c" },
+      "object": { "type": "module", "name": "(root)" },
+      "polarity": "affirmed",
+      "text": "rtu.c is part of the root module."
+    },
+    {
+      "id": "c-0008",
+      "kind": "calls",
+      "subject": { "type": "function", "name": "checksum" },
+      "object": { "type": "function", "name": "apply" },
+      "polarity": "negated",
+      "text": "checksum calls nothing else."
+    }
+  ]
+}

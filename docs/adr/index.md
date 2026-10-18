@@ -44,3 +44,4 @@ Rules:
 | [0027](0027-two-phase-template-parsing-for-msvc-code.md) | Two-phase template parsing for MSVC code | Accepted |
 | [0028](0028-handoff-bundle-paths-run-id-and-contract-texts.md) | Handoff bundle: paths, run ID, command line and the texts of the contract | Accepted (decided by delegation) |
 | [0029](0029-verdict-evidence-names-its-fact-table.md) | Verdict evidence names its fact table | Accepted |
+| [0030](0030-verification-report-and-lcart-verify.md) | Verification report and `lcart verify` | Accepted (decided by delegation) |

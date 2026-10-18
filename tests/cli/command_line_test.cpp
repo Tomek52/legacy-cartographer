@@ -220,6 +220,32 @@ TEST(CommandLine, HandoffRejectsBadArguments) {
     expect_usage_error({"handoff", "--include-source"}, "--include-source is not available yet");
 }
 
+// Verifies: b28-verification-report-v1 (criterion 1: `lcart verify
+// <claims.json> [--db] [--out]` and the exit status for a contradicted
+// claim), adr0030-command-line-v1.
+TEST(CommandLine, VerifyDefaultsAndOptions) {
+    const auto verify = parsed_as<VerifyCommand>({"verify", "claims.json"});
+    EXPECT_EQ(verify.claims, "claims.json");
+    EXPECT_EQ(verify.database, "lcart-out/facts.lcart.db");
+    EXPECT_EQ(verify.output_dir, "lcart-out");
+    const auto given =
+        parsed_as<VerifyCommand>({"verify", "--db=x.lcart.db", "--out", "out", "c.json"});
+    EXPECT_EQ(given.claims, "c.json");
+    EXPECT_EQ(given.database, "x.lcart.db");
+    EXPECT_EQ(given.output_dir, "out");
+    EXPECT_TRUE(std::holds_alternative<HelpCommand>(*parse({"verify", "--help"})));
+    EXPECT_NE(usage().find("6 a claim is contradicted"), std::string_view::npos) << usage();
+    EXPECT_EQ(static_cast<int>(ExitStatus::contradicted), 6);
+}
+
+TEST(CommandLine, VerifyRejectsBadArguments) {
+    expect_usage_error({"verify"}, "verify needs a claims file");
+    expect_usage_error({"verify", "a.json", "b.json"}, "b.json");
+    expect_usage_error({"verify", "a.json", "--output", "x"}, "--output");
+    expect_usage_error({"verify", "a.json", "--out", "a", "--out", "b"}, "twice");
+    expect_usage_error({"verify", "a.json", "--agent", "x"}, "--agent");
+}
+
 // Verifies: b16-resumable-analysis-v2 (the command line of ADR-0019:
 // `--jobs` from 1 to 256, command line only; `--resume`; exit status 5).
 TEST(CommandLine, AnalyzeJobsAndResume) {

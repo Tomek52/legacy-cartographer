@@ -108,6 +108,7 @@ nav:
       - adr/0027-two-phase-template-parsing-for-msvc-code.md
       - adr/0028-handoff-bundle-paths-run-id-and-contract-texts.md
       - adr/0029-verdict-evidence-names-its-fact-table.md
+      - adr/0030-verification-report-and-lcart-verify.md
   - Testing:
       - testing/index.md
       - Strategy: testing/strategy.md
