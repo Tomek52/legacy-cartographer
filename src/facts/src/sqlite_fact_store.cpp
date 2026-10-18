@@ -500,10 +500,10 @@ constexpr std::string_view function_columns =
     "SELECT f.id, f.usr, f.name, f.qualified_name, f.signature, f.file_id, f.line_begin,"
     " f.line_end, f.is_definition, f.linkage FROM function f";
 constexpr std::string_view call_columns =
-    "SELECT c.caller_id, c.callee_id, c.kind, c.via, c.file_id, c.line, c.col, c.field"
+    "SELECT c.caller_id, c.callee_id, c.kind, c.via, c.file_id, c.line, c.col, c.field, c.id"
     " FROM call_edge c JOIN file ON file.id = c.file_id";
 constexpr std::string_view include_columns =
-    "SELECT e.includer_id, e.included_id, e.spelled, e.line, e.is_system"
+    "SELECT e.includer_id, e.included_id, e.spelled, e.line, e.is_system, e.id"
     " FROM include_edge e JOIN file ON file.id = e.includer_id";
 
 Result<CallFact> read_call(const Statement& row) {
@@ -512,6 +512,7 @@ Result<CallFact> read_call(const Statement& row) {
         return std::unexpected(kind.error());
     }
     return CallFact{
+        .id = row.id<CallId>(8),
         .caller = row.id<FunctionId>(0),
         .callee = row.optional_id<FunctionId>(1),
         .kind = *kind,
@@ -521,7 +522,8 @@ Result<CallFact> read_call(const Statement& row) {
 }
 
 Result<IncludeFact> read_include(const Statement& row) {
-    return IncludeFact{.includer = row.id<FileId>(0),
+    return IncludeFact{.id = row.id<IncludeId>(5),
+                       .includer = row.id<FileId>(0),
                        .included = row.optional_id<FileId>(1),
                        .spelled = row.text(2),
                        .line = row.uint32(3),
