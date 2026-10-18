@@ -115,7 +115,12 @@ The source of `_modbus_receive_msg` spells `modbus_close` and
 branches, which the Linux build does not compile, so two calls each are
 right. Names in comments and string literals of `modbus_reply`
 (`modbus_receive`, `write_bits`, `write_registers`) are not calls. Which
-backend functions the indirect calls reach is FR-015 (M2).
+backend functions the indirect calls reach is FR-015: since B-26 each
+indirect call through a backend member has `may_call` edges to the
+functions the backend tables assign to it, and the baseline job checks
+that the one through `check_integrity` in `_modbus_receive_msg`
+(`src/modbus.c` line 546) reaches `_modbus_rtu_check_integrity` and
+`_modbus_tcp_check_integrity` and nothing else.
 
 ### M2: generated documentation and verification report
 

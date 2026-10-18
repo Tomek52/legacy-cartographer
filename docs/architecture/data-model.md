@@ -1,14 +1,16 @@
 # Fact database data model
 
-One SQLite file per analysed project. Schema version 2
+One SQLite file per analysed project. Schema version 3
 (`facts::schema_version` in `src/facts/fact_model.hpp`); any change bumps it
-(2: translation unit and diagnostic paths spelled like file paths, B-12).
+(2: translation unit and diagnostic paths spelled like file paths, B-12;
+3: `CALL_EDGE.field` and `FIELD_ASSIGNMENT` for `may_call` edges, B-26).
 Paths of files under the analysis root are relative to it, with `/`
 separators; files outside it have absolute paths
 ([file facts](#arch-data-model-file-facts-v1)). How functions are
 identified: [function facts](#arch-data-model-function-facts-v2),
-[call edges](#arch-data-model-call-edges-v1); how files get modules and
-modules dependencies: [modules](#arch-data-model-modules-v1).
+[call edges](#arch-data-model-call-edges-v1),
+[may_call edges](#arch-data-model-may-call-edges-v1); how files get
+modules and modules dependencies: [modules](#arch-data-model-modules-v1).
 
 ```mermaid
 erDiagram
@@ -70,10 +72,15 @@ erDiagram
         int caller_id FK
         int callee_id FK "null if indirect"
         text kind "direct | indirect | may_call"
-        text via "indirect: object.member as written, else empty"
+        text via "indirect, may_call: object.member as written, else empty"
         int file_id FK
         int line
         int col
+        text field "indirect, may_call: USR of the field called through, else empty"
+    }
+    FIELD_ASSIGNMENT {
+        text field PK "USR of a struct field of function-pointer type"
+        int function_id PK, FK "assigned in a static initializer"
     }
     MODULE_DEPENDENCY {
         int from_module_id FK
@@ -101,6 +108,7 @@ erDiagram
     FILE ||--o{ INCLUDE_EDGE : "includes"
     FILE ||--o{ FUNCTION : "declares/defines"
     FUNCTION ||--o{ CALL_EDGE : "calls from"
+    FUNCTION ||--o{ FIELD_ASSIGNMENT : "assigned to fields"
     MODULE ||--o{ MODULE_DEPENDENCY : "depends"
     CLAIM ||--o| VERDICT : "verified as"
 ```
@@ -129,7 +137,8 @@ erDiagram
   `CALL_EDGE`s after analysis and keeps the justifying edge, so `depends_on`
   claims have evidence ([modules](#arch-data-model-modules-v1)).
 - `kind = 'indirect'` if and only if `callee_id` is null; `may_call` edges
-  ([FR-015](../specs/requirements.md#fr015-resolve-function-pointer-tables-v1)) are never returned with direct calls.
+  ([FR-015](../specs/requirements.md#fr015-resolve-function-pointer-tables-v1)) are never returned with direct calls
+  (how they are derived: [may_call edges](#arch-data-model-may-call-edges-v1)).
 - Claims and verdicts live in the same file so a report can be regenerated
   without the LLM.
 - Each TU's facts are committed in one transaction together with its
@@ -244,6 +253,38 @@ How [FR-004](../specs/requirements.md#fr004-record-call-edges-v1) maps onto
   member initializers are not recorded (they are not in its body), nor are
   constructor calls themselves (not call expressions in Clang). A virtual
   call is `direct` to the method it names.
+
+## <a id="arch-data-model-may-call-edges-v1"></a>may_call edges
+
+How [FR-015](../specs/requirements.md#fr015-resolve-function-pointer-tables-v1)
+maps onto `CALL_EDGE` and `FIELD_ASSIGNMENT` (B-26,
+[ADR-0026](../adr/0026-may-call-edges-from-function-pointer-tables.md)):
+
+- A field is identified by Clang's USR of the field
+  (`c:@S@_modbus_backend@FI@check_integrity`), the same in every
+  translation unit that includes the struct's header.
+- An `indirect` edge whose callee is a member access of a struct field of
+  function-pointer type (`ctx->backend->send(...)`, `local.recv(...)`,
+  `(*p->send)(...)`) keeps that field's USR in `field`; a call through a
+  local pointer, a parameter or an array element has an empty `field`.
+- `FIELD_ASSIGNMENT` has one row per field and function that a static
+  initializer assigns to it: a function named (`f`, `&f`) in the
+  initializer of a variable with static storage duration, positional or
+  designated, also in nested structs, unions, base classes and arrays.
+  Initializers of automatic variables, assignments in code and functions
+  that are not recorded do not count
+  ([ADR-0026](../adr/0026-may-call-edges-from-function-pointer-tables.md#adr0026-field-assignments-v1)).
+  The rows are written with the facts of their translation unit, so a
+  resumed analysis keeps them.
+- After the last translation unit the `may_call` edges are replaced in one
+  transaction: one per `indirect` edge with a `field` and function assigned
+  to that field, whichever translation unit assigned it, at the indirect
+  call's site, with its `via` and `field`, and the function as `callee_id`.
+  So they do not depend on the order of translation units.
+- `may_call` edges justify no `MODULE_DEPENDENCY`: only include edges and
+  direct calls do ([modules](#arch-data-model-modules-v1)), and the module
+  map does not change. They are read with `FactQuery::may_calls_from()`
+  and `may_calls()`, never with the call queries.
 
 ## <a id="arch-data-model-modules-v1"></a>Modules and module dependencies
 
