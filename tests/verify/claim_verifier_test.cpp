@@ -573,6 +573,56 @@ TEST(ClaimVerifierCalls, AbsentAfterAFatalErrorInAnyUnitIsCoverageIncomplete) {
         expected(unverified, VerdictReason::coverage_incomplete));
 }
 
+/// The second review's case: unit main.c includes h1.h, whose declaration
+/// of `g` has an unknown parameter type (a non-fatal error in h1.h), and,
+/// through h.h, h2.h, which defines `k`. Clang reported nothing in h2.h and
+/// dropped k's call to the invalid `g`.
+struct ErrorInIncludedHeader {
+    Project p;
+    FileId h1_h = p.facts.add_file("app/h1.h", p.app);
+    FileId h_h = p.facts.add_file("app/h.h", p.app);
+    FileId h2_h = p.facts.add_file("app/h2.h", p.app);
+    FunctionId k = p.facts.add_function("k", h2_h);
+    FunctionId g = p.facts.add_function("g", p.core_c);
+
+    ErrorInIncludedHeader() {
+        p.facts.add_include(p.main_c, h1_h);
+        p.facts.add_include(p.main_c, h_h);
+        p.facts.add_include(h_h, h2_h);
+        p.facts.add_diagnostic("app/main.c", "app/h1.h", DiagnosticSeverity::error);
+        p.facts.set_coverage(3, 2);
+    }
+};
+
+TEST(ClaimVerifierCalls, AbsentWithDefinitionReachedByAUnitWithAnErrorIsCoverageIncomplete) {
+    const ErrorInIncludedHeader f;
+    for (const Polarity polarity : {Polarity::affirmed, Polarity::negated}) {
+        EXPECT_EQ(
+            verify(claim(ClaimKind::calls, function_named("k"), function_named("g"), polarity),
+                   f.p.facts),
+            expected(unverified, VerdictReason::coverage_incomplete));
+    }
+}
+
+TEST(ClaimVerifierCalls, AbsentWithDefinitionNotReachedByAUnitWithAnErrorIsContradicted) {
+    // src/core.c is not reached from main.c: the error cannot have touched
+    // run's body.
+    const ErrorInIncludedHeader f;
+    EXPECT_EQ(
+        verify(claim(ClaimKind::calls, function_named("run"), function_named("init")), f.p.facts),
+        expected(contradicted, VerdictReason::relation_absent, {ref(f.p.run)}));
+}
+
+TEST(ClaimVerifierIncludes, AbsentWithSubjectReachedByAUnitWithAnErrorIsUnverified) {
+    const ErrorInIncludedHeader f;
+    for (const Polarity polarity : {Polarity::affirmed, Polarity::negated}) {
+        EXPECT_EQ(
+            verify(claim(ClaimKind::includes, file_named("h2.h"), file_named("h1.h"), polarity),
+                   f.p.facts),
+            expected(unverified, VerdictReason::coverage_incomplete));
+    }
+}
+
 TEST(ClaimVerifierCalls, WarningsDoNotMakeADefinitionUnparsed) {
     Project p;
     p.facts.add_diagnostic("src/core.c", "src/core.c", DiagnosticSeverity::warning);

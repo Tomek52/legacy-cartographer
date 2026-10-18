@@ -1,8 +1,11 @@
 #include "verify/claim_verifier.hpp"
 
 #include <algorithm>
+#include <functional>
 #include <iterator>
 #include <optional>
+#include <set>
+#include <string>
 #include <string_view>
 #include <utility>
 #include <variant>
@@ -104,10 +107,11 @@ public:
     }
 
     /// "Was parsed" of the relation rules: under the root, no fatal error
-    /// anywhere in the analysis, and no error in the file or in the
-    /// translation unit it is the main file of. Clang's error recovery can
-    /// drop calls; after a fatal error it goes on parsing without reporting
-    /// errors, in any file the unit reaches, so nothing locates the damage.
+    /// anywhere in the analysis, and not reached by a translation unit with
+    /// an error (as its main file or through recorded include edges). Clang
+    /// suppresses follow-on errors at uses of an invalid declaration, so a
+    /// call in another file of the unit is dropped without a report there;
+    /// after a fatal error not even the include edges can be trusted.
     [[nodiscard]] Result<bool> was_parsed(const FileFact& file) const {
         if (file.is_external) {
             return false; // its directives and definitions are not recorded
@@ -116,11 +120,28 @@ public:
         if (!diagnostics) {
             return std::unexpected(diagnostics.error());
         }
-        return std::ranges::none_of(*diagnostics, [&](const DiagnosticFact& diagnostic) {
-            return diagnostic.severity == DiagnosticSeverity::fatal ||
-                   (is_error(diagnostic.severity) &&
-                    (diagnostic.file == file.path || diagnostic.translation_unit == file.path));
-        });
+        std::set<std::string, std::less<>> units_with_errors;
+        for (const DiagnosticFact& diagnostic : *diagnostics) {
+            if (diagnostic.severity == DiagnosticSeverity::fatal) {
+                return false;
+            }
+            if (is_error(diagnostic.severity)) {
+                if (diagnostic.file == file.path) {
+                    return false;
+                }
+                units_with_errors.insert(diagnostic.translation_unit);
+            }
+        }
+        for (const std::string& unit : units_with_errors) {
+            auto reached = reaches(unit, file.id);
+            if (!reached) {
+                return std::unexpected(reached.error());
+            }
+            if (*reached) {
+                return false;
+            }
+        }
+        return true;
     }
 
     [[nodiscard]] Result<bool> definition_was_parsed(const FunctionFact& function) const {
@@ -150,6 +171,38 @@ public:
     }
 
 private:
+    /// Whether the translation unit whose main file is `unit` reaches
+    /// `target`: it is the main file, or the recorded include edges lead
+    /// there from it. A unit whose main file is not recorded has no facts.
+    [[nodiscard]] Result<bool> reaches(std::string_view unit, facts::FileId target) const {
+        auto main_file = facts_->find_file(unit);
+        if (!main_file) {
+            return std::unexpected(main_file.error());
+        }
+        if (!*main_file) {
+            return false;
+        }
+        std::set<facts::FileId> seen{(*main_file)->id};
+        std::vector<facts::FileId> pending{(*main_file)->id};
+        while (!pending.empty()) {
+            const facts::FileId current = pending.back();
+            pending.pop_back();
+            if (current == target) {
+                return true;
+            }
+            auto includes = facts_->includes_of(current);
+            if (!includes) {
+                return std::unexpected(includes.error());
+            }
+            for (const IncludeFact& include : *includes) {
+                if (include.included && seen.insert(*include.included).second) {
+                    pending.push_back(*include.included);
+                }
+            }
+        }
+        return false;
+    }
+
     const Claim* claim_;
     const FactQuery* facts_;
 };

@@ -161,6 +161,38 @@ TEST_F(ClaimVerifierAnalysisTest, NoFalseVerdictAfterAFatalError) {
     }
 }
 
+// The facts of the recovery_expr README, which the next test relies on: k
+// is defined in h2.h with no calls, and the only diagnostic is a non-fatal
+// error in h1.h.
+TEST_F(ClaimVerifierAnalysisTest, RecoveryExprFixtureHidesADroppedCall) {
+    const auto store = analyze("recovery_expr", {"main.c", "other.c"}, "-I.");
+    ASSERT_NE(store, nullptr);
+    const std::vector<FunctionFact> k = value_of(store->find_functions("k"));
+    ASSERT_EQ(k.size(), 1U);
+    EXPECT_TRUE(k[0].is_definition);
+    EXPECT_TRUE(value_of(store->calls_from(k[0].id)).empty());
+    const std::vector<DiagnosticFact> diagnostics = value_of(store->diagnostics());
+    ASSERT_EQ(diagnostics.size(), 1U);
+    EXPECT_EQ(diagnostics[0].severity, DiagnosticSeverity::error);
+    EXPECT_EQ(diagnostics[0].file, "h1.h");
+    EXPECT_EQ(diagnostics[0].translation_unit, "main.c");
+}
+
+// Verifies: claim-relation-rules-v2 (a unit with an error reaches the file
+// through its include edges: not parsed), on the recovery_expr fixture.
+TEST_F(ClaimVerifierAnalysisTest, NoFalseVerdictAfterAnErrorInAnIncludedHeader) {
+    const auto store = analyze("recovery_expr", {"main.c", "other.c"}, "-I.");
+    ASSERT_NE(store, nullptr);
+    Claim does_not_call = calls("k", "g");
+    does_not_call.polarity = Polarity::negated;
+    for (const Claim& claim : {calls("k", "g"), does_not_call}) {
+        expect_coverage_incomplete(claim, *store);
+    }
+    // other.c is not reached by main.c: still checked.
+    const auto clean = value_of(lcart::verify::verify_claim(calls("other", "g"), *store));
+    EXPECT_EQ(clean.status, VerificationStatus::contradicted);
+}
+
 TEST_F(ClaimVerifierAnalysisTest, NotFoundUnderCompleteCoverageIsContradicted) {
     const auto store = analyze("broken_tu", {"ok.c", "also_ok.c"}, "-Iinclude");
     ASSERT_NE(store, nullptr);
