@@ -4,7 +4,7 @@
 - **Date:** 2026-10-18
 - **Requirements:** [NFR-009](../specs/requirements.md#nfr009-verifier-accuracy-measured-v1),
   [B-29](../plan/backlog.md#b29-labelled-claim-set-v1),
-  [testing strategy](../testing/strategy.md#testing-verifier-accuracy-v1),
+  [testing strategy](../testing/strategy.md#testing-verifier-accuracy-v2),
   [entity resolution](../specs/claim-schema.md#claim-entity-resolution-v3)
 - **Supersedes / superseded by:** — (narrows the open question on complete
   coverage that B-27 left to B-29; amends step 1 of the verification rules)
@@ -122,7 +122,7 @@ labels that break the format or cite a line past the end of their file
 (exit 2). CTest runs it on the fixture sets on every preset
 (`ClaimAccuracy.FixtureClaims`, with a self-test that a wrong label fails
 the gate); the `libmodbus baseline` job runs it on both sets and writes
-the result page (`docs/testing/verifier-accuracy.md`), which must not change
+[the result page](../testing/verifier-accuracy.md), which must not change
 (as the module map). Python, as the other repository scripts: the gate
 reads lcart's JSON report, so it needs no C++ of its own and links nothing.
 

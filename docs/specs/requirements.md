@@ -435,7 +435,7 @@ and publish the result with each release.
 Acceptance criteria:
 
 1. A labelled set of at least 200 claims over the fixtures and libmodbus,
-   including deliberately false claims (see [testing strategy](../testing/strategy.md#testing-verifier-accuracy-v1)).
+   including deliberately false claims (see [testing strategy](../testing/strategy.md#testing-verifier-accuracy-v2)).
 2. Precision of `confirmed` ≥ 0.99 and precision of `contradicted` ≥ 0.95;
    CI fails below these.
 

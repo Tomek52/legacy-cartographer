@@ -1,0 +1,2 @@
+{"format":"lcart-labelled-claims","format_version":1,"target":"fixture","fixture":"two_modules","units":["app/legacy.c","app/main.c","core/core.c"],"flags":["-I."]}
+{"id":"c-0001","kind":"calls","polarity":"affirmed","subject":{"type":"function","name":"main"},"object":{"type":"function","name":"app_run"},"expected":"contradicted","origin":"mutated","at":"tests/fixtures/two_modules/app/main.c:10","why":"Deliberately wrong label for the gate's self-test: main does call app_run."}

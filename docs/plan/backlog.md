@@ -38,7 +38,7 @@ expanded in place; its version is bumped if its meaning changes
 | [B-26](#b26-function-pointer-tables-v1) | ✅ `may_call` edges from function-pointer tables | M2 | FR-015 | – | 8 h |
 | [B-27](#b27-claim-verifier-v1) | ✅ Claim verifier | M2 | FR-010 | B-25, B-26 | 6 h |
 | [B-28](#b28-verification-report-v1) | ✅ Verification report and `lcart verify` | M2 | FR-010, FR-011 | B-27, B-30 | 4 h |
-| [B-29](#b29-labelled-claim-set-v1) | Labelled claim set and accuracy gate | M2 | NFR-009 | B-27 | 6 h |
+| [B-29](#b29-labelled-claim-set-v1) | ✅ Labelled claim set and accuracy gate | M2 | NFR-009 | B-27 | 6 h |
 | [B-30](#b30-facts-only-handoff-bundle-v1) | ✅ `lcart handoff`: facts-only bundle | M2 | FR-008, NFR-002 | B-26 | 6 h |
 | [B-31](#b31-include-source-excerpts-v1) | `--include-source` excerpts | M2 | NFR-002, NFR-010 | B-30 | 3 h |
 | [B-32](#b32-agent-permissions-in-bundle-v1) | Agent permission configuration in the bundle | M2 | NFR-010 | B-30 | 2 h |
@@ -46,7 +46,7 @@ expanded in place; its version is bumped if its meaning changes
 | [B-34](#b34-mermaid-check-in-ingest-v1) | Mermaid check of agent diagrams | M2 | FR-008 | B-33 | 3 h |
 | [B-35](#b35-no-raw-html-in-generated-docs-v1) | No raw HTML from the agent in published documents | M2 | NFR-010 | B-33 | 2 h |
 | [B-36](#b36-libmodbus-handoff-end-to-end-v1) | libmodbus handoff end to end without network | M2 | NFR-002 | B-31, B-33 | 3 h |
-| [B-37](#b37-real-agent-run-on-libmodbus-v1) | Real agent run on libmodbus, published | M2 | FR-008, NFR-009 | B-29, B-32, B-34, B-35, B-36 | 4 h |
+| [B-37](#b37-real-agent-run-on-libmodbus-v2) | Real agent run on libmodbus, published | M2 | FR-008, NFR-009 | B-29, B-32, B-34, B-35, B-36 | 4 h |
 | [B-38](#b38-resume-detects-edited-sources-v1) | `--resume` detects edited sources | M2 (carry-over) | NFR-004 | – | 5 h |
 | [B-39](#b39-adrs-for-merged-decisions-v1) | ✅ ADRs for the decisions of #29, #30 and #31 | M2 (carry-over) | NFR-010, NFR-013 | – | 2 h |
 | [B-40](#b40-msvc-delayed-template-parsing-v1) | ✅ MSVC delayed template parsing: decision | M2 (carry-over) | NFR-013 | – | 2 h |
@@ -1015,8 +1015,8 @@ Acceptance criteria: those of [NFR-009](../specs/requirements.md#nfr009-verifier
 plus:
 
 1. `tests/claims/labelled/` holds at least 200 claims in the sources 1 to 3
-   of the [testing strategy](../testing/strategy.md#testing-verifier-accuracy-v1)
-   (source 4 comes with [B-37](#b37-real-agent-run-on-libmodbus-v1)), with
+   of the [testing strategy](../testing/strategy.md#testing-verifier-accuracy-v2)
+   (source 4 comes with [B-37](#b37-real-agent-run-on-libmodbus-v2)), with
    at least 30 per claim kind and at least 60 false ones. Each label states
    the source file and line it was read from at the pinned libmodbus commit
    or in the fixture; labels are written from the code, never from lcart's
@@ -1036,10 +1036,27 @@ plus:
 4. A label that disagrees with the verifier is resolved by reading the code
    again: a wrong label is fixed with a note, a verifier bug is fixed with a
    test.
-5. The [testing strategy](../testing/strategy.md#testing-verifier-accuracy-v1)
+5. The [testing strategy](../testing/strategy.md#testing-verifier-accuracy-v2)
    is rewritten for assumption A12 (labels drafted by an agent from the
    code, a sample checked by the reviewer agent, also for source 4), with
    its anchor bumped to `-v2` and its referrers checked.
+
+Result (2026-10-18): 312 labelled claims in `tests/claims/labelled/`, 192
+of libmodbus and 120 of six fixtures (`calls` 117, `includes` 52,
+`depends_on` 37, `defines` 59, `belongs_to` 47; 119 false), in the format
+of [ADR-0031](../adr/0031-labelled-claim-set-and-accuracy-gate.md).
+`scripts/claim-accuracy.py` gates them in CTest (fixture sets) and in the
+`libmodbus baseline` job (both sets), and writes the
+[result page](../testing/verifier-accuracy.md). Measured on both sets:
+precision of `confirmed` 1.00 (158 of 158), precision of `contradicted`
+0.98 (108 of 110), recall of `contradicted` 0.91 (108 of 119), unverified
+rate 0.14 (44 of 312). The first measurement failed the gate (precision of
+`contradicted` 0.90): nine true claims calling functions declared outside
+the root were contradicted. That was a verifier rule, not a label: a callee
+that is not found is now `unverified`
+([ADR-0031](../adr/0031-labelled-claim-set-and-accuracy-gate.md#adr0031-callee-not-found-v1)).
+No label was changed after a disagreement; the two false contradictions
+left are an [open question](../open-questions.md#open-technical-questions).
 
 ### <a id="b30-facts-only-handoff-bundle-v1"></a>**[B-30 v1]** `lcart handoff`: facts-only bundle
 
@@ -1231,7 +1248,7 @@ for `handoff` and `ingest`, plus:
 4. The facts-only libmodbus bundle contains no comment text of libmodbus
    (a check with strings taken from its comments).
 
-### <a id="b37-real-agent-run-on-libmodbus-v1"></a>**[B-37 v1]** Real agent run on libmodbus, published
+### <a id="b37-real-agent-run-on-libmodbus-v2"></a>**[B-37 v2]** Real agent run on libmodbus, published
 
 M2's last Definition of Done items. The agent is Claude Code, started in
 the bundle directory in a session separate from the one implementing M2,
@@ -1244,8 +1261,10 @@ Acceptance criteria:
    bundle's permission configuration; its output is ingested and the
    documents and report are published on the documentation site, with the
    agent and model named.
-2. Its claims are labelled by hand and added to the labelled set (source 4
-   of the [testing strategy](../testing/strategy.md#testing-verifier-accuracy-v1));
+2. Its claims are labelled from the code, as the other labels are (drafted
+   by an agent, a sample checked by the reviewer agent: assumption A12), and
+   added to the labelled set (source 4 of the
+   [testing strategy](../testing/strategy.md#testing-verifier-accuracy-v2));
    the accuracy gate still passes.
 3. Failure modes seen (invented names, wrong direction, broken contract,
    instructions followed from the data) are recorded on the

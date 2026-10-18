@@ -126,6 +126,17 @@ jobs:
           "$(id -un)" "$PATH"
       - name: The committed module map is up to date
         run: git diff --exit-code -- docs/targets/libmodbus-map.md
+      - name: Verifier accuracy gate
+        # B-29 and ADR-0031: every labelled set (fixtures and libmodbus),
+        # one combined precision; fails below the NFR-009 targets.
+        # Verifies: nfr009-verifier-accuracy-measured-v1 (criterion 2),
+        # b29-labelled-claim-set-v1 (criteria 2 and 3).
+        run: >
+          python3 scripts/claim-accuracy.py --lcart build/release-system/src/cli/lcart
+          --work build/claim-accuracy --libmodbus-db build/targets/libmodbus/facts.lcart.db
+          --page docs/testing/verifier-accuracy.md
+      - name: The committed accuracy page is up to date
+        run: git diff --exit-code -- docs/testing/verifier-accuracy.md
       - name: Keep the libmodbus build log
         if: failure()
         uses: actions/upload-artifact@v4

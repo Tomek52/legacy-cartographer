@@ -113,6 +113,7 @@ nav:
   - Testing:
       - testing/index.md
       - Strategy: testing/strategy.md
+      - Verifier accuracy: testing/verifier-accuracy.md
   - Security: security.md
   - Targets:
       - targets/index.md

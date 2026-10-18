@@ -75,3 +75,25 @@ add_test(NAME Architecture.IncludeBoundariesSelfTest
             -P ${CMAKE_CURRENT_SOURCE_DIR}/architecture/include_boundaries_self_test.cmake)
 set_tests_properties(Architecture.IncludeBoundaries Architecture.IncludeBoundariesSelfTest
     PROPERTIES LABELS architecture)
+
+# Verifier accuracy on the labelled fixture claims (B-29, NFR-009,
+# ADR-0031): analyses each fixture set of tests/claims/labelled/ with lcart,
+# verifies its claims with `lcart verify` and fails below the precision
+# targets. The gate over both sets (fixtures and libmodbus) runs in CI's
+# `libmodbus baseline` job, the only place with a libmodbus fact database.
+# The self-test runs the same gate on a deliberately wrong label and passes
+# only if the gate reports the false confirmation.
+# Verifies: nfr009-verifier-accuracy-measured-v1 (criterion 2),
+# b29-labelled-claim-set-v1 (criteria 1 and 2, the fixture claims).
+find_package(Python3 REQUIRED COMPONENTS Interpreter)
+add_test(NAME ClaimAccuracy.FixtureClaims
+    COMMAND Python3::Interpreter ${PROJECT_SOURCE_DIR}/scripts/claim-accuracy.py
+            --lcart $<TARGET_FILE:lcart> --work ${CMAKE_CURRENT_BINARY_DIR}/claim-accuracy)
+add_test(NAME ClaimAccuracy.GateFailsOnFalseConfirmation
+    COMMAND Python3::Interpreter ${PROJECT_SOURCE_DIR}/scripts/claim-accuracy.py
+            --lcart $<TARGET_FILE:lcart> --work ${CMAKE_CURRENT_BINARY_DIR}/claim-accuracy-self-test
+            --labelled ${CMAKE_CURRENT_SOURCE_DIR}/claims/accuracy-self-test)
+set_tests_properties(ClaimAccuracy.GateFailsOnFalseConfirmation PROPERTIES
+    PASS_REGULAR_EXPRESSION "accuracy gate: FAIL[^\n]*precision of confirmed 0\\.00 < 0\\.99")
+set_tests_properties(ClaimAccuracy.FixtureClaims ClaimAccuracy.GateFailsOnFalseConfirmation
+    PROPERTIES LABELS cli)

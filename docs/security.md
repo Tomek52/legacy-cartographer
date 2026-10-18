@@ -128,7 +128,7 @@ to make it *do* something: delete files, run a command, send data to a URL.
 - The verifier prefers `unverified` over a doubtful `confirmed`
   ([claim schema](specs/claim-schema.md#claim-status-semantics-v1)), and its
   accuracy is measured
-  ([testing strategy](testing/strategy.md#testing-verifier-accuracy-v1)).
+  ([testing strategy](testing/strategy.md#testing-verifier-accuracy-v2)).
 
 ### <a id="security-malicious-build-input-v1"></a>T5. Malicious compilation database or source
 

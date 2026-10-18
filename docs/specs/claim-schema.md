@@ -213,7 +213,7 @@ outcomes do not swap.
 The worst verifier error is a false `confirmed` (it lends authority to a
 wrong statement), so the rules prefer `unverified` whenever the evidence is
 incomplete. Accuracy is measured as described in the
-[testing strategy](../testing/strategy.md#testing-verifier-accuracy-v1).
+[testing strategy](../testing/strategy.md#testing-verifier-accuracy-v2).
 
 ## <a id="claim-verification-report-format-v1"></a>Verification report (format 1)
 

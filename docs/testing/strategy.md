@@ -82,26 +82,46 @@ building a wrapper on top of it (M3, then M5).
 - AFL++ for libmodbus is optional (M4): it adds value with a different
   mutation strategy only once libFuzzer coverage plateaus.
 
-## <a id="testing-verifier-accuracy-v1"></a>Measuring the verifier's accuracy
+## <a id="testing-verifier-accuracy-v2"></a>Measuring the verifier's accuracy
 
 The verifier is the product's core promise, so it is measured like a
 classifier, independently of any LLM.
 
-**Labelled claim set.** `tests/claims/labelled/*.json`: claims with the
-expected status, written by a human from reading the code (not from the fact
-database). Sources:
+**Labelled claim set.** `tests/claims/labelled/*.jsonl`, one set per
+fixture and one for libmodbus, in the format of
+[ADR-0031](../adr/0031-labelled-claim-set-and-accuracy-gate.md#adr0031-labelled-set-format-v1).
+Each label is the truth of the claim in the analysed configuration
+([ADR-0031](../adr/0031-labelled-claim-set-and-accuracy-gate.md#adr0031-labels-from-analysed-configuration-v1)):
+`confirmed` if the code as compiled makes the statement true,
+`contradicted` if it makes it false, `unverified` only if the code cannot
+settle it (a call through a pointer). Each label cites the file and line it
+was read from, at the pinned libmodbus commit or in the fixture, and says
+why in one sentence. Labels are written from the code, never from the fact
+database or lcart's output.
 
-1. **True claims** sampled from the fixtures and from libmodbus, checked by
-   reading the code.
+Who labels (assumption A12): the implementing agent drafts the labels from
+the code; the reviewer agent re-reads a random sample of at least 20
+against the source in the pull request, and a wrong label in the sample
+sends the whole claim kind back for a re-read. The same holds for source 4.
+A label that disagrees with the verifier is resolved by reading the code
+again: a wrong label is fixed with a note, a verifier bug with a test.
+
+Sources:
+
+1. **True claims** sampled from the fixtures and from libmodbus, including
+   calls to functions declared outside the root (`memcpy`), which the
+   analysis does not record.
 2. **Mutated false claims**, generated from true ones and then reviewed:
    swap callee for a function that exists but is not called; reverse an
    include; negate; invent a plausible name (`modbus_rtu_check_crc`-style);
-   attribute a `static` function to the wrong file.
-3. **Hard cases** expected to be `unverified`: calls through the backend
-   table, calls only inside `#ifdef` branches not compiled with the given
-   flags, functions in TUs that failed to parse.
+   attribute a `static` function to the wrong file; name code that only an
+   inactive `#if` branch has (false in the analysed configuration).
+3. **Hard cases**, which the verifier is expected to leave `unverified`
+   whatever their label: calls through the backend table, names that
+   denote several functions, functions in units that failed to parse.
 4. **Real agent claims** (from M2): claims produced by the agents and models
-   used, labelled by hand. These show which mistakes models actually make.
+   used, labelled the same way. These show which mistakes models actually
+   make.
 
 **Metrics** (per claim kind and overall), from the confusion matrix of
 expected vs actual status:
@@ -115,8 +135,12 @@ expected vs actual status:
 - **Unverified rate**: how often the tool cannot decide; tracked over time.
 
 These targets are [NFR-009](../specs/requirements.md#nfr009-verifier-accuracy-measured-v1).
-CI fails below the targets. The labelled set grows with every bug found in
-the verifier.
+`scripts/claim-accuracy.py` computes them
+([ADR-0031](../adr/0031-labelled-claim-set-and-accuracy-gate.md#adr0031-accuracy-gate-v1)):
+CTest runs it on the fixture sets on every preset, and CI's `libmodbus
+baseline` job on all sets, failing below the targets and regenerating the
+[result page](verifier-accuracy.md). The labelled set grows with every bug
+found in the verifier.
 
 **Not measured here:** how often LLMs are wrong. That is a property of the
 model; the report's per-status counts for real runs show it, and a table per
