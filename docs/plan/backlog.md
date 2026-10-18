@@ -918,9 +918,9 @@ Calls through `set_rts`, assigned in code, get none.
 Acceptance criteria: those of [FR-010](../specs/requirements.md#fr010-verify-claims-v1)
 except criterion 3 (B-28), plus:
 
-1. `verify::verify_claim` implements [entity resolution](../specs/claim-schema.md#claim-entity-resolution-v1),
-   the [relation rules](../specs/claim-schema.md#claim-relation-rules-v1)
-   and [negation](../specs/claim-schema.md#claim-negation-rule-v1) as
+1. `verify::verify_claim` implements [entity resolution](../specs/claim-schema.md#claim-entity-resolution-v2),
+   the [relation rules](../specs/claim-schema.md#claim-relation-rules-v2)
+   and [negation](../specs/claim-schema.md#claim-negation-rule-v2) as
    written; every cell of the relation table and every resolution outcome
    has a test against a `FactQuery` fake, named after the cell.
 2. `may_call` edges never confirm a `calls` claim; they make an absent
