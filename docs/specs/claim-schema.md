@@ -111,7 +111,7 @@ Example:
 (Function names taken from libmodbus v3.2.0 `src/modbus.c`; whether the call
 is direct is for the verifier to decide.)
 
-## <a id="claim-verification-rules-v1"></a>Verification rules
+## <a id="claim-verification-rules-v2"></a>Verification rules
 
 Verification is a pure function of the claim and the fact database. It is
 deterministic and needs no LLM.
@@ -151,23 +151,32 @@ evidence; for `coverage_incomplete`, none.
 
 ### <a id="claim-relation-rules-v2"></a>Step 2: check the relation (affirmed claims)
 
-A file **was parsed** when it is under the analysis root, no error or fatal
-diagnostic is located in it, and it is not the main file of a translation
-unit with one: Clang's error recovery can drop calls, and a fatal error
-stops a translation unit before the rest of its file. A function's
-**definition was parsed** when the function is recorded as a definition and
-its file was parsed. A function belongs to the module of its file.
+A file **was parsed** when it is under the analysis root, no translation
+unit of the analysis has a fatal diagnostic, no error is located in the
+file, and it is not the main file of a translation unit with an error.
+Clang's error recovery can drop calls and declarations where it reports an
+error. After a fatal error (a missing `#include`, too many errors) Clang
+goes on parsing the unit but reports no further errors, so the damage it
+recovers from is not recorded anywhere, in any file the unit reaches. The
+include edges recorded for that unit cannot be trusted to say which files
+those are, so any fatal error in the analysis means no file counts as
+parsed. A function's **definition was parsed** when the function is recorded
+as a definition and its file was parsed. A function belongs to the module of
+its file; a function whose file is not recorded is an inconsistent fact
+database, an error rather than a verdict.
 
 | Kind | Relation found | Relation absent |
 |---|---|---|
 | `calls` | a direct call from subject to object: `confirmed` (evidence: those calls) | `unverified` / `coverage_incomplete` if the subject's definition was not parsed; else `unverified` / `indirect_calls_present` if it has indirect calls (incl. `may_call` edges, [FR-015](requirements.md#fr015-resolve-function-pointer-tables-v1); evidence: its indirect calls and its `may_call` edges to the object); else `contradicted` (evidence: the subject) |
 | `includes` | an include directive in subject resolving to object: `confirmed` (evidence: those directives) | `contradicted` if subject was parsed (evidence: the subject); else `unverified` / `coverage_incomplete` |
-| `depends_on` | the module dependency: `confirmed` (evidence: the include directives and calls that justify it) | `contradicted` if coverage is complete (evidence: the subject); else `unverified` / `coverage_incomplete` |
+| `depends_on` | the module dependency: `confirmed` (evidence: the include directives and calls that justify it) | `unverified` / `indirect_calls_present` if a function of subject has a `may_call` edge to a function of object (evidence: those edges); else `contradicted` if coverage is complete (evidence: the subject); else `unverified` / `coverage_incomplete` |
 | `defines` | object recorded as a definition located in subject: `confirmed` (evidence: the object) | `contradicted` if subject was parsed (evidence: the subject); else `unverified` / `coverage_incomplete` |
 | `belongs_to` | subject's module is object: `confirmed` | `contradicted`; evidence either way: the subject, and for a function also its file |
 
 The reason is `relation_found` or `relation_absent` unless the table names
-another. `may_call` edges never make a `calls` relation found. Evidence
+another. `may_call` edges never make a `calls` or `depends_on` relation
+found (they are no module dependencies,
+[ADR-0026](../adr/0026-may-call-edges-from-function-pointer-tables.md)). Evidence
 names rows of the fact database, each with its table
 ([ADR-0029](../adr/0029-verdict-evidence-names-its-fact-table.md)).
 

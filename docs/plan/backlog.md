@@ -936,12 +936,16 @@ except criterion 3 (B-28), plus:
 5. If a rule turns out ambiguous while implementing it, the claim schema is
    corrected first, with a version bump, in the same pull request.
 
-Result (2026-10-18): the claim schema was corrected first: entity
-resolution, relation rules and negation are v2. A function's `file` only
+Result (2026-10-18): the claim schema was corrected first: the
+verification rules, entity resolution, relation rules and negation are
+v2. A function's `file` only
 disambiguates, because the fact database locates a function at its
 definition only; files match exactly before by suffix; complete coverage
 needs at least one translation unit. "Was parsed" means no error in the
-file or its translation unit. `defines` contradicts only for a parsed
+file or its translation unit and no fatal error anywhere in the analysis
+(after one, Clang reports nothing more while it recovers; found in
+review). A `depends_on` reached only through `may_call` edges is
+`unverified` / `indirect_calls_present`. `defines` contradicts only for a parsed
 file, as the status semantics ask, and negation does not apply to step 1.
 `verify::verify_claim` (`src/verify/src/claim_verifier.cpp`) returns
 `common::Result<Verdict>`, so a database that cannot be read is an error.
@@ -951,8 +955,10 @@ which include directives and call edges now carry their ids.
 `tests/verify/claim_verifier_test.cpp` checks every cell and resolution
 outcome against a `FactQuery` fake (each also failed against a stub
 verdict first). `claim_verifier_analysis_test.cpp` checks criteria 2 and
-4 on the `fn_pointers` and `broken_tu` databases after a real analysis.
-A true claim naming a function outside the analysis root (`printf`) is
+4 on the `fn_pointers` and `broken_tu` databases after a real analysis,
+and the fatal-error case on the new `fatal_nested` fixture. A true claim
+naming code the analysis never saw (a function outside the root such as
+`printf`, a unit excluded or missing from the compilation database) is
 contradicted / `entity_not_found`; this is an
 [open question](../open-questions.md#open-technical-questions) for B-29.
 
