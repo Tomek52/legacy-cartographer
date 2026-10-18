@@ -1,6 +1,7 @@
 #include "verify/claim_verifier.hpp"
 
 #include <algorithm>
+#include <cstdint>
 #include <iterator>
 #include <optional>
 #include <string_view>
@@ -246,7 +247,18 @@ struct Resolution {
     Verdict verdict;
 };
 
-Result<Resolution> resolve(const Context& context, const EntityRef& entity) {
+/// What an entity that is not found under complete coverage means.
+enum class NotFound : std::uint8_t {
+    /// It does not exist in the analysed code: contradicted.
+    contradicts,
+    /// It may exist outside what the analysis records: unverified. The
+    /// callee of a `calls` claim, because functions declared only outside
+    /// the root (`printf`) are not recorded (ADR-0031).
+    cannot_tell,
+};
+
+Result<Resolution> resolve(const Context& context, const EntityRef& entity,
+                           NotFound not_found = NotFound::contradicts) {
     auto found = candidates(context.facts(), entity);
     if (!found) {
         return std::unexpected(found.error());
@@ -267,12 +279,17 @@ Result<Resolution> resolve(const Context& context, const EntityRef& entity) {
     if (!complete) {
         return std::unexpected(complete.error());
     }
+    if (!*complete) {
+        return Resolution{.entity = std::nullopt,
+                          .verdict = context.verdict(VerificationStatus::unverified,
+                                                     VerdictReason::coverage_incomplete)};
+    }
     // No fact to cite: the coverage is the evidence (verdict.hpp).
     return Resolution{.entity = std::nullopt,
-                      .verdict = *complete ? context.verdict(VerificationStatus::contradicted,
-                                                             VerdictReason::entity_not_found)
-                                           : context.verdict(VerificationStatus::unverified,
-                                                             VerdictReason::coverage_incomplete)};
+                      .verdict = context.verdict(not_found == NotFound::contradicts
+                                                     ? VerificationStatus::contradicted
+                                                     : VerificationStatus::unverified,
+                                                 VerdictReason::entity_not_found)};
 }
 
 // --- Step 2: check the relation (affirmed) --------------------------------
@@ -541,7 +558,9 @@ Result<Verdict> verify_claim(const Claim& claim, const FactQuery& facts) {
     if (!subject->entity) {
         return std::move(subject->verdict);
     }
-    auto object = resolve(context, claim.object);
+    auto object = resolve(context, claim.object,
+                          claim.kind == claims::ClaimKind::calls ? NotFound::cannot_tell
+                                                                 : NotFound::contradicts);
     if (!object) {
         return std::unexpected(object.error());
     }

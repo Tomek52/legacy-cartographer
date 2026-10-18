@@ -918,7 +918,7 @@ Calls through `set_rts`, assigned in code, get none.
 Acceptance criteria: those of [FR-010](../specs/requirements.md#fr010-verify-claims-v1)
 except criterion 3 (B-28), plus:
 
-1. `verify::verify_claim` implements [entity resolution](../specs/claim-schema.md#claim-entity-resolution-v2),
+1. `verify::verify_claim` implements [entity resolution](../specs/claim-schema.md#claim-entity-resolution-v3),
    the [relation rules](../specs/claim-schema.md#claim-relation-rules-v2)
    and [negation](../specs/claim-schema.md#claim-negation-rule-v2) as
    written; every cell of the relation table and every resolution outcome

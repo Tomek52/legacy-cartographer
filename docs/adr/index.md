@@ -45,3 +45,4 @@ Rules:
 | [0028](0028-handoff-bundle-paths-run-id-and-contract-texts.md) | Handoff bundle: paths, run ID, command line and the texts of the contract | Accepted (decided by delegation) |
 | [0029](0029-verdict-evidence-names-its-fact-table.md) | Verdict evidence names its fact table | Accepted |
 | [0030](0030-verification-report-and-lcart-verify.md) | Verification report and `lcart verify` | Accepted (decided by delegation) |
+| [0031](0031-labelled-claim-set-and-accuracy-gate.md) | Labelled claim set, accuracy gate and callees that are not found | Accepted (decided by delegation) |

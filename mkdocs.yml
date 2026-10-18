@@ -109,6 +109,7 @@ nav:
       - adr/0028-handoff-bundle-paths-run-id-and-contract-texts.md
       - adr/0029-verdict-evidence-names-its-fact-table.md
       - adr/0030-verification-report-and-lcart-verify.md
+      - adr/0031-labelled-claim-set-and-accuracy-gate.md
   - Testing:
       - testing/index.md
       - Strategy: testing/strategy.md

@@ -1940,7 +1940,7 @@ protected:
                   read_file(golden_verify() / "verification-report.md"));
         EXPECT_EQ(read_file(out() / "verification-report.json"),
                   read_file(golden_verify() / "verification-report.json"));
-        EXPECT_NE(verified.out.find("4 confirmed, 1 unverified, 3 contradicted"), std::string::npos)
+        EXPECT_NE(verified.out.find("4 confirmed, 2 unverified, 2 contradicted"), std::string::npos)
             << verified.out;
         EXPECT_NE(verified.out.find((out() / "verification-report.md").string()), std::string::npos)
             << verified.out;

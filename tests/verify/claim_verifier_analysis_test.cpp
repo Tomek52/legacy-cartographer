@@ -1,7 +1,7 @@
 // Verifies: b27-claim-verifier-v1 (criterion 4: failed translation units
 // turn entity_not_found into unverified / coverage_incomplete, on the
 // broken_tu fixture's database; criterion 2 on fn_pointers), through the
-// real SqliteFactStore after analysis; claim-entity-resolution-v2 and
+// real SqliteFactStore after analysis; claim-entity-resolution-v3 and
 // claim-relation-rules-v2 ("was parsed").
 #include "analysis/clang_analyzer.hpp"
 #include "facts/sqlite_fact_store.hpp"
@@ -231,10 +231,16 @@ TEST_F(ClaimVerifierAnalysisTest, NoFalseVerdictWhenNoEdgeLeadsFromTheError) {
 TEST_F(ClaimVerifierAnalysisTest, NotFoundUnderCompleteCoverageIsContradicted) {
     const auto store = analyze("broken_tu", {"ok.c", "also_ok.c"}, "-Iinclude");
     ASSERT_NE(store, nullptr);
-    const auto missing = value_of(lcart::verify::verify_claim(calls("main", "imagined"), *store));
+    const auto missing = value_of(lcart::verify::verify_claim(calls("imagined", "main"), *store));
     EXPECT_EQ(missing.status, VerificationStatus::contradicted);
     EXPECT_EQ(missing.reason, VerdictReason::entity_not_found);
     EXPECT_TRUE(missing.evidence.empty());
+    // printf is declared outside the root, so it is not recorded: a callee
+    // that is not found may still be called (ADR-0031).
+    const auto outside = value_of(lcart::verify::verify_claim(calls("main", "printf"), *store));
+    EXPECT_EQ(outside.status, VerificationStatus::unverified);
+    EXPECT_EQ(outside.reason, VerdictReason::entity_not_found);
+    EXPECT_TRUE(outside.evidence.empty());
     // Without an error in the analysis, an absent call is contradicted.
     const auto absent = value_of(lcart::verify::verify_claim(calls("also_ok", "main"), *store));
     EXPECT_EQ(absent.status, VerificationStatus::contradicted);

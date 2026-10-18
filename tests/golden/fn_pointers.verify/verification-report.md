@@ -11,12 +11,12 @@
 
 | Kind | confirmed | unverified | contradicted | total |
 |---|---|---|---|---|
-| `calls` | 2 | 1 | 2 | 5 |
+| `calls` | 2 | 2 | 1 | 5 |
 | `includes` | 1 | 0 | 0 | 1 |
 | `depends_on` | 0 | 0 | 0 | 0 |
 | `defines` | 0 | 0 | 1 | 1 |
 | `belongs_to` | 1 | 0 | 0 | 1 |
-| all | 4 | 1 | 3 | 8 |
+| all | 4 | 2 | 2 | 8 |
 
 ## Contradicted claims
 
@@ -38,13 +38,6 @@
 - Evidence:
   - file `core.c`
 
-### `c-0006`
-
-- Claim (`calls`, affirmed): function `run` → function `modbus_flush`
-- Text: `run flushes the context with modbus_flush.`
-- Reason: `entity_not_found`
-- Evidence: no fact to cite; the coverage below is the evidence
-
 ## Unverified claims
 
 ### `c-0002`
@@ -57,6 +50,13 @@
   - `core.c:10:16` indirect call from `transfer` via `backend.send`
   - `core.c:11:19` indirect call from `transfer` via `backend.recv`
   - `core.c:10:16` `may_call` edge from `transfer` to `tcp_send` via `backend.send`
+
+### `c-0006`
+
+- Claim (`calls`, affirmed): function `run` → function `modbus_flush`
+- Text: `run flushes the context with modbus_flush.`
+- Reason: `entity_not_found`
+- Evidence: no fact to cite; the coverage below is the evidence
 
 ## Coverage
 

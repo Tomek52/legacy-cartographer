@@ -116,7 +116,7 @@ is direct is for the verifier to decide.)
 Verification is a pure function of the claim and the fact database. It is
 deterministic and needs no LLM.
 
-### <a id="claim-entity-resolution-v2"></a>Step 1: resolve entities
+### <a id="claim-entity-resolution-v3"></a>Step 1: resolve entities
 
 The subject is resolved first, then the object; the first entity that does
 not resolve decides the verdict.
@@ -137,7 +137,12 @@ not resolve decides the verdict.
 - **module:** by exact name.
 - **Not found:** if analysis coverage is complete, `contradicted` /
   `entity_not_found` (the LLM named something that does not exist, a typical
-  hallucination). If coverage is incomplete, `unverified` /
+  hallucination), except for the object of a `calls` claim: a function
+  declared only outside the analysis root (`printf`) is not recorded
+  ([function facts](../architecture/data-model.md#arch-data-model-function-facts-v2)),
+  so a callee that is not found is `unverified` / `entity_not_found`
+  ([ADR-0031](../adr/0031-labelled-claim-set-and-accuracy-gate.md#adr0031-callee-not-found-v1)).
+  If coverage is incomplete, `unverified` /
   `coverage_incomplete`. Coverage is **complete** when at least one
   translation unit was analysed and every one was parsed; a database without
   coverage counts as incomplete.
@@ -228,7 +233,7 @@ The JSON report has these keys, in this order, every key always present:
 | `fact_schema_version` | the fact database's schema version |
 | `handoff_contract_version` | the contract version of the bundle the claims answer; `null` for `lcart verify` |
 | `agent` | the agent and model as the user stated them (`lcart ingest --agent`); `""` for `lcart verify` |
-| `coverage` | `translation_units_total`, `translation_units_parsed`, `complete` (at least one unit, every one parsed: [entity resolution](#claim-entity-resolution-v2)), `error_diagnostics` (errors and fatal errors: with any, no file [was parsed](#claim-relation-rules-v2)) |
+| `coverage` | `translation_units_total`, `translation_units_parsed`, `complete` (at least one unit, every one parsed: [entity resolution](#claim-entity-resolution-v3)), `error_diagnostics` (errors and fatal errors: with any, no file [was parsed](#claim-relation-rules-v2)) |
 | `counts` | `by_status`: `confirmed`, `unverified`, `contradicted` and their counts; `by_kind`: the five claim kinds in the order of [claim kinds](#claim-kinds-v1), each with the three counts |
 | `claims` | every claim, in the order of the claims file: `id`, `kind`, `polarity`, `subject` and `object` (`type`, `name`, `file` or `null`), `text`, `source` (`document`, `section`, `""` if not given), then the verdict: `status`, `reason`, `evidence` |
 

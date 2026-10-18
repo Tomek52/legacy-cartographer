@@ -14,14 +14,14 @@
   "counts": {
     "by_status": {
       "confirmed": 4,
-      "unverified": 1,
-      "contradicted": 3
+      "unverified": 2,
+      "contradicted": 2
     },
     "by_kind": {
       "calls": {
         "confirmed": 2,
-        "unverified": 1,
-        "contradicted": 2
+        "unverified": 2,
+        "contradicted": 1
       },
       "includes": {
         "confirmed": 1,
@@ -245,7 +245,7 @@
         "document": "",
         "section": ""
       },
-      "status": "contradicted",
+      "status": "unverified",
       "reason": "entity_not_found",
       "evidence": []
     },

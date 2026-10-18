@@ -1,6 +1,6 @@
 // Verifies: fr010-verify-claims-v1 (criteria 1 and 2: every rule of the
 // claim schema, each possible outcome, against a FactQuery fake; no LLM),
-// b27-claim-verifier-v1 (criteria 1-3), claim-entity-resolution-v2,
+// b27-claim-verifier-v1 (criteria 1-3), claim-entity-resolution-v3,
 // claim-relation-rules-v2, claim-negation-rule-v2,
 // claim-verification-rules-v2, adr0029-fact-references-v1.
 // Criterion 4 of B-27 runs on a real analysis: claim_verifier_analysis_test.cpp.
@@ -423,9 +423,26 @@ TEST(ClaimVerifierResolution, ModuleByExactNameOnly) {
 TEST(ClaimVerifierResolution, NotFoundUnderCompleteCoverageIsContradicted) {
     const Project p;
     // No fact to cite: the evidence is the coverage (b27 criterion 3).
-    EXPECT_EQ(verify(claim(ClaimKind::calls, function_named("main"), function_named("imagined")),
+    EXPECT_EQ(verify(claim(ClaimKind::calls, function_named("imagined"), function_named("main")),
                      p.facts),
               expected(contradicted, VerdictReason::entity_not_found));
+    EXPECT_EQ(verify(claim(ClaimKind::defines, file_named("core.c"), function_named("imagined")),
+                     p.facts),
+              expected(contradicted, VerdictReason::entity_not_found));
+}
+
+// The callee of a `calls` claim may be declared only outside the analysis
+// root (`printf`), and such functions are not recorded: a callee that is
+// not found is unverified, in both polarities (ADR-0031).
+// Verifies: claim-entity-resolution-v3, adr0031-callee-not-found-v1
+TEST(ClaimVerifierResolution, CalleeNotFoundUnderCompleteCoverageIsUnverified) {
+    const Project p;
+    for (const Polarity polarity : {Polarity::affirmed, Polarity::negated}) {
+        EXPECT_EQ(verify(claim(ClaimKind::calls, function_named("main"), function_named("printf"),
+                               polarity),
+                         p.facts),
+                  expected(unverified, VerdictReason::entity_not_found));
+    }
 }
 
 TEST(ClaimVerifierResolution, NotFoundUnderIncompleteCoverageIsUnverified) {
@@ -446,7 +463,7 @@ TEST(ClaimVerifierResolution, NotFoundWithoutCoverageIsUnverified) {
 
 TEST(ClaimVerifierResolution, OutcomesDoNotDependOnPolarity) {
     Project p;
-    EXPECT_EQ(verify(claim(ClaimKind::calls, function_named("main"), function_named("imagined"),
+    EXPECT_EQ(verify(claim(ClaimKind::calls, function_named("imagined"), function_named("main"),
                            Polarity::negated),
                      p.facts),
               expected(contradicted, VerdictReason::entity_not_found));
