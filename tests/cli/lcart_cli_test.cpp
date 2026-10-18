@@ -2000,6 +2000,17 @@ TEST_F(LcartVerifyTest, InvalidOrMissingClaimsFileWritesNoReport) {
     EXPECT_FALSE(fs::exists(out()));
 }
 
+// Verifies: adr0030-command-line-v1 (the claims file is read one byte past
+// the parser's 4 MiB limit, so a larger file is a usage error).
+TEST_F(LcartVerifyTest, ClaimsFileOverTheLimitIsAUsageError) {
+    const fs::path claims = work_dir() / "claims.json";
+    std::ofstream{claims} << std::string((4U * 1024U * 1024U) + 1U, ' ');
+    const Outcome oversized = verify(claims, fn_pointers_database());
+    EXPECT_EQ(oversized.status, exit_usage) << oversized.err;
+    EXPECT_NE(oversized.err.find("larger than 4 MiB"), std::string::npos) << oversized.err;
+    EXPECT_FALSE(fs::exists(out()));
+}
+
 // Verifies: adr0030-command-line-v1 (lcart replaces only its own reports:
 // a file of another kind under either name stops the run before anything
 // is written).

@@ -103,7 +103,8 @@ the agent, a table of counts per kind and status, the contradicted and
 then the unverified claims (confirmed ones are only counted), each with
 its statement, text, source, reason and evidence, then the coverage.
 Every name, path and claim text in it is a Markdown code span (ADR-0017),
-so agent output cannot add headings, links or HTML. Neither format holds a
+with `|` written `\|` in a table cell, so agent output cannot add
+headings, links or HTML or split a cell. Neither format holds a
 generation time, so identical input gives identical bytes (NFR-004).
 `handoff_contract_version` is `null` and `agent` empty for
 `lcart verify`; `lcart ingest` (B-33) fills both. `format_version` changes
@@ -132,5 +133,8 @@ for B-33.
   (`<outside-root>/x.h`) is still `contradicted` / `entity_not_found` under
   complete coverage, although the report would print that name; B-33
   decides the mapping.
+- The two reports are replaced one after the other. If the second write
+  fails (a full disk), the run exits 1 with the new Markdown report next to
+  the earlier JSON one; rerunning `lcart verify` makes them agree again.
 - A script that treated any non-zero exit of a future `lcart verify` as a
   crash must accept 6, which means the run succeeded.

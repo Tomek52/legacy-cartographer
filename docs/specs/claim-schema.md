@@ -254,8 +254,8 @@ the versions and the agent, then `## Counts` (per kind and status, and a
 row `all`), `## Contradicted claims` and `## Unverified claims` (each claim
 with its statement, text, source, reason and evidence as `file:line`, or
 `file:line:column` for a call), and `## Coverage`. Confirmed claims are
-only counted. Every name, path and text is a code span, so a claim's text
-cannot add Markdown or HTML.
+only counted. Every name, path and text is a code span, and a `|` in a
+table cell is written `\|`, so a claim's text cannot add Markdown or HTML.
 
 ## Out of scope for v1
 

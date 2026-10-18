@@ -508,16 +508,30 @@ void claims_markdown(std::string& doc, const std::vector<Entry>& entries,
     }
 }
 
+// GitHub splits a table row at every unescaped `|`, even inside a code
+// span; `\|` keeps it in the cell and renders as `|`.
+std::string table_cell(const std::string& text) {
+    std::string cell;
+    for (const char c : text) {
+        if (c == '|') {
+            cell += '\\';
+        }
+        cell += c;
+    }
+    return cell;
+}
+
 std::string markdown_report(const VerificationReport& report, const std::vector<Entry>& entries,
                             const Counts& counts, const Coverage& coverage) {
     std::string doc = "# Verification report\n\n| Item | Value |\n|---|---|\n";
-    doc += "| Tool version | " + code_span(common::version) + " |\n";
+    doc += "| Tool version | " + table_cell(code_span(common::version)) + " |\n";
     doc += "| Fact schema version | " + std::to_string(facts::schema_version) + " |\n";
     doc += "| Handoff contract version | " +
            (report.handoff_contract_version ? std::to_string(*report.handoff_contract_version)
                                             : std::string{"none"}) +
            " |\n";
-    doc += "| Agent | " + (report.agent.empty() ? std::string{"none"} : code_span(report.agent)) +
+    doc += "| Agent | " +
+           (report.agent.empty() ? std::string{"none"} : table_cell(code_span(report.agent))) +
            " |\n";
 
     doc += "\n## Counts\n\n| Kind | confirmed | unverified | contradicted | total |\n"

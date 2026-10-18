@@ -343,6 +343,14 @@ TEST(VerificationReport, UntrustedTextCannotAddMarkdown) {
         << markdown;
 }
 
+TEST(VerificationReport, AgentCannotSplitItsTableCell) {
+    const Facts facts;
+    VerificationReport report = report_of(facts);
+    report.agent = "x | y";
+    const std::string markdown = written(report, *facts.store, ReportFormat::markdown);
+    EXPECT_NE(markdown.find("| Agent | `x \\| y` |\n"), std::string::npos) << markdown;
+}
+
 TEST(VerificationReport, SameInputGivesTheSameBytes) {
     const Facts facts;
     for (const ReportFormat format : {ReportFormat::json, ReportFormat::markdown}) {
