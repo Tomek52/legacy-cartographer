@@ -604,13 +604,43 @@ TEST(ClaimVerifierCalls, AbsentWithDefinitionReachedByAUnitWithAnErrorIsCoverage
     }
 }
 
-TEST(ClaimVerifierCalls, AbsentWithDefinitionNotReachedByAUnitWithAnErrorIsContradicted) {
-    // src/core.c is not reached from main.c: the error cannot have touched
-    // run's body.
+TEST(ClaimVerifierCalls, AbsentWithAnErrorAnywhereIsCoverageIncomplete) {
+    // No recorded edge leads from main.c to src/core.c, but edges cannot
+    // bound what a unit with an error reached.
     const ErrorInIncludedHeader f;
-    EXPECT_EQ(
-        verify(claim(ClaimKind::calls, function_named("run"), function_named("init")), f.p.facts),
-        expected(contradicted, VerdictReason::relation_absent, {ref(f.p.run)}));
+    for (const Polarity polarity : {Polarity::affirmed, Polarity::negated}) {
+        EXPECT_EQ(
+            verify(claim(ClaimKind::calls, function_named("run"), function_named("init"), polarity),
+                   f.p.facts),
+            expected(unverified, VerdictReason::coverage_incomplete));
+    }
+}
+
+TEST(ClaimVerifierCalls, AbsentWithAnErrorInAUnitOutsideTheRootIsCoverageIncomplete) {
+    // A generated main file outside the root: its diagnostic names no unit
+    // spelled like a recorded file, and it has no include edges.
+    Project p;
+    p.facts.add_diagnostic("", "src/core.h", DiagnosticSeverity::error);
+    for (const Polarity polarity : {Polarity::affirmed, Polarity::negated}) {
+        EXPECT_EQ(
+            verify(claim(ClaimKind::calls, function_named("run"), function_named("init"), polarity),
+                   p.facts),
+            expected(unverified, VerdictReason::coverage_incomplete));
+    }
+}
+
+TEST(ClaimVerifierCalls, AbsentWithAnErrorInAUnitWithoutEdgeToTheSubjectIsCoverageIncomplete) {
+    // main.c includes an external wrapper that includes src/core.c's
+    // header; directives of external files are not recorded, so no edge.
+    Project p;
+    p.facts.add_include(p.main_c, p.stdio_h);
+    p.facts.add_diagnostic("app/main.c", "app/main.c", DiagnosticSeverity::error);
+    for (const Polarity polarity : {Polarity::affirmed, Polarity::negated}) {
+        EXPECT_EQ(
+            verify(claim(ClaimKind::defines, file_named("core.h"), function_named("run"), polarity),
+                   p.facts),
+            expected(unverified, VerdictReason::coverage_incomplete));
+    }
 }
 
 TEST(ClaimVerifierIncludes, AbsentWithSubjectReachedByAUnitWithAnErrorIsUnverified) {

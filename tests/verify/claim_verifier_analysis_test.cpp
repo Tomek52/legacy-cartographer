@@ -9,6 +9,7 @@
 
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <cstddef>
 #include <filesystem>
 #include <fstream>
@@ -94,6 +95,12 @@ Claim calls(const std::string& caller, const std::string& callee) {
             .text = caller + " calls " + callee};
 }
 
+void expect_coverage_incomplete(const Claim& claim, const FactQuery& facts) {
+    const auto verdict = value_of(lcart::verify::verify_claim(claim, facts));
+    EXPECT_EQ(verdict.status, VerificationStatus::unverified) << claim.text;
+    EXPECT_EQ(verdict.reason, VerdictReason::coverage_incomplete) << claim.text;
+}
+
 TEST_F(ClaimVerifierAnalysisTest, FailedTranslationUnitTurnsNotFoundIntoUnverified) {
     const auto store = analyze("broken_tu", {"ok.c", "broken.c", "also_ok.c"}, "-Iinclude");
     ASSERT_NE(store, nullptr);
@@ -112,7 +119,7 @@ TEST_F(ClaimVerifierAnalysisTest, FailedTranslationUnitTurnsNotFoundIntoUnverifi
     EXPECT_EQ(in_broken.status, VerificationStatus::unverified);
     EXPECT_EQ(in_broken.reason, VerdictReason::coverage_incomplete);
 
-    // Definitions that were parsed are still checked.
+    // A relation found is still confirmed.
     const auto found = value_of(lcart::verify::verify_claim(calls("main", "util_length"), *store));
     EXPECT_EQ(found.status, VerificationStatus::confirmed);
     ASSERT_EQ(found.evidence.size(), 1U);
@@ -122,9 +129,8 @@ TEST_F(ClaimVerifierAnalysisTest, FailedTranslationUnitTurnsNotFoundIntoUnverifi
     ASSERT_EQ(from_main.size(), 1U);
     EXPECT_EQ(found.evidence[0].id, from_main[0].id.value);
 
-    const auto absent = value_of(lcart::verify::verify_claim(calls("also_ok", "main"), *store));
-    EXPECT_EQ(absent.status, VerificationStatus::contradicted);
-    EXPECT_EQ(absent.reason, VerdictReason::relation_absent);
+    // broken.c has an error, so no absence is trusted, even in also_ok.c.
+    expect_coverage_incomplete(calls("also_ok", "main"), *store);
 }
 
 // The facts of the fatal_nested README, which the next test relies on: k is
@@ -141,12 +147,6 @@ TEST_F(ClaimVerifierAnalysisTest, FatalNestedFixtureHidesADroppedCall) {
     ASSERT_EQ(diagnostics.size(), 1U);
     EXPECT_EQ(diagnostics[0].severity, DiagnosticSeverity::fatal);
     EXPECT_EQ(diagnostics[0].file, "h2.h");
-}
-
-void expect_coverage_incomplete(const Claim& claim, const FactQuery& facts) {
-    const auto verdict = value_of(lcart::verify::verify_claim(claim, facts));
-    EXPECT_EQ(verdict.status, VerificationStatus::unverified) << claim.text;
-    EXPECT_EQ(verdict.reason, VerdictReason::coverage_incomplete) << claim.text;
 }
 
 // Verifies: claim-relation-rules-v2 (a fatal error anywhere in the
@@ -188,9 +188,44 @@ TEST_F(ClaimVerifierAnalysisTest, NoFalseVerdictAfterAnErrorInAnIncludedHeader) 
     for (const Claim& claim : {calls("k", "g"), does_not_call}) {
         expect_coverage_incomplete(claim, *store);
     }
-    // other.c is not reached by main.c: still checked.
-    const auto clean = value_of(lcart::verify::verify_claim(calls("other", "g"), *store));
-    EXPECT_EQ(clean.status, VerificationStatus::contradicted);
+    // other.c is not reached by main.c, but edges cannot bound what a unit
+    // with an error reached: no file counts as parsed.
+    expect_coverage_incomplete(calls("other", "g"), *store);
+}
+
+/// The facts of the error_beyond_edges README: k is defined in h2.h with
+/// no calls, and an error is reported in h1.h.
+void expect_dropped_call_after_error(const FactQuery& facts) {
+    const std::vector<FunctionFact> k = value_of(facts.find_functions("k"));
+    ASSERT_EQ(k.size(), 1U);
+    EXPECT_TRUE(k[0].is_definition);
+    EXPECT_TRUE(value_of(facts.calls_from(k[0].id)).empty());
+    const std::vector<DiagnosticFact> diagnostics = value_of(facts.diagnostics());
+    EXPECT_TRUE(std::ranges::any_of(diagnostics, [](const DiagnosticFact& diagnostic) {
+        return diagnostic.severity == DiagnosticSeverity::error && diagnostic.file == "h1.h";
+    }));
+}
+
+// Verifies: claim-relation-rules-v2 (any error in the analysis: no file
+// counts as parsed, as include edges cannot bound what a unit reached), on
+// the error_beyond_edges fixture: a main file outside the root, and a
+// header reached through a header outside the root.
+TEST_F(ClaimVerifierAnalysisTest, NoFalseVerdictWhenNoEdgeLeadsFromTheError) {
+    const std::vector<std::pair<std::vector<std::string>, std::string>> setups{
+        {{"../gen/main.c", "other.c"}, "-I."},
+        {{"main.c", "other.c"}, "-I. -I../ext"},
+    };
+    for (const auto& [files, flags] : setups) {
+        SCOPED_TRACE(files.front());
+        const auto store = analyze("error_beyond_edges/root", files, flags);
+        ASSERT_NE(store, nullptr);
+        expect_dropped_call_after_error(*store);
+        Claim does_not_call = calls("k", "g");
+        does_not_call.polarity = Polarity::negated;
+        for (const Claim& claim : {calls("k", "g"), does_not_call}) {
+            expect_coverage_incomplete(claim, *store);
+        }
+    }
 }
 
 TEST_F(ClaimVerifierAnalysisTest, NotFoundUnderCompleteCoverageIsContradicted) {
@@ -200,6 +235,10 @@ TEST_F(ClaimVerifierAnalysisTest, NotFoundUnderCompleteCoverageIsContradicted) {
     EXPECT_EQ(missing.status, VerificationStatus::contradicted);
     EXPECT_EQ(missing.reason, VerdictReason::entity_not_found);
     EXPECT_TRUE(missing.evidence.empty());
+    // Without an error in the analysis, an absent call is contradicted.
+    const auto absent = value_of(lcart::verify::verify_claim(calls("also_ok", "main"), *store));
+    EXPECT_EQ(absent.status, VerificationStatus::contradicted);
+    EXPECT_EQ(absent.reason, VerdictReason::relation_absent);
 }
 
 TEST_F(ClaimVerifierAnalysisTest, MayCallEdgesMakeAnAbsentCallUnverified) {
