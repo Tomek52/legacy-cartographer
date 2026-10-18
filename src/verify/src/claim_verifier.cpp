@@ -103,9 +103,11 @@ public:
                coverage->translation_units_parsed == coverage->translation_units_total;
     }
 
-    /// "Was parsed" of the relation rules: under the root, and no error in
-    /// the file or in the translation unit it is the main file of. Clang's
-    /// error recovery can drop calls, and a fatal error ends the unit.
+    /// "Was parsed" of the relation rules: under the root, no fatal error
+    /// anywhere in the analysis, and no error in the file or in the
+    /// translation unit it is the main file of. Clang's error recovery can
+    /// drop calls; after a fatal error it goes on parsing without reporting
+    /// errors, in any file the unit reaches, so nothing locates the damage.
     [[nodiscard]] Result<bool> was_parsed(const FileFact& file) const {
         if (file.is_external) {
             return false; // its directives and definitions are not recorded
@@ -115,8 +117,9 @@ public:
             return std::unexpected(diagnostics.error());
         }
         return std::ranges::none_of(*diagnostics, [&](const DiagnosticFact& diagnostic) {
-            return is_error(diagnostic.severity) &&
-                   (diagnostic.file == file.path || diagnostic.translation_unit == file.path);
+            return diagnostic.severity == DiagnosticSeverity::fatal ||
+                   (is_error(diagnostic.severity) &&
+                    (diagnostic.file == file.path || diagnostic.translation_unit == file.path));
         });
     }
 
@@ -124,11 +127,26 @@ public:
         if (!function.is_definition) {
             return false;
         }
+        auto file = file_of(function);
+        if (!file) {
+            return std::unexpected(file.error());
+        }
+        return was_parsed(*file);
+    }
+
+    /// The file a function is located in. Every function row names a file
+    /// row, so a missing one is an inconsistent database, not a verdict.
+    [[nodiscard]] Result<FileFact> file_of(const FunctionFact& function) const {
         auto file = facts_->file(function.file);
         if (!file) {
             return std::unexpected(file.error());
         }
-        return *file ? was_parsed(**file) : Result<bool>{false};
+        if (!*file) {
+            return std::unexpected(Error{.code = ErrorCode::not_found,
+                                         .message = "function " + function.usr +
+                                                    ": its file is not in the fact database"});
+        }
+        return std::move(**file);
     }
 
 private:
@@ -339,6 +357,50 @@ Result<Verdict> check_includes(const Context& context, const FileFact& subject,
     return *parsed ? absent(context, {ref(subject.id)}) : cannot_tell(context);
 }
 
+/// The may_call edges from a function of `from` to a function of `to`, in
+/// the order of FactQuery::may_calls().
+Result<std::vector<FactRef>> may_calls_between(const Context& context, const ModuleFact& from,
+                                               const ModuleFact& to) {
+    auto may_calls = context.facts().may_calls();
+    if (!may_calls) {
+        return std::unexpected(may_calls.error());
+    }
+    auto module_of = [&](facts::FunctionId id) -> Result<std::optional<facts::ModuleId>> {
+        auto function = context.facts().function(id);
+        if (!function) {
+            return std::unexpected(function.error());
+        }
+        if (!*function) {
+            return std::unexpected(Error{.code = ErrorCode::not_found,
+                                         .message = "a may_call edge names a function that is "
+                                                    "not in the fact database"});
+        }
+        auto file = context.file_of(**function);
+        if (!file) {
+            return std::unexpected(file.error());
+        }
+        return file->module;
+    };
+    std::vector<FactRef> between;
+    for (const CallFact& may_call : *may_calls) {
+        auto caller_module = module_of(may_call.caller);
+        if (!caller_module) {
+            return std::unexpected(caller_module.error());
+        }
+        if (*caller_module != from.id || !may_call.callee) {
+            continue;
+        }
+        auto callee_module = module_of(*may_call.callee);
+        if (!callee_module) {
+            return std::unexpected(callee_module.error());
+        }
+        if (*callee_module == to.id) {
+            between.push_back(ref(may_call.id));
+        }
+    }
+    return between;
+}
+
 Result<Verdict> check_depends_on(const Context& context, const ModuleFact& subject,
                                  const ModuleFact& object) {
     auto edges = context.facts().module_dependency_edges(subject.id);
@@ -354,6 +416,16 @@ Result<Verdict> check_depends_on(const Context& context, const ModuleFact& subje
     if (!justifying.empty()) {
         return found(context, std::move(justifying));
     }
+    // may_call edges are no module dependencies (ADR-0026), but a call
+    // through a table may still reach the object module.
+    auto may_calls = may_calls_between(context, subject, object);
+    if (!may_calls) {
+        return std::unexpected(may_calls.error());
+    }
+    if (!may_calls->empty()) {
+        return context.verdict(VerificationStatus::unverified,
+                               VerdictReason::indirect_calls_present, std::move(*may_calls));
+    }
     auto complete = context.coverage_complete();
     if (!complete) {
         return std::unexpected(complete.error());
@@ -366,8 +438,8 @@ Result<Verdict> check_defines(const Context& context, const FileFact& subject,
     if (object.is_definition && object.file == subject.id) {
         return found(context, {ref(object.id)});
     }
-    // A definition after a fatal error is not recorded, so absence counts
-    // only in a file that was parsed.
+    // Error recovery can drop a definition, so absence counts only in a
+    // file that was parsed.
     auto parsed = context.was_parsed(subject);
     if (!parsed) {
         return std::unexpected(parsed.error());
@@ -381,7 +453,7 @@ Result<Verdict> check_belongs_to(const Context& context, const Entity& subject,
     std::vector<FactRef> evidence;
     if (const auto* function = std::get_if<FunctionFact>(&subject)) {
         // A function belongs to the module of its file.
-        auto function_file = context.facts().file(function->file);
+        auto function_file = context.file_of(*function);
         if (!function_file) {
             return std::unexpected(function_file.error());
         }
@@ -390,10 +462,8 @@ Result<Verdict> check_belongs_to(const Context& context, const Entity& subject,
     } else {
         file = std::get<FileFact>(subject);
     }
-    if (file) {
-        evidence.push_back(ref(file->id));
-    }
-    const bool belongs = file && file->module == object.id;
+    evidence.push_back(ref(file->id));
+    const bool belongs = file->module == object.id;
     return belongs ? found(context, std::move(evidence)) : absent(context, std::move(evidence));
 }
 

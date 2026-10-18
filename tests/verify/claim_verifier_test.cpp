@@ -2,8 +2,7 @@
 // claim schema, each possible outcome, against a FactQuery fake; no LLM),
 // b27-claim-verifier-v1 (criteria 1-3), claim-entity-resolution-v2,
 // claim-relation-rules-v2, claim-negation-rule-v2,
-// fr015-resolve-function-pointer-tables-v1 (criterion 2: may_call edges
-// never confirm a `calls` claim), adr0029-fact-references-v1.
+// claim-verification-rules-v2, adr0029-fact-references-v1.
 // Criterion 4 of B-27 runs on a real analysis: claim_verifier_analysis_test.cpp.
 #include "verify/claim_verifier.hpp"
 
@@ -498,6 +497,8 @@ TEST(ClaimVerifierCalls, AbsentWithIndirectCallsIsUnverified) {
         expected(unverified, VerdictReason::indirect_calls_present, {ref(indirect)}));
 }
 
+// Verifies: fr015-resolve-function-pointer-tables-v1 (criterion 2: may_call
+// edges never turn a `calls` claim into `confirmed`).
 TEST(ClaimVerifierCalls, MayCallEdgeNeverConfirms) {
     Project p;
     // A may_call edge to the object is derived from an indirect call.
@@ -530,6 +531,45 @@ TEST(ClaimVerifierCalls, AbsentWithDefinitionInFailedTranslationUnitIsCoverageIn
     p.facts.add_diagnostic("src/core.c", "/usr/include/stdio.h", DiagnosticSeverity::fatal);
     EXPECT_EQ(
         verify(claim(ClaimKind::calls, function_named("run"), function_named("init")), p.facts),
+        expected(unverified, VerdictReason::coverage_incomplete));
+}
+
+/// The reviewer's case: main.c includes h.h, which includes h2.h (a fatal
+/// error: missing.h) and then h3.h, which defines `k`. Clang reported
+/// nothing in h3.h, and dropped k's call to `g` while recovering.
+struct FatalInHeader {
+    Project p;
+    FileId h_h = p.facts.add_file("app/h.h", p.app);
+    FileId h2_h = p.facts.add_file("app/h2.h", p.app);
+    FileId h3_h = p.facts.add_file("app/h3.h", p.app);
+    FunctionId k = p.facts.add_function("k", h3_h);
+    FunctionId g = p.facts.add_function("g", p.core_c);
+
+    FatalInHeader() {
+        p.facts.add_include(p.main_c, h_h);
+        p.facts.add_include(h_h, h2_h);
+        p.facts.add_include(h_h, h3_h);
+        p.facts.add_diagnostic("app/main.c", "app/h2.h", DiagnosticSeverity::fatal);
+        p.facts.set_coverage(3, 2);
+    }
+};
+
+TEST(ClaimVerifierCalls, AbsentWithDefinitionReachedAfterAFatalErrorIsCoverageIncomplete) {
+    const FatalInHeader f;
+    for (const Polarity polarity : {Polarity::affirmed, Polarity::negated}) {
+        EXPECT_EQ(
+            verify(claim(ClaimKind::calls, function_named("k"), function_named("g"), polarity),
+                   f.p.facts),
+            expected(unverified, VerdictReason::coverage_incomplete));
+    }
+}
+
+TEST(ClaimVerifierCalls, AbsentAfterAFatalErrorInAnyUnitIsCoverageIncomplete) {
+    // run is in src/core.c, which the failed unit does not include; its
+    // include edges cannot be trusted, so no definition counts as parsed.
+    const FatalInHeader f;
+    EXPECT_EQ(
+        verify(claim(ClaimKind::calls, function_named("run"), function_named("init")), f.p.facts),
         expected(unverified, VerdictReason::coverage_incomplete));
 }
 
@@ -596,6 +636,28 @@ TEST(ClaimVerifierDependsOn, AbsentUnderIncompleteCoverageIsUnverified) {
         expected(unverified, VerdictReason::coverage_incomplete));
 }
 
+// Verifies: fr015-resolve-function-pointer-tables-v1 (criterion 2: may_call
+// edges are reported apart from direct calls and confirm nothing).
+TEST(ClaimVerifierDependsOn, AbsentWithMayCallEdgesIsUnverified) {
+    Project p;
+    // main (module app) may reach init (core) through a table only.
+    p.facts.add_indirect_call(p.main_fn);
+    const CallId may_call = p.facts.add_may_call(p.main_fn, p.init);
+    p.facts.add_may_call(p.main_fn, p.main_fn); // within app: not evidence
+    for (const Polarity polarity : {Polarity::affirmed, Polarity::negated}) {
+        EXPECT_EQ(verify(claim(ClaimKind::depends_on, module_named("app"), module_named("core"),
+                               polarity),
+                         p.facts),
+                  expected(unverified, VerdictReason::indirect_calls_present, {ref(may_call)}));
+    }
+    // Ahead of the coverage, which says nothing about pointers.
+    p.facts.set_coverage(3, 2);
+    EXPECT_EQ(
+        verify(claim(ClaimKind::depends_on, module_named("app"), module_named("core")), p.facts)
+            .reason,
+        VerdictReason::indirect_calls_present);
+}
+
 TEST(ClaimVerifierDefines, RelationFoundIsConfirmedWithTheFunction) {
     const Project p;
     EXPECT_EQ(
@@ -622,6 +684,26 @@ TEST(ClaimVerifierDefines, AbsentWithUnparsedSubjectIsUnverified) {
     EXPECT_EQ(verify(claim(ClaimKind::defines, file_named("core.c"), function_named("extern_only")),
                      p.facts),
               expected(unverified, VerdictReason::coverage_incomplete));
+}
+
+TEST(ClaimVerifierDefines, AbsentAfterAFatalErrorIsUnverified) {
+    const FatalInHeader f;
+    for (const Polarity polarity : {Polarity::affirmed, Polarity::negated}) {
+        EXPECT_EQ(
+            verify(claim(ClaimKind::defines, file_named("h3.h"), function_named("g"), polarity),
+                   f.p.facts),
+            expected(unverified, VerdictReason::coverage_incomplete));
+    }
+}
+
+TEST(ClaimVerifierIncludes, AbsentAfterAFatalErrorIsUnverified) {
+    const FatalInHeader f;
+    for (const Polarity polarity : {Polarity::affirmed, Polarity::negated}) {
+        EXPECT_EQ(
+            verify(claim(ClaimKind::includes, file_named("h3.h"), file_named("h2.h"), polarity),
+                   f.p.facts),
+            expected(unverified, VerdictReason::coverage_incomplete));
+    }
 }
 
 TEST(ClaimVerifierBelongsTo, FileRelationFoundIsConfirmed) {
@@ -738,6 +820,19 @@ TEST(ClaimVerifier, EntityTypeNotFittingTheKindIsAnError) {
         claim(ClaimKind::calls, file_named("main.c"), function_named("init")), p.facts);
     ASSERT_FALSE(verdict.has_value());
     EXPECT_EQ(verdict.error().code, ErrorCode::invalid_argument);
+}
+
+TEST(ClaimVerifier, FunctionWithoutRecordedFileIsAnError) {
+    // An inconsistent database: a verdict built on it would be invented.
+    Project p;
+    p.facts.add_function("orphan", FileId{999});
+    for (const Claim& checked :
+         {claim(ClaimKind::belongs_to, function_named("orphan"), module_named("core")),
+          claim(ClaimKind::calls, function_named("orphan"), function_named("init"))}) {
+        const auto verdict = lcart::verify::verify_claim(checked, p.facts);
+        ASSERT_FALSE(verdict.has_value()) << verdict.value();
+        EXPECT_EQ(verdict.error().code, ErrorCode::not_found);
+    }
 }
 
 TEST(ClaimVerifier, QueryErrorsArePassedOn) {

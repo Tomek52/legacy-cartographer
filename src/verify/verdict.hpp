@@ -50,8 +50,10 @@ struct Verdict {
     ///   function), or for `belongs_to` the subject (and a function's file).
     /// - relation_absent: the subject (a function stands for its
     ///   definition), and for `belongs_to` a function's file too.
-    /// - indirect_calls_present: the subject's indirect calls, then its
-    ///   may_call edges to the object.
+    /// - indirect_calls_present: for `calls`, the subject's indirect calls,
+    ///   then its may_call edges to the object; for `depends_on`, the
+    ///   may_call edges from functions of the subject module to functions of
+    ///   the object module.
     /// - entity_ambiguous: the candidates.
     /// - entity_not_found: empty. There is no fact to cite; the evidence is
     ///   the analysis coverage (every translation unit parsed), which the

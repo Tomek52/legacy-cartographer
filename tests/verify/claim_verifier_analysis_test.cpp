@@ -127,6 +127,40 @@ TEST_F(ClaimVerifierAnalysisTest, FailedTranslationUnitTurnsNotFoundIntoUnverifi
     EXPECT_EQ(absent.reason, VerdictReason::relation_absent);
 }
 
+// The facts of the fatal_nested README, which the next test relies on: k is
+// defined in h3.h, its call to g was dropped, and the only diagnostic is
+// the fatal one in h2.h.
+TEST_F(ClaimVerifierAnalysisTest, FatalNestedFixtureHidesADroppedCall) {
+    const auto store = analyze("fatal_nested", {"main.c", "other.c"}, "-I.");
+    ASSERT_NE(store, nullptr);
+    const std::vector<FunctionFact> k = value_of(store->find_functions("k"));
+    ASSERT_EQ(k.size(), 1U);
+    EXPECT_TRUE(k[0].is_definition);
+    EXPECT_TRUE(value_of(store->calls_from(k[0].id)).empty());
+    const std::vector<DiagnosticFact> diagnostics = value_of(store->diagnostics());
+    ASSERT_EQ(diagnostics.size(), 1U);
+    EXPECT_EQ(diagnostics[0].severity, DiagnosticSeverity::fatal);
+    EXPECT_EQ(diagnostics[0].file, "h2.h");
+}
+
+void expect_coverage_incomplete(const Claim& claim, const FactQuery& facts) {
+    const auto verdict = value_of(lcart::verify::verify_claim(claim, facts));
+    EXPECT_EQ(verdict.status, VerificationStatus::unverified) << claim.text;
+    EXPECT_EQ(verdict.reason, VerdictReason::coverage_incomplete) << claim.text;
+}
+
+// Verifies: claim-relation-rules-v2 (a fatal error anywhere in the
+// analysis: no file counts as parsed), on the fatal_nested fixture.
+TEST_F(ClaimVerifierAnalysisTest, NoFalseVerdictAfterAFatalError) {
+    const auto store = analyze("fatal_nested", {"main.c", "other.c"}, "-I.");
+    ASSERT_NE(store, nullptr);
+    Claim does_not_call = calls("k", "g");
+    does_not_call.polarity = Polarity::negated;
+    for (const Claim& claim : {calls("k", "g"), does_not_call, calls("unrelated", "g")}) {
+        expect_coverage_incomplete(claim, *store);
+    }
+}
+
 TEST_F(ClaimVerifierAnalysisTest, NotFoundUnderCompleteCoverageIsContradicted) {
     const auto store = analyze("broken_tu", {"ok.c", "also_ok.c"}, "-Iinclude");
     ASSERT_NE(store, nullptr);
