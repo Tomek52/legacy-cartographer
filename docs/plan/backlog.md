@@ -36,7 +36,7 @@ expanded in place; its version is bumped if its meaning changes
 | [B-24](#b24-clang-tidy-checks-headers-v1) | ✅ clang-tidy checks the project's headers | M1 | NFR-007 | B-02 | 1 h |
 | [B-25](#b25-claim-parser-v1) | ✅ Claim parser and its fuzzer | M2 | FR-009, NFR-010 | – | 5 h |
 | [B-26](#b26-function-pointer-tables-v1) | ✅ `may_call` edges from function-pointer tables | M2 | FR-015 | – | 8 h |
-| [B-27](#b27-claim-verifier-v1) | Claim verifier | M2 | FR-010 | B-25, B-26 | 6 h |
+| [B-27](#b27-claim-verifier-v1) | ✅ Claim verifier | M2 | FR-010 | B-25, B-26 | 6 h |
 | [B-28](#b28-verification-report-v1) | Verification report and `lcart verify` | M2 | FR-010, FR-011 | B-27, B-30 | 4 h |
 | [B-29](#b29-labelled-claim-set-v1) | Labelled claim set and accuracy gate | M2 | NFR-009 | B-27 | 6 h |
 | [B-30](#b30-facts-only-handoff-bundle-v1) | `lcart handoff`: facts-only bundle | M2 | FR-008, NFR-002 | B-26 | 6 h |
@@ -935,6 +935,26 @@ except criterion 3 (B-28), plus:
    the `broken_tu` fixture's database).
 5. If a rule turns out ambiguous while implementing it, the claim schema is
    corrected first, with a version bump, in the same pull request.
+
+Result (2026-10-18): the claim schema was corrected first: entity
+resolution, relation rules and negation are v2. A function's `file` only
+disambiguates, because the fact database locates a function at its
+definition only; files match exactly before by suffix; complete coverage
+needs at least one translation unit. "Was parsed" means no error in the
+file or its translation unit. `defines` contradicts only for a parsed
+file, as the status semantics ask, and negation does not apply to step 1.
+`verify::verify_claim` (`src/verify/src/claim_verifier.cpp`) returns
+`common::Result<Verdict>`, so a database that cannot be read is an error.
+Evidence is a list of typed references (table and row id,
+[ADR-0027](../adr/0027-verdict-evidence-names-its-fact-table.md)), for
+which include directives and call edges now carry their ids.
+`tests/verify/claim_verifier_test.cpp` checks every cell and resolution
+outcome against a `FactQuery` fake (each also failed against a stub
+verdict first). `claim_verifier_analysis_test.cpp` checks criteria 2 and
+4 on the `fn_pointers` and `broken_tu` databases after a real analysis.
+A true claim naming a function outside the analysis root (`printf`) is
+contradicted / `entity_not_found`; this is an
+[open question](../open-questions.md#open-technical-questions) for B-29.
 
 ### <a id="b28-verification-report-v1"></a>**[B-28 v1]** Verification report and `lcart verify`
 
